@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body {
+  font-family: Arial;
+  background: #0b0b0b;
+  color: white;
+  margin: 0;
+  padding: 20px;
+}
+
+input, button {
+  padding: 12px;
+  margin: 6px 0;
+  width: 100%;
+  border-radius: 8px;
+  border: none;
+}
+
+button {
+  background: gold;
+  font-weight: bold;
+}
+
+.card {
+  background: #141414;
+  padding: 15px;
+  margin-top: 10px;
+  border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>OJO LUXE PORTAL</h2>
+
+<div id="login">
+  <input id="user" placeholder="Username"/>
+  <input id="pass" type="password" placeholder="Password"/>
+  <button onclick="login()">LOGIN</button>
+</div>
+
+<div id="app" style="display:none;">
+
+  <h3>Add Member</h3>
+
+  <input id="name" placeholder="Full Name"/>
+  <input id="role" placeholder="Role"/>
+  <input id="phone" placeholder="Phone"/>
+  <input id="email" placeholder="Email"/>
+
+  <button onclick="addMember()">SAVE</button>
+
+  <h3>Team List</h3>
+  <div id="list"></div>
+
+</div>
+
+<script>
+const supabase = window.supabase.createClient(
+  'https://aadlqagpxwshpdccxwto.supabase.co',
+  'sb_publishable_Z83IeqeP7C2DL1rRR1Xzjg_SDHvpOS3'
+);
+
+function login() {
+  const u = document.getElementById('user').value;
+  const p = document.getElementById('pass').value;
+
+  if (u === 'admin' && p === 'ojoluxe2026') {
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadData();
+  } else {
+    alert('Wrong login');
+  }
+}
+
+async function addMember() {
+
+  const name = document.getElementById('name').value;
+  const role = document.getElementById('role').value;
+  const phone = document.getElementById('phone').value;
+  const email = document.getElementById('email').value;
+
+  const { error } = await supabase
+    .from('team_v2')
+    .insert({
+      full_name: name,
+      role: role,
+      phone: phone,
+      email: email
+    });
+
+  if (error) {
+    alert(error.message);
+  } else {
+    alert('Saved!');
+    loadData();
+  }
+}
+
+async function loadData() {
+  const { data } = await supabase
+    .from('team_v2')
+    .select('*');
+
+  let html = '';
+
+  data.forEach(d => {
+    html += `
+      <div class="card">
+        <b>${d.full_name}</b><br/>
+        ${d.role || ''}<br/>
+        ${d.phone || ''}
+      </div>
+    `;
+  });
+
+  document.getElementById('list').innerHTML = html;
+}
+</script>
+
+</body>
+</html>
