@@ -1,128 +1,87 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>OJO Luxe Portal</title>
 
 <style>
-body {
-  font-family: Arial;
-  background: #0b0b0b;
-  color: white;
-  margin: 0;
-  padding: 20px;
-}
-
-input, button {
-  padding: 12px;
-  margin: 6px 0;
-  width: 100%;
-  border-radius: 8px;
-  border: none;
-}
-
-button {
-  background: gold;
-  font-weight: bold;
-}
-
-.card {
-  background: #141414;
-  padding: 15px;
-  margin-top: 10px;
-  border-radius: 10px;
-}
+body { font-family: Arial; background:#0b0b0b; color:white; margin:0; }
+.header { padding:15px; font-size:20px; font-weight:bold; border-bottom:1px solid #222; }
+.container { padding:15px; }
+input, select, button { width:100%; padding:12px; margin:8px 0; border-radius:8px; border:none; }
+button { background:gold; font-weight:bold; }
+.card { background:#111; padding:12px; margin-top:10px; border-radius:10px; }
 </style>
 </head>
 
 <body>
 
-<h2>OJO LUXE PORTAL</h2>
+<div class="header">OJO Luxe Portal</div>
 
-<div id="login">
-  <input id="user" placeholder="Username"/>
-  <input id="pass" type="password" placeholder="Password"/>
-  <button onclick="login()">LOGIN</button>
+<div class="container">
+
+<h3>➕ New Booking</h3>
+
+<input id="name" placeholder="Client Name"/>
+<input id="date" type="date"/>
+<input id="from" placeholder="From"/>
+<input id="to" placeholder="To"/>
+
+<select id="vehicle">
+<option>SUV</option>
+<option>Sprinter</option>
+</select>
+
+<button onclick="saveJob()">Save Booking</button>
+
+<h3>📋 Job List</h3>
+<div id="jobs"></div>
+
 </div>
 
-<div id="app" style="display:none;">
-
-  <h3>Add Member</h3>
-
-  <input id="name" placeholder="Full Name"/>
-  <input id="role" placeholder="Role"/>
-  <input id="phone" placeholder="Phone"/>
-  <input id="email" placeholder="Email"/>
-
-  <button onclick="addMember()">SAVE</button>
-
-  <h3>Team List</h3>
-  <div id="list"></div>
-
-</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
 <script>
-const supabase = window.supabase.createClient(
-  'https://aadlqagpxwshpdccxwto.supabase.co',
-  'sb_publishable_Z83IeqeP7C2DL1rRR1Xzjg_SDHvpOS3'
-);
+const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
+const SUPABASE_KEY = "PASTE_YOUR_KEY";
 
-function login() {
-  const u = document.getElementById('user').value;
-  const p = document.getElementById('pass').value;
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  if (u === 'admin' && p === 'ojoluxe2026') {
-    document.getElementById('login').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    loadData();
-  } else {
-    alert('Wrong login');
-  }
+async function saveJob() {
+  const job = {
+    client: document.getElementById("name").value,
+    date: document.getElementById("date").value,
+    from_loc: document.getElementById("from").value,
+    to_loc: document.getElementById("to").value,
+    vehicle: document.getElementById("vehicle").value
+  };
+
+  await db.from("jobs").insert([job]);
+
+  alert("Saved!");
+  loadJobs();
 }
 
-async function addMember() {
+async function loadJobs() {
+  const { data } = await db.from("jobs").select("*").order("id", {ascending:false});
 
-  const name = document.getElementById('name').value;
-  const role = document.getElementById('role').value;
-  const phone = document.getElementById('phone').value;
-  const email = document.getElementById('email').value;
+  let html = "";
 
-  const { error } = await supabase
-    .from('team_v2')
-    .insert({
-      full_name: name,
-      role: role,
-      phone: phone,
-      email: email
-    });
-
-  if (error) {
-    alert(error.message);
-  } else {
-    alert('Saved!');
-    loadData();
-  }
-}
-
-async function loadData() {
-  const { data } = await supabase
-    .from('team_v2')
-    .select('*');
-
-  let html = '';
-
-  data.forEach(d => {
+  data.forEach(j => {
     html += `
       <div class="card">
-        <b>${d.full_name}</b><br/>
-        ${d.role || ''}<br/>
-        ${d.phone || ''}
+        <b>${j.client}</b><br/>
+        ${j.date}<br/>
+        ${j.from_loc} → ${j.to_loc}<br/>
+        🚘 ${j.vehicle}
       </div>
     `;
   });
 
-  document.getElementById('list').innerHTML = html;
+  document.getElementById("jobs").innerHTML = html;
 }
+
+loadJobs();
 </script>
 
 </body>
