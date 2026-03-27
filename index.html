@@ -43,12 +43,11 @@ button { background:gold; font-weight:bold; }
 <script>
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Z83IeqeP7C2DL1rRR1Xzjg_SDHvpOS3";
-
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function saveJob() {
   try {
-    const job = {
+    const job = 
       client: document.getElementById("name").value,
       date: document.getElementById("date").value,
       from_loc: document.getElementById("from").value,
