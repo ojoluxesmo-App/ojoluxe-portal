@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>OJO Luxe Portal</title>
+
+<style>
+body { font-family: Arial; background:#0b0b0b; color:white; margin:0; }
+.header { padding:15px; font-size:20px; font-weight:bold; border-bottom:1px solid #222; }
+.container { padding:15px; }
+input, select, button { width:100%; padding:12px; margin:8px 0; border-radius:8px; border:none; }
+button { background:gold; font-weight:bold; }
+.card { background:#111; padding:12px; margin-top:10px; border-radius:10px; }
+</style>
+</head>
+
+<body>
+
+<div class="header">OJO Luxe Portal</div>
+
+<div class="container">
+
+<h3>➕ New Booking</h3>
+
+<input id="name" placeholder="Client Name"/>
+<input id="date" type="date"/>
+<input id="from" placeholder="From"/>
+<input id="to" placeholder="To"/>
+
+<select id="vehicle">
+<option>SUV</option>
+<option>Sprinter</option>
+</select>
+
+<button onclick="saveJob()">Save Booking</button>
+
+<h3>📋 Job List</h3>
+<div id="jobs"></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+<script>
+const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZGxxYWdweHdzaHBkY2N4d3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYyODQsImV4cCI6MjA4OTcxMjI4NH0.MaNNRIcsD6aDizz2J4YzqXzkn32RhwJZqHM61t-TLYg";
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function saveJob() {
+  const job = {
+    client: document.getElementById("name").value,
+    date: document.getElementById("date").value,
+    from_loc: document.getElementById("from").value,
+    to_loc: document.getElementById("to").value,
+    vehicle: document.getElementById("vehicle").value
+  };
+
+  const { error } = await db.from("jobs").insert([job]);
+
+  if (error) {
+    alert("Error: " + error.message);
+    return;
+  }
+
+  alert("Saved!");
+  loadJobs();
+}
+
+async function loadJobs() {
+  const { data } = await db.from("jobs").select("*").order("id", { ascending: false });
+
+  let html = "";
+
+  data.forEach(j => {
+    html += `
+      <div class="card">
+        <b>${j.client}</b><br/>
+        ${j.date}<br/>
+        ${j.from_loc} → ${j.to_loc}<br/>
+        🚘 ${j.vehicle}
+      </div>
+    `;
+  });
+
+  document.getElementById("jobs").innerHTML = html;
+}
+
+loadJobs();
+</script>
+
+</body>
+</html>
