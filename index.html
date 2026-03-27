@@ -38,10 +38,69 @@ button { background:gold; font-weight:bold; }
 <div id="jobs"></div>
 
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
 <script>
+const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Z83IeqeP7C2DL1rRR1Xzjg_SDHvpOS3";
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function saveJob() {
+  try {
+    const job = {
+      client: document.getElementById("name").value,
+      date: document.getElementById("date").value,
+      from_loc: document.getElementById("from").value,
+      to_loc: document.getElementById("to").value,
+      vehicle: document.getElementById("vehicle").value
+    };
+
+    const { error } = await db.from("jobs").insert([job]);
+
+    if (error) {
+      alert("❌ Save failed: " + error.message);
+      return;
+    }
+
+    alert("✅ Saved!");
+    loadJobs();
+  } catch (err) {
+    alert("⚠️ Error: " + err.message);
+  }
+}
+
+async function loadJobs() {
+  try {
+    const { data, error } = await db.from("jobs").select("*").order("id", { ascending: false });
+
+    if (error) {
+      alert("Load error: " + error.message);
+      return;
+    }
+
+    let html = "";
+    data.forEach(j => {
+      html += `
+        <div class="card">
+          <b>${j.client || ""}</b><br/>
+          ${j.date || ""}<br/>
+          ${j.from_loc || ""} → ${j.to_loc || ""}<br/>
+          🚘 ${j.vehicle || ""}
+        </div>
+      `;
+    });
+
+    document.getElementById("jobs").innerHTML = html;
+  } catch (err) {
+    alert("Load error: " + err.message);
+  }
+}
+
+loadJobs();
+</script>1
+
+
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const sb_publishable_Z83IeqeP7C2DL1rRR1Xzjg_SDHvpOS3
   
