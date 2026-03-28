@@ -1,93 +1,332 @@
-<!DOCTYPE html> 
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>OJO Luxe Portal</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OJO Luxe Portal</title>
 
-<style>
-body { font-family: Arial; background:#0b0b0b; color:white; margin:0; }
-.header { padding:15px; font-size:20px; font-weight:bold; border-bottom:1px solid #222; }
-.container { padding:15px; }
-input, select, button { width:100%; padding:12px; margin:8px 0; border-radius:8px; border:none; }
-button { background:gold; font-weight:bold; }
-.card { background:#111; padding:12px; margin-top:10px; border-radius:10px; }
-</style>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0b0b0b;
+      color: white;
+      margin: 0;
+    }
+
+    .header {
+      padding: 15px;
+      font-size: 20px;
+      font-weight: bold;
+      border-bottom: 1px solid #222;
+      color: #d4af37;
+    }
+
+    .container {
+      padding: 15px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    h3 {
+      color: #d4af37;
+      margin-top: 10px;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+      border: none;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    input,
+    select,
+    textarea {
+      background: #111;
+      color: white;
+      border: 1px solid #2e2e2e;
+    }
+
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    button {
+      background: gold;
+      color: black;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .card {
+      background: #111;
+      padding: 12px;
+      margin-top: 10px;
+      border-radius: 10px;
+      border: 1px solid #2a2a2a;
+    }
+
+    .field-row-v2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field-group label {
+      font-size: 12px;
+      margin-bottom: 6px;
+      color: #c9a85d;
+      font-weight: 600;
+    }
+
+    .field-group input,
+    .field-group select,
+    .field-group textarea {
+      border: 1px solid #3a3225;
+      background: #111;
+      color: #f5f5f5;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    .job-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .job-badge {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #1a1a1a;
+      border: 1px solid #5a4720;
+      color: #d4af37;
+    }
+
+    .job-driver,
+    .job-waybill-note {
+      font-size: 13px;
+      color: #ddd;
+      margin-top: 6px;
+    }
+
+    .empty-state {
+      color: #999;
+      padding: 10px 0;
+    }
+  </style>
 </head>
-
 <body>
 
-<div class="header">OJO Luxe Portal</div>
+  <div class="header">OJO Luxe Portal</div>
 
-<div class="container">
+  <div class="container">
+    <h3>➕ New Booking</h3>
 
-<h3>➕ New Booking</h3>
+    <input id="name" placeholder="Client Name" />
+    <input id="date" type="date" />
+    <input id="from" placeholder="From" />
+    <input id="to" placeholder="To" />
 
-<input id="name" placeholder="Client Name"/>
-<input id="date" type="date"/>
-<input id="from" placeholder="From"/>
-<input id="to" placeholder="To"/>
+    <select id="vehicle">
+      <option value="SUV">SUV</option>
+      <option value="Sprinter">Sprinter</option>
+    </select>
 
-<select id="vehicle">
-<option>SUV</option>
-<option>Sprinter</option>
-</select>
-
-<button onclick="saveJob()">Save Booking</button>
-
-<h3>📋 Job List</h3>
-<div id="jobs"></div>
-
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-
-<script>
-const SUPABASE_URL = 'https://aadlqagpxwshpdccxwto.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZGxxYWdweHdzaHBkY2N4d3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYyODQsImV4cCI6MjA4OTcxMjI4NH0.MaNNRIcsD6aDizz2J4YzqXzkn32RhwJZqHM61t-TLYg';
-
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-async function saveJob() {
-  const job = {
-    client: document.getElementById("name").value,
-    date: document.getElementById("date").value,
-    from_loc: document.getElementById("from").value,
-    to_loc: document.getElementById("to").value,
-    vehicle: document.getElementById("vehicle").value
-  };
-
-  const { error } = await db.from("jobs").insert([job]);
-
-  if (error) {
-    alert("Error: " + error.message);
-    return;
-  }
-
-  alert("Saved!");
-  loadJobs();
-}
-
-async function loadJobs() {
-  const { data } = await db.from("jobs").select("*").order("id", { ascending: false });
-
-  let html = "";
-
-  data.forEach(j => {
-    html += `
-      <div class="card">
-        <b>${j.client}</b><br/>
-        ${j.date}<br/>
-        ${j.from_loc} → ${j.to_loc}<br/>
-        🚘 ${j.vehicle}
+    <div class="field-row-v2">
+      <div class="field-group">
+        <label for="jobType">Job Type</label>
+        <select id="jobType">
+          <option value="Airport Transfer">Airport Transfer</option>
+          <option value="Point to Point">Point to Point</option>
+          <option value="Hourly">Hourly</option>
+        </select>
       </div>
-    `;
-  });
 
-  document.getElementById("jobs").innerHTML = html;
-}
+      <div class="field-group">
+        <label for="vehicleType">Vehicle Type</label>
+        <select id="vehicleType">
+          <option value="Premium SUV">Premium SUV</option>
+          <option value="Premium Sedan">Premium Sedan</option>
+          <option value="Mini Van">Mini Van</option>
+          <option value="Sprinter">Sprinter</option>
+        </select>
+      </div>
 
-loadJobs();
-</script>
+      <div class="field-group">
+        <label for="paymentType">Payment Type</label>
+        <select id="paymentType">
+          <option value="Cash">Cash</option>
+          <option value="Zelle">Zelle</option>
+          <option value="Venmo">Venmo</option>
+          <option value="Apple Cash">Apple Cash</option>
+          <option value="Credit Card">Credit Card</option>
+        </select>
+      </div>
 
+      <div class="field-group">
+        <label for="jobStatus">Status</label>
+        <select id="jobStatus">
+          <option value="Offer">Offer</option>
+          <option value="Assigned">Assigned</option>
+          <option value="Accepted">Accepted</option>
+          <option value="Heading to Pickup">Heading to Pickup</option>
+          <option value="Arrived">Arrived</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Completed">Completed</option>
+          <option value="Released">Released</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="assignedDriver">Assigned Driver</label>
+        <input id="assignedDriver" type="text" placeholder="Driver name" />
+      </div>
+
+      <div class="field-group full-width">
+        <label for="waybillNotes">Waybill Notes</label>
+        <textarea id="waybillNotes" placeholder="Notes for chauffeur / dispatch"></textarea>
+      </div>
+    </div>
+
+    <button onclick="saveJob()">Save Booking</button>
+
+    <h3>📋 Job List</h3>
+    <div id="jobs"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZGxxYWdweHdzaHBkY2N4d3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYyODQsImV4cCI6MjA4OTcxMjI4NH0.MaNNRIcsD6aDizz2J4YzqXzkn32RhwJZqHM61t-TLYg";
+
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function saveJob() {
+      const job = {
+        client: document.getElementById("name").value.trim(),
+        date: document.getElementById("date").value,
+        from_loc: document.getElementById("from").value.trim(),
+        to_loc: document.getElementById("to").value.trim(),
+        vehicle: document.getElementById("vehicle").value,
+
+        job_type: document.getElementById("jobType")?.value || "Airport Transfer",
+        vehicle_type: document.getElementById("vehicleType")?.value || document.getElementById("vehicle").value || "Premium SUV",
+        payment_type: document.getElementById("paymentType")?.value || "Cash",
+        status: document.getElementById("jobStatus")?.value || "Offer",
+        assigned_driver: document.getElementById("assignedDriver")?.value.trim() || "",
+        waybill_notes: document.getElementById("waybillNotes")?.value.trim() || ""
+      };
+
+      if (!job.client || !job.date || !job.from_loc || !job.to_loc) {
+        alert("Please fill Client Name, Date, From, and To.");
+        return;
+      }
+
+      const { error } = await db.from("jobs").insert([job]);
+
+      if (error) {
+        alert("Error: " + error.message);
+        return;
+      }
+
+      alert("Saved!");
+      clearForm();
+      loadJobs();
+    }
+
+    function clearForm() {
+      document.getElementById("name").value = "";
+      document.getElementById("date").value = "";
+      document.getElementById("from").value = "";
+      document.getElementById("to").value = "";
+      document.getElementById("vehicle").value = "SUV";
+      document.getElementById("jobType").value = "Airport Transfer";
+      document.getElementById("vehicleType").value = "Premium SUV";
+      document.getElementById("paymentType").value = "Cash";
+      document.getElementById("jobStatus").value = "Offer";
+      document.getElementById("assignedDriver").value = "";
+      document.getElementById("waybillNotes").value = "";
+    }
+
+    async function loadJobs() {
+      const { data, error } = await db
+        .from("jobs")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (error) {
+        document.getElementById("jobs").innerHTML =
+          '<div class="empty-state">Load error: ' + error.message + "</div>";
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        document.getElementById("jobs").innerHTML =
+          '<div class="empty-state">No jobs yet.</div>';
+        return;
+      }
+
+      let html = "";
+
+      data.forEach((j) => {
+        html += `
+          <div class="card">
+            <b>${escapeHtml(j.client || "-")}</b><br/>
+            ${escapeHtml(j.date || "-")}<br/>
+            ${escapeHtml(j.from_loc || "-")} → ${escapeHtml(j.to_loc || "-")}<br/>
+            🚘 ${escapeHtml(j.vehicle || "-")}<br/>
+
+            <div class="job-badges">
+              <span class="job-badge">${escapeHtml(j.job_type || "Airport Transfer")}</span>
+              <span class="job-badge">${escapeHtml(j.vehicle_type || j.vehicle || "Premium SUV")}</span>
+              <span class="job-badge">${escapeHtml(j.payment_type || "Cash")}</span>
+              <span class="job-badge">${escapeHtml(j.status || "Offer")}</span>
+            </div>
+
+            <div class="job-driver"><strong>Driver:</strong> ${escapeHtml(j.assigned_driver || "Unassigned")}</div>
+            <div class="job-waybill-note"><strong>Notes:</strong> ${escapeHtml(j.waybill_notes || "-")}</div>
+          </div>
+        `;
+      });
+
+      document.getElementById("jobs").innerHTML = html;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    loadJobs();
+  </script>
 </body>
 </html>
