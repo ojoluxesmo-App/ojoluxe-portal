@@ -917,15 +917,24 @@ function setStops(stops = []) {
                 <div class="job-route">${escapeHtml(j.from_loc || "-")} → ${escapeHtml(j.to_loc || "-")}</div>
               </div>
             </div>
+${j.stops && j.stops.length > 0 ? `
+  <div class="job-line">
+    <strong>Stops:</strong>
+    ${j.stops.map(s => `📍 ${escapeHtml(s.address)}`).join("<br>")}
+  </div>
+` : ""}
+           <div class="job-badges">
+  <span class="badge">${escapeHtml(j.job_type || "Airport Transfer")}</span>
+  <span class="badge">${escapeHtml(j.vehicle_type || j.vehicle || "-")}</span>
+  <span class="badge">${escapeHtml(j.payment_type || "Cash")}</span>
 
-            <div class="job-badges">
-              <span class="badge">${escapeHtml(j.job_type || "Airport Transfer")}</span>
-              <span class="badge">${escapeHtml(j.vehicle_type || j.vehicle || "-")}</span>
-              <span class="badge">${escapeHtml(j.payment_type || "Cash")}</span>
-              <span class="badge status-${normalizeClassName(currentStatus)}">${escapeHtml(currentStatus)}</span>
-              <span class="badge urgency-${normalizeClassName(urgency)}">${escapeHtml(urgency)}</span>
-            </div>
+  ${j.stops && j.stops.length > 0 ? `
+    <span class="badge">${j.stops.length} Stops</span>
+  ` : ""}
 
+  <span class="badge status-${normalizeClassName(currentStatus)}">${escapeHtml(currentStatus)}</span>
+  <span class="badge urgency-${normalizeClassName(urgency)}">${escapeHtml(urgency)}</span>
+</div>
             <div class="job-driver">
               <strong>Driver:</strong>
               <span style="color:${j.assigned_driver ? '#87e18b' : '#aaa'}">
