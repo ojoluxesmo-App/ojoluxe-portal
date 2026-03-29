@@ -502,6 +502,48 @@
     ];
 
     let allJobs = [];
+    function addStop(value = "") {
+  const container = document.getElementById("stopsContainer");
+  const count = container.children.length;
+
+  if (count >= 5) {
+    alert("Max 5 stops only");
+    return;
+  }
+
+  const div = document.createElement("div");
+  div.className = "field-row";
+
+  div.innerHTML = `
+    <input placeholder="Stop address" value="${value}" />
+    <button type="button" class="danger-btn" onclick="this.parentElement.remove()">Remove</button>
+  `;
+
+  container.appendChild(div);
+}
+
+function getStops() {
+  const inputs = document.querySelectorAll("#stopsContainer input");
+  const stops = [];
+
+  inputs.forEach((input, index) => {
+    if (input.value.trim()) {
+      stops.push({
+        order: index + 1,
+        address: input.value.trim()
+      });
+    }
+  });
+
+  return stops;
+}
+
+function setStops(stops = []) {
+  const container = document.getElementById("stopsContainer");
+  container.innerHTML = "";
+
+  stops.forEach(s => addStop(s.address));
+}
     let currentTab = "offers";
     let editingId = null;
 
