@@ -388,7 +388,12 @@
 
         <input id="from" placeholder="From" />
         <input id="to" placeholder="To" />
-
+<!-- NEW: Stops (max 5) -->
+<div class="field-group full-width">
+  <label>Stops (max 5)</label>
+  <div id="stopsContainer" class="stack"></div>
+  <button type="button" class="secondary-btn" onclick="addStop()">+ Add Stop</button>
+</div>
         <div class="field-row">
           <div class="field-group">
             <label for="jobType">Job Type</label>
