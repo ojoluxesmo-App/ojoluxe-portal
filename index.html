@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head>.from("jobs")
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OJO Luxe Portal</title>
@@ -741,9 +741,9 @@ function setStops(stops = []) {
       let error;
 
       if (editingId) {
-        ({ error } = await db.from("jobs_v2").update(payload).eq("id", editingId));
+        ({ error } = await db.from("jobs").update(payload).eq("id", editingId));
       } else {
-        ({ error } = await db.from("jobs_v2").insert([payload]));
+        ({ error } = await db.from("jobs").insert([payload]));
       }
 
       if (error) {
@@ -775,7 +775,7 @@ function setStops(stops = []) {
       const nextStatus = getNextStatus(currentStatus);
 
       const { error } = await db
-        .from("jobs_v2")
+        .from("jobs")
         .update({ status: nextStatus })
         .eq("id", jobId);
 
@@ -797,7 +797,7 @@ function setStops(stops = []) {
       }
 
       const { error } = await db
-        .from("jobs_v2")
+        .from("jobs")
         .update({
           assigned_driver: assignedDriver,
           status: "Assigned"
@@ -819,7 +819,7 @@ function setStops(stops = []) {
       const assignedDriver = input.value.trim();
 
       const { error } = await db
-        .from("jobs_v2")
+        .from("jobs")
         .update({ assigned_driver: assignedDriver })
         .eq("id", jobId);
 
@@ -836,7 +836,7 @@ function setStops(stops = []) {
       if (!confirmed) return;
 
       const { error } = await db
-        .from("jobs_v2")
+        .from("jobs")
         .delete()
         .eq("id", jobId);
 
@@ -983,7 +983,7 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
 
     async function loadJobs() {
       const { data, error } = await db
-        .from("jobs_v2")
+        .from("jobs")
         .select("*")
         .order("date", { ascending: true })
         .order("pickup_time", { ascending: true });
