@@ -911,8 +911,11 @@ const payload = {
 
         html += `
           <div class="card">
-            <div class="card-top">
+<div class="card-top">
               <div>
+                <div class="job-meta" style="color: var(--gold-soft); font-weight: 700; letter-spacing: 0.4px;">
+                  ${escapeHtml(j.reference_code || "OJO JOB")}
+                </div>
                 <div class="client-name">${escapeHtml(j.client || "-")}</div>
                 <div class="job-meta">${escapeHtml(j.date || "-")}${j.pickup_time ? ` • ${escapeHtml(j.pickup_time)}` : ""}</div>
                 <div class="job-route">${escapeHtml(j.from_loc || "-")} → ${escapeHtml(j.to_loc || "-")}</div>
