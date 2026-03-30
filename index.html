@@ -324,13 +324,37 @@
       }
     }
 
-    @media (max-width: 700px) {
+   @media (max-width: 700px) {
       .tabs,
-      .assign-row,
-      .card-actions,
-      .card-actions-3,
       .search-row {
         grid-template-columns: 1fr;
+      }
+
+      .assign-row,
+      .card-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .card-actions-3 {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      .card {
+        padding: 16px;
+        border-radius: 16px;
+      }
+
+      .client-name {
+        font-size: 20px;
+      }
+
+      .job-route {
+        font-size: 17px;
+      }
+
+      .badge {
+        font-size: 11px;
+        padding: 6px 10px;
       }
     }
   </style>
