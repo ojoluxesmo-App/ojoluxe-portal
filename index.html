@@ -945,6 +945,11 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
   <span class="badge status-${normalizeClassName(currentStatus)}">${escapeHtml(currentStatus)}</span>
   <span class="badge urgency-${normalizeClassName(urgency)}">${escapeHtml(urgency)}</span>
 </div>
+
+<div class="job-line" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+  <div><strong>Status:</strong> ${escapeHtml(currentStatus)}</div>
+  <div><strong>Urgency:</strong> ${escapeHtml(urgency)}</div>
+</div>
             <div class="job-driver">
               <strong>Driver:</strong>
               <span style="color:${j.assigned_driver ? '#87e18b' : '#aaa'}">
