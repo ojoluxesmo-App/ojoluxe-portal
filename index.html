@@ -251,22 +251,23 @@
     .card-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 12px;
+      gap: 8px;
+      margin-top: 10px;
     }
 
     .card-actions-3 {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
-      margin-top: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
     }
 
-    .small-btn {
-      padding: 10px 12px;
+   .small-btn {
+      padding: 11px 10px;
       font-size: 13px;
       font-weight: 700;
       cursor: pointer;
+      min-height: 44px;
     }
 
     .status-btn {
