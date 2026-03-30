@@ -993,15 +993,12 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
 
             <div class="job-note"><strong>Notes:</strong> ${escapeHtml(j.waybill_notes || "-")}</div>
 
-            <div class="assign-row">
-              <input
-                id="driver-${j.id}"
-                list="driverSuggestions"
-                placeholder="Type driver name"
-                value="${escapeHtml(j.assigned_driver || "")}"
-              />
-              <button class="small-btn assign-btn" onclick="updateAssignedDriver('${j.id}')">Save Driver</button>
-            </div>
+            <div class="job-driver">
+  <strong>Driver:</strong>
+  <span style="color:${j.assigned_driver ? '#87e18b' : '#aaa'}">
+    ${escapeHtml(j.assigned_driver || "Unassigned")}
+  </span>
+</div>
 
             <div class="card-actions-3">
               <button class="small-btn secondary-btn" onclick="showWaybill('${j.id}')">Waybill</button>
