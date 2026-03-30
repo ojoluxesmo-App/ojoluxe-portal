@@ -964,25 +964,20 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
               <button class="small-btn assign-btn" onclick="updateAssignedDriver('${j.id}')">Save Driver</button>
             </div>
 
-            <div class="card-actions">
-              <button class="small-btn secondary-btn" onclick="dispatchJob('${j.id}')">Dispatch</button>
-              <button
-                class="small-btn status-btn"
-                ${isCompleted ? "disabled style='opacity:0.45;cursor:not-allowed'" : ""}
-                ${isCompleted ? "" : `onclick="updateStatus('${j.id}', '${escapeHtml(currentStatus)}')"`}>
-                ${isCompleted ? "Completed" : `Next: ${escapeHtml(nextStatus)}`}
-              </button>
-            </div>
-
             <div class="card-actions-3">
-              <button class="small-btn secondary-btn" onclick="fillForm(${JSON.stringify(j).replace(/"/g, '&quot;')})">Edit</button>
               <button class="small-btn secondary-btn" onclick="showWaybill('${j.id}')">Waybill</button>
+              <button class="small-btn assign-btn" onclick="dispatchJob('${j.id}')">Dispatch</button>
               <button class="small-btn danger-btn" onclick="deleteJob('${j.id}')">Delete</button>
             </div>
 
             <div class="card-actions">
-              <button class="small-btn secondary-btn" onclick="openMap('${escapeHtml(j.from_loc || "").replace(/'/g, "\\'")}')">Pickup Nav</button>
-              <button class="small-btn secondary-btn" onclick="openMap('${escapeHtml(j.to_loc || "").replace(/'/g, "\\'")}')">Dropoff Nav</button>
+              <button
+                class="small-btn status-btn"
+                ${isCompleted ? "disabled style='opacity:0.45;cursor:not-allowed'" : ""}
+                ${isCompleted ? "" : `onclick="updateStatus('${j.id}', '${escapeHtml(currentStatus)}')"`}>
+                ${isCompleted ? "Completed" : "Next Status"}
+              </button>
+              <button class="small-btn secondary-btn" onclick="fillForm(${JSON.stringify(j).replace(/"/g, '&quot;')})">Edit</button>
             </div>
           </div>
         `;
