@@ -657,20 +657,24 @@ function setStops(stops = []) {
     }
 
     function getJobsForCurrentTab(jobs) {
-      if (currentTab === "offers") {
-        return jobs.filter(j => (j.status || "Offer") === "Offer");
-      }
+  if (!Array.isArray(jobs)) return [];
 
-      if (currentTab === "active") {
-        return jobs.filter(j => ["Assigned", "Accepted", "Heading to Pickup", "Arrived", "In Progress"].includes(j.status || ""));
-      }
+  if (currentTab === "offers") {
+    return jobs.filter(j => !j.status || j.status === "Offer");
+  }
 
-      if (currentTab === "done") {
-        return jobs.filter(j => ["Completed", "Released", "Cancelled"].includes(j.status || ""));
-      }
+  if (currentTab === "active") {
+    return jobs.filter(j =>
+      ["Assigned", "Accepted", "Heading to Pickup", "Arrived", "In Progress"].includes(j.status)
+    );
+  }
 
-      return jobs;
-    }
+  if (currentTab === "done") {
+    return jobs.filter(j => j.status === "Completed");
+  }
+
+  return jobs;
+}
 
     function resetFilters() {
       document.getElementById("searchInput").value = "";
