@@ -992,15 +992,8 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
             </div>
 
             <div class="card-actions">
-              <button
-                class="small-btn status-btn"
-                ${isCompleted ? "disabled style='opacity:0.45;cursor:not-allowed'" : ""}
-                ${isCompleted ? "" : `onclick="updateStatus('${j.id}', '${escapeHtml(currentStatus)}')"`}>
-             ${isCompleted ? "Completed" : getStatusActionLabel(currentStatus)}
-              </button>
               <button class="small-btn secondary-btn" onclick="fillForm(${JSON.stringify(j).replace(/"/g, '&quot;')})">Edit</button>
             </div>
-          </div>
         `;
       });
 
