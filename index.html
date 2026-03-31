@@ -811,28 +811,39 @@ const payload = {
     }
 
 async function dispatchJob(jobId) {
-      const job = allJobs.find(j => String(j.id) === String(jobId));
-      const assignedDriver = job?.assigned_driver ? String(job.assigned_driver).trim() : "";
+  const job = allJobs.find(j => String(j.id) === String(jobId));
+  if (!job) {
+    alert("Job not found");
+    return;
+  }
 
-      if (!assignedDriver) {
-        alert("Assign driver in Edit first");
-        return;
-      }
+  const currentDriver = job.assigned_driver || "";
+  const newDriver = prompt("Assign / reassign driver for this job:", currentDriver);
 
-      const { error } = await db
-        .from("jobs")
-        .update({
-          status: "Assigned"
-        })
-        .eq("id", jobId);
+  if (newDriver === null) return;
 
-      if (error) {
-        alert("Dispatch failed: " + error.message);
-        return;
-      }
+  const assignedDriver = String(newDriver).trim();
+  if (!assignedDriver) {
+    alert("Driver name is required");
+    return;
+  }
 
-      await loadJobs();
-    }
+  const { error } = await db
+    .from("jobs")
+    .update({
+      assigned_driver: assignedDriver,
+      status: "Assigned"
+    })
+    .eq("id", jobId);
+
+  if (error) {
+    alert("Dispatch failed: " + error.message);
+    return;
+  }
+
+  alert("Driver assigned successfully");
+  await loadJobs();
+}
 
     async function updateAssignedDriver(jobId) {
       const input = document.getElementById(`driver-${jobId}`);
