@@ -826,19 +826,18 @@ const payload = {
       await loadJobs();
     }
 
-    async function dispatchJob(jobId) {
-      const input = document.getElementById(`driver-${jobId}`);
-      const assignedDriver = input ? input.value.trim() : "";
+async function dispatchJob(jobId) {
+      const job = allJobs.find(j => String(j.id) === String(jobId));
+      const assignedDriver = job?.assigned_driver ? String(job.assigned_driver).trim() : "";
 
       if (!assignedDriver) {
-        alert("Type driver name first, then dispatch.");
+        alert("Assign driver in Edit first, then dispatch.");
         return;
       }
 
       const { error } = await db
         .from("jobs")
         .update({
-          assigned_driver: assignedDriver,
           status: "Assigned"
         })
         .eq("id", jobId);
