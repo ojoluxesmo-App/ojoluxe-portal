@@ -697,6 +697,38 @@ function setStops(stops = []) {
         <div class="count-pill">Critical: ${critical}</div>
       `;
     }
+    function openNavMenu(address, label = "Navigation") {
+  if (!address) {
+    alert(label + " address not found");
+    return;
+  }
+
+  const choice = prompt(
+    `${label}:\n1 = Google Maps\n2 = Waze\n3 = Apple Maps`,
+    "1"
+  );
+
+  if (choice === null) return;
+
+  const encoded = encodeURIComponent(address);
+
+  if (choice === "1") {
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
+    return;
+  }
+
+  if (choice === "2") {
+    window.open(`https://waze.com/ul?q=${encoded}`, "_blank");
+    return;
+  }
+
+  if (choice === "3") {
+    window.open(`https://maps.apple.com/?q=${encoded}`, "_blank");
+    return;
+  }
+
+  alert("Invalid choice");
+}
 function fillFormById(id) {
   const job = allJobs.find(j => String(j.id) === String(id));
   if (job) fillForm(job);
@@ -905,7 +937,7 @@ async function dispatchJob(jobId) {
       );
     }
 
-   function renderJobs() {
+ function renderJobs() {
   populateCounts();
 
   const search = (document.getElementById("searchInput")?.value || "").trim().toLowerCase();
@@ -928,7 +960,6 @@ async function dispatchJob(jobId) {
   jobs.forEach((j) => {
     const urgency = getUrgencyLevel(j.date, j.pickup_time);
     const currentStatus = j.status || "Offer";
-    const isCompleted = currentStatus === "Completed";
 
     html += `
       <div class="card">
@@ -977,6 +1008,11 @@ async function dispatchJob(jobId) {
           <button class="small-btn secondary-btn" onclick="showWaybill('${j.id}')">Waybill</button>
           <button class="small-btn assign-btn" onclick="dispatchJob('${j.id}')">Dispatch</button>
           <button class="small-btn danger-btn" onclick="deleteJob('${j.id}')">Delete</button>
+        </div>
+
+        <div class="card-actions">
+          <button class="small-btn secondary-btn" onclick="openNavMenu('${escapeHtml(j.from_loc || "").replace(/'/g, "\\'")}', 'Pickup')">Pickup Nav</button>
+          <button class="small-btn secondary-btn" onclick="openNavMenu('${escapeHtml(j.to_loc || "").replace(/'/g, "\\'")}', 'Dropoff')">Dropoff Nav</button>
         </div>
 
         <div class="card-actions">
