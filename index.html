@@ -982,7 +982,7 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
             </div>
 
             <div class="card-actions">
-              <button class="small-btn secondary-btn" onclick="fillForm(${JSON.stringify(j).replace(/"/g, '&quot;')})">Edit</button>
+              <button class="small-btn secondary-btn" onclick="fillFormById('${j.id}')">Edit</button>
                       </div>
         `;
         } catch (err) {
@@ -994,7 +994,10 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
           `;
         }
       });
-
+function fillFormById(id) {
+  const job = allJobs.find(j => j.id === id);
+  if (job) fillForm(job);
+}
       document.getElementById("jobs").innerHTML = html;
 function getStatusActionLabel(status) {
   switch (status) {
