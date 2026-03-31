@@ -923,12 +923,13 @@ if (window.innerWidth <= 700) {
       let html = "";
 
       jobs.forEach((j) => {
-        const urgency = getUrgencyLevel(j.date, j.pickup_time);
-        const currentStatus = j.status || "Offer";
-        const nextStatus = getNextStatus(currentStatus);
-        const isCompleted = currentStatus === "Completed";
+        try {
+          const urgency = getUrgencyLevel(j.date, j.pickup_time);
+          const currentStatus = j.status || "Offer";
+          const nextStatus = getNextStatus(currentStatus);
+          const isCompleted = currentStatus === "Completed";
 
-        html += `
+          html += `
           <div class="card">
 <div class="card-top">
               <div>
@@ -982,12 +983,19 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
 
             <div class="card-actions">
               <button class="small-btn secondary-btn" onclick="fillForm(${JSON.stringify(j).replace(/"/g, '&quot;')})">Edit</button>
-            </div>
+                      </div>
         `;
+        } catch (err) {
+          html += `
+            <div class="card">
+              <div class="client-name">Render Error</div>
+              <div class="job-note">${escapeHtml(err.message || "Unknown error")}</div>
+            </div>
+          `;
+        }
       });
 
       document.getElementById("jobs").innerHTML = html;
-    }
 function getStatusActionLabel(status) {
   switch (status) {
     case "Assigned":
