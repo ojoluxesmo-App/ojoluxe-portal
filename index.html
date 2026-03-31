@@ -978,13 +978,26 @@ async function dispatchJob(jobId) {
   document.getElementById("jobs").innerHTML = html;
 }
 
-      allJobs = data || [];
-      refreshDriverSuggestions(allJobs);
-      renderJobs();
-    }
+      async function loadJobs() {
+  const { data, error } = await db
+    .from("jobs")
+    .select("*")
+    .order("date", { ascending: true })
+    .order("pickup_time", { ascending: true });
 
-    setActiveTabButton();
-    loadJobs();
+  if (error) {
+    document.getElementById("jobs").innerHTML =
+      `<div class="empty-state">Load error: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  allJobs = data || [];
+  refreshDriverSuggestions(allJobs);
+  renderJobs();
+}
+
+setActiveTabButton();
+loadJobs();
   </script>
 </body>
 </html>
