@@ -54,7 +54,9 @@
       margin-bottom: 16px;
     }
 
-    .tabs {
+    .tabs .tab-btn {
+  width: 100%;
+}
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
@@ -79,7 +81,6 @@
   border-color: #6f5712;
   color: var(--gold);
 }
-    }
 
     .search-row {
       display: grid;
@@ -331,11 +332,6 @@
     }
 
    @media (max-width: 700px) {
-      .tabs,
-      .search-row {
-        grid-template-columns: 1fr;
-      }
-
       .assign-row,
       .card-actions {
         grid-template-columns: 1fr;
