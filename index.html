@@ -697,35 +697,29 @@ function setStops(stops = []) {
         <div class="count-pill">Critical: ${critical}</div>
       `;
     }
-    function openNavMenu(address, label = "Navigation") {
+   function openNavMenu(address, label = "Navigation") {
   if (!address) {
     alert(label + " address not found");
     return;
   }
 
-  const choice = prompt(
-    `${label}:\n1 = Google Maps\n2 = Waze\n3 = Apple Maps`,
-    "1"
-  );
-
-  if (choice === null) return;
-
   const encoded = encodeURIComponent(address);
 
-  if (choice === "1") {
+  const choice = confirm(`${label}\n\nOK = Google Maps\nCancel = More Options`);
+
+  if (choice) {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encoded}`, "_blank");
     return;
   }
 
-  if (choice === "2") {
-    window.open(`https://waze.com/ul?q=${encoded}`, "_blank");
-    return;
-  }
+  const secondChoice = confirm("Open Waze?\n\nOK = Waze\nCancel = Apple Maps");
 
-  if (choice === "3") {
+  if (secondChoice) {
+    window.open(`https://waze.com/ul?q=${encoded}`, "_blank");
+  } else {
     window.open(`https://maps.apple.com/?q=${encoded}`, "_blank");
-    return;
   }
+}
 
   alert("Invalid choice");
 }
