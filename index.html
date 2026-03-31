@@ -890,10 +890,10 @@ async function dispatchJob(jobId) {
     function renderJobs() {
       populateCounts();
 
-      const search = document.getElementById("searchInput").value.trim().toLowerCase();
-let urgencyFilter = document.getElementById("filterUrgency").value;
-let driverFilter = document.getElementById("filterDriver").value;
-let paymentFilter = document.getElementById("filterPayment").value;
+     const search = (document.getElementById("searchInput")?.value || "").trim().toLowerCase();
+let urgencyFilter = document.getElementById("filterUrgency")?.value || "";
+let driverFilter = document.getElementById("filterDriver")?.value || "";
+let paymentFilter = document.getElementById("filterPayment")?.value || "";
 
 if (window.innerWidth <= 700) {
   urgencyFilter = "";
