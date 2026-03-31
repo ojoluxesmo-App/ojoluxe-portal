@@ -1008,7 +1008,7 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
                 class="small-btn status-btn"
                 ${isCompleted ? "disabled style='opacity:0.45;cursor:not-allowed'" : ""}
                 ${isCompleted ? "" : `onclick="updateStatus('${j.id}', '${escapeHtml(currentStatus)}')"`}>
-                ${isCompleted ? "Completed" : "Next Status"}
+             ${isCompleted ? "Completed" : getStatusActionLabel(currentStatus)}
               </button>
               <button class="small-btn secondary-btn" onclick="fillForm(${JSON.stringify(j).replace(/"/g, '&quot;')})">Edit</button>
             </div>
@@ -1018,7 +1018,22 @@ ${Array.isArray(j.stops) && j.stops.length > 0 ? `
 
       document.getElementById("jobs").innerHTML = html;
     }
-
+function getStatusActionLabel(status) {
+  switch (status) {
+    case "Assigned":
+      return "Start Trip";
+    case "Accepted":
+      return "Heading to Pickup";
+    case "Heading to Pickup":
+      return "Arrived";
+    case "Arrived":
+      return "Start Ride";
+    case "In Progress":
+      return "Complete Trip";
+    default:
+      return "Update Status";
+  }
+}
     async function loadJobs() {
       const { data, error } = await db
         .from("jobs")
