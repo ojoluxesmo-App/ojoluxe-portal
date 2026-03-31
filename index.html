@@ -815,7 +815,7 @@ async function dispatchJob(jobId) {
       const assignedDriver = job?.assigned_driver ? String(job.assigned_driver).trim() : "";
 
       if (!assignedDriver) {
-        alert("Assign driver in Edit first, then dispatch.");
+        alert("Assign driver in Edit first");
         return;
       }
 
