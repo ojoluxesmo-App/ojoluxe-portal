@@ -891,10 +891,15 @@ async function dispatchJob(jobId) {
       populateCounts();
 
       const search = document.getElementById("searchInput").value.trim().toLowerCase();
-      const urgencyFilter = document.getElementById("filterUrgency").value;
-      const driverFilter = document.getElementById("filterDriver").value;
-      const paymentFilter = document.getElementById("filterPayment").value;
+let urgencyFilter = document.getElementById("filterUrgency").value;
+let driverFilter = document.getElementById("filterDriver").value;
+let paymentFilter = document.getElementById("filterPayment").value;
 
+if (window.innerWidth <= 700) {
+  urgencyFilter = "";
+  driverFilter = "";
+  paymentFilter = "";
+}
       let jobs = getJobsForCurrentTab(allJobs);
 
       jobs = jobs.filter((j) => {
