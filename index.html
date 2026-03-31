@@ -378,31 +378,9 @@
         <button class="tab-btn" onclick="setTab('post')" id="tab-post">+ Post Job</button>
       </div>
 
-      <div class="search-row">
+   <div class="search-row">
         <input id="searchInput" placeholder="Search client / route" oninput="renderJobs()" />
-        <select id="filterUrgency" onchange="renderJobs()">
-          <option value="">All Urgency</option>
-          <option value="Critical">Critical</option>
-          <option value="Urgent">Urgent</option>
-          <option value="High">High</option>
-          <option value="Medium">Medium</option>
-          <option value="Low">Low</option>
-          <option value="Past Due">Past Due</option>
-        </select>
-        <select id="filterDriver" onchange="renderJobs()">
-          <option value="">All Drivers</option>
-        </select>
-        <select id="filterPayment" onchange="renderJobs()">
-          <option value="">All Payment</option>
-          <option value="Cash">Cash</option>
-          <option value="Zelle">Zelle</option>
-          <option value="Venmo">Venmo</option>
-          <option value="Apple Cash">Apple Cash</option>
-          <option value="Credit Card">Credit Card</option>
-        </select>
-        <button class="secondary-btn" onclick="resetFilters()">Reset</button>
       </div>
-    </div>
 
     <div id="postPanel" class="panel hidden">
       <h3 id="formTitle">➕ New Booking</h3>
