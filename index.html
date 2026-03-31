@@ -55,20 +55,18 @@
     }
 
     .tabs {
-      display: flex;
-      gap: 10px;
-      overflow-x: auto;
-      padding-bottom: 4px;
-    }
-
-.tabs::-webkit-scrollbar {
-      display: none;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
     }
 
 .tab-btn {
-      min-width: 110px;
-      flex-shrink: 0;
-}
+      min-width: 0;
+      flex-shrink: 1;
+      padding: 10px 6px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
     .tab-btn {
       padding: 12px 10px;
       border-radius: 12px;
