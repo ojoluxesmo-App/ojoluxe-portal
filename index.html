@@ -693,7 +693,10 @@ function setStops(stops = []) {
         <div class="count-pill">Critical: ${critical}</div>
       `;
     }
-
+function fillFormById(id) {
+  const job = allJobs.find(j => String(j.id) === String(id));
+  if (job) fillForm(job);
+}
     function fillForm(job) {
       editingId = job.id;
       document.getElementById("name").value = job.client || "";
@@ -887,146 +890,89 @@ async function dispatchJob(jobId) {
       );
     }
 
-    function renderJobs() {
-      populateCounts();
+   function renderJobs() {
+  populateCounts();
 
-     const search = (document.getElementById("searchInput")?.value || "").trim().toLowerCase();
-let urgencyFilter = document.getElementById("filterUrgency")?.value || "";
-let driverFilter = document.getElementById("filterDriver")?.value || "";
-let paymentFilter = document.getElementById("filterPayment")?.value || "";
+  const search = (document.getElementById("searchInput")?.value || "").trim().toLowerCase();
+  let jobs = getJobsForCurrentTab(allJobs);
 
-if (window.innerWidth <= 700) {
-  urgencyFilter = "";
-  driverFilter = "";
-  paymentFilter = "";
-}
-      let jobs = getJobsForCurrentTab(allJobs);
+  jobs = jobs.filter((j) => {
+    const searchText = `${j.client || ""} ${j.from_loc || ""} ${j.to_loc || ""}`.toLowerCase();
+    if (search && !searchText.includes(search)) return false;
+    return true;
+  });
 
-      jobs = jobs.filter((j) => {
-        const urgency = getUrgencyLevel(j.date, j.pickup_time);
-        const searchText = `${j.client || ""} ${j.from_loc || ""} ${j.to_loc || ""}`.toLowerCase();
-
-        if (search && !searchText.includes(search)) return false;
-        if (urgencyFilter && urgency !== urgencyFilter) return false;
-        if (driverFilter && (j.assigned_driver || "") !== driverFilter) return false;
-        if (paymentFilter && (j.payment_type || "") !== paymentFilter) return false;
-
-        return true;
-      });
-
-      if (jobs.length === 0) {
-        document.getElementById("jobs").innerHTML =
-          `<div class="empty-state">No jobs in this section.</div>`;
-        return;
-      }
-
-      let html = "";
-
-      jobs.forEach((j) => {
-        try {
-          const urgency = getUrgencyLevel(j.date, j.pickup_time);
-          const currentStatus = j.status || "Offer";
-          const nextStatus = getNextStatus(currentStatus);
-          const isCompleted = currentStatus === "Completed";
-
-          html += `
-          <div class="card">
-<div class="card-top">
-              <div>
-                <div class="job-meta" style="color: var(--gold-soft); font-weight: 700; letter-spacing: 0.4px;">
-                  ${escapeHtml(j.reference_code || "OJO JOB")}
-                </div>
-                <div class="client-name">${escapeHtml(j.client || "-")}</div>
-                <div class="job-meta">${escapeHtml(j.date || "-")}${j.pickup_time ? ` • ${escapeHtml(j.pickup_time)}` : ""}</div>
-                <div class="job-route">${escapeHtml(j.from_loc || "-")} → ${escapeHtml(j.to_loc || "-")}</div>
-              </div>
-            </div>
-${Array.isArray(j.stops) && j.stops.length > 0 ? `
-  <div class="job-line">
-    <strong>Stops:</strong>
-    ${j.stops.map(s => `📍 ${escapeHtml(s.address)}`).join("<br>")}
-  </div>
-` : ""}
-           <div class="job-badges">
-  <span class="badge">${escapeHtml(j.job_type || "Airport Transfer")}</span>
-  <span class="badge">${escapeHtml(j.vehicle_type || j.vehicle || "-")}</span>
-  <span class="badge">${escapeHtml(j.payment_type || "Cash")}</span>
-
-${Array.isArray(j.stops) && j.stops.length > 0 ? `
-  <span class="badge">${j.stops.length} Stops</span>
-` : ""}
-
-  <span class="badge status-${normalizeClassName(currentStatus)}">${escapeHtml(currentStatus)}</span>
-  <span class="badge urgency-${normalizeClassName(urgency)}">${escapeHtml(urgency)}</span>
-</div>
-
-<div class="job-line" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-  <div><strong>Status:</strong> ${escapeHtml(currentStatus)}</div>
-  <div><strong>Urgency:</strong> ${escapeHtml(urgency)}</div>
-</div>
-            <div class="job-driver">
-              <strong>Driver:</strong>
-              <span style="color:${j.assigned_driver ? '#87e18b' : '#aaa'}">
-                ${escapeHtml(j.assigned_driver || "Unassigned")}
-              </span>
-            </div>
-
-            <div class="job-note"><strong>Notes:</strong> ${escapeHtml(j.waybill_notes || "-")}</div>
-
-
-
-            <div class="card-actions-3">
-              <button class="small-btn secondary-btn" onclick="showWaybill('${j.id}')">Waybill</button>
-              <button class="small-btn assign-btn" onclick="dispatchJob('${j.id}')">Dispatch</button>
-              <button class="small-btn danger-btn" onclick="deleteJob('${j.id}')">Delete</button>
-            </div>
-
-            <div class="card-actions">
-              <button class="small-btn secondary-btn" onclick="fillFormById('${j.id}')">Edit</button>
-                      </div>
-        `;
-        } catch (err) {
-          html += `
-            <div class="card">
-              <div class="client-name">Render Error</div>
-              <div class="job-note">${escapeHtml(err.message || "Unknown error")}</div>
-            </div>
-          `;
-        }
-      });
-function fillFormById(id) {
-  const job = allJobs.find(j => j.id === id);
-  if (job) fillForm(job);
-}
-      document.getElementById("jobs").innerHTML = html;
-function getStatusActionLabel(status) {
-  switch (status) {
-    case "Assigned":
-      return "Start Trip";
-    case "Accepted":
-      return "Heading to Pickup";
-    case "Heading to Pickup":
-      return "Arrived";
-    case "Arrived":
-      return "Start Ride";
-    case "In Progress":
-      return "Complete Trip";
-    default:
-      return "Update Status";
+  if (jobs.length === 0) {
+    document.getElementById("jobs").innerHTML =
+      `<div class="empty-state">No jobs in this section.</div>`;
+    return;
   }
-}
-    async function loadJobs() {
-      const { data, error } = await db
-        .from("jobs")
-        .select("*")
-        .order("date", { ascending: true })
-        .order("pickup_time", { ascending: true });
 
-      if (error) {
-        document.getElementById("jobs").innerHTML =
-          `<div class="empty-state">Load error: ${escapeHtml(error.message)}</div>`;
-        return;
-      }
+  let html = "";
+
+  jobs.forEach((j) => {
+    const urgency = getUrgencyLevel(j.date, j.pickup_time);
+    const currentStatus = j.status || "Offer";
+    const isCompleted = currentStatus === "Completed";
+
+    html += `
+      <div class="card">
+        <div class="card-top">
+          <div>
+            <div class="job-meta" style="color: var(--gold-soft); font-weight: 700;">
+              ${escapeHtml(j.job_type || "OJO Luxe Service")}
+            </div>
+            <div class="client-name">${escapeHtml(j.client || "-")}</div>
+            <div class="job-meta">${escapeHtml(j.date || "-")}${j.pickup_time ? ` • ${escapeHtml(j.pickup_time)}` : ""}</div>
+            <div class="job-route">${escapeHtml(j.from_loc || "-")} → ${escapeHtml(j.to_loc || "-")}</div>
+          </div>
+        </div>
+
+        ${Array.isArray(j.stops) && j.stops.length > 0 ? `
+          <div class="job-line">
+            <strong>Stops:</strong><br>
+            ${j.stops.map(s => `📍 ${escapeHtml(s.address)}`).join("<br>")}
+          </div>
+        ` : ""}
+
+        <div class="job-badges">
+          <span class="badge">${escapeHtml(j.job_type || "Airport Transfer")}</span>
+          <span class="badge">${escapeHtml(j.vehicle_type || j.vehicle || "-")}</span>
+          <span class="badge">${escapeHtml(j.payment_type || "Cash")}</span>
+          ${Array.isArray(j.stops) && j.stops.length > 0 ? `<span class="badge">${j.stops.length} Stops</span>` : ""}
+          <span class="badge status-${normalizeClassName(currentStatus)}">${escapeHtml(currentStatus)}</span>
+          <span class="badge urgency-${normalizeClassName(urgency)}">${escapeHtml(urgency)}</span>
+        </div>
+
+        <div class="job-line" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div><strong>Status:</strong> ${escapeHtml(currentStatus)}</div>
+          <div><strong>Urgency:</strong> ${escapeHtml(urgency)}</div>
+        </div>
+
+        <div class="job-driver">
+          <strong>Driver:</strong>
+          <span style="color:${j.assigned_driver ? '#87e18b' : '#aaa'}">
+            ${escapeHtml(j.assigned_driver || "Unassigned")}
+          </span>
+        </div>
+
+        <div class="job-note"><strong>Notes:</strong> ${escapeHtml(j.waybill_notes || "-")}</div>
+
+        <div class="card-actions-3">
+          <button class="small-btn secondary-btn" onclick="showWaybill('${j.id}')">Waybill</button>
+          <button class="small-btn assign-btn" onclick="dispatchJob('${j.id}')">Dispatch</button>
+          <button class="small-btn danger-btn" onclick="deleteJob('${j.id}')">Delete</button>
+        </div>
+
+        <div class="card-actions">
+          <button class="small-btn secondary-btn" onclick="fillFormById('${j.id}')">Edit</button>
+        </div>
+      </div>
+    `;
+  });
+
+  document.getElementById("jobs").innerHTML = html;
+}
 
       allJobs = data || [];
       refreshDriverSuggestions(allJobs);
