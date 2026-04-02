@@ -6,364 +6,114 @@
   <title>OJO Luxe Portal</title>
 
   <style>
-    :root {
-      --bg: #070707;
-      --panel: #111111;
-      --panel-2: #161616;
-      --border: #262626;
-      --gold: #d4af37;
-      --gold-soft: #c9a85d;
-      --text: #f4f4f4;
-      --muted: #a0a0a0;
-      --green: #2f7d32;
-      --red: #b23b3b;
-      --orange: #b76a00;
-      --blue: #225b9a;
-      --gray: #666666;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Arial, sans-serif;
-    }
-
-    .header {
-      padding: 18px 16px;
-      border-bottom: 1px solid #1c1c1c;
-      color: var(--gold);
-      font-size: 20px;
-      font-weight: 700;
-      background: #050505;
-    }
-
-    .container {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 16px;
-    }
-
-    .topbar {
-      display: grid;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-.tabs {
-  display: flex;
-  gap: 6px;
-  width: 100%;
+   /* ── Dispatch Modal ── */
+.dispatch-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
 }
+.dispatch-overlay.active { display: flex; }
 
-.tabs .tab-btn {
-  flex: 1;
-  padding: 10px 2px;
-  font-size: 11px;
-  border-radius: 10px;
-  text-align: center;
-  white-space: nowrap;
-}
-.tab-btn {
-  padding: 10px 4px;
-  font-size: 12px;
-  border-radius: 10px;
-  border: 1px solid #2a2a2a;
-  background: #0e0e0e;
+.dispatch-modal {
+  background: linear-gradient(180deg, #141414 0%, #0e0e0e 100%);
+  border: 1px solid #3a2e10;
+  border-radius: 18px;
+  padding: 28px 22px 22px;
+  width: min(94vw, 400px);
+  box-shadow: 0 0 0 1px rgba(212,175,55,0.12), 0 24px 60px rgba(0,0,0,0.7);
   color: var(--text);
-  font-weight: 700;
-  cursor: pointer;
-  text-align: center;
-  white-space: nowrap;
 }
-
-.tab-btn.active {
-  background: #1a1405;
-  border-color: #6f5712;
+.dispatch-modal h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 800;
   color: var(--gold);
 }
-
-    .search-row {
-      display: grid;
-      grid-template-columns: 1.6fr 1fr 1fr 1fr auto;
-      gap: 10px;
-    }
-
-    h3 {
-      color: var(--gold);
-      margin: 18px 0 12px;
-      font-size: 18px;
-    }
-
-    .panel {
-      background: transparent;
-    }
-
-    .stack {
-      display: grid;
-      gap: 12px;
-    }
-
-    .field-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 12px;
-    }
-
-    .field-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .field-group label {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--gold-soft);
-    }
-
-    .full-width {
-      grid-column: 1 / -1;
-    }
-
-    input,
-    select,
-    textarea,
-    button {
-      width: 100%;
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 14px;
-      border: 1px solid var(--border);
-      background: #0d0d0d;
-      color: var(--text);
-      margin: 0;
-    }
-
-    input::placeholder,
-    textarea::placeholder {
-      color: #7f7f7f;
-    }
-
-    textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
-
-    .primary-btn {
-      background: #f2cf00;
-      color: #000;
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
-    }
-
-    .secondary-btn {
-      background: #161616;
-      color: var(--gold);
-      border: 1px solid #5a4720;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .danger-btn {
-      background: #2a1111;
-      color: #ff9f9f;
-      border: 1px solid #733;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .job-list {
-      display: grid;
-      gap: 12px;
-    }
-
-    .card {
-      background: linear-gradient(180deg, #111111 0%, #090909 100%);
-      border: 1px solid #2a2a2a;
-      border-radius: 18px;
-      padding: 18px;
-      box-shadow: 0 0 0 1px rgba(212,175,55,0.08), 0 10px 30px rgba(0,0,0,0.28);
-    }
-
-    .card-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: flex-start;
-    }
-
-   .client-name {
-      font-size: 22px;
-      font-weight: 800;
-      line-height: 1.08;
-      margin-bottom: 6px;
-      letter-spacing: 0.2px;
-    }
-
-    .job-meta,
-    .job-route,
-    .job-line,
-    .job-driver,
-    .job-note {
-      font-size: 15px;
-      line-height: 1.35;
-      margin-top: 4px;
-    }
-
-   .job-route {
-      font-size: 18px;
-      font-weight: 600;
-      color: #f0f0f0;
-      margin-top: 6px;
-    }
-
-    .job-badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 10px 0;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 7px 12px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      border: 1px solid #6a5520;
-      color: var(--gold);
-      background: linear-gradient(180deg, #161616 0%, #101010 100%);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
-    }
-
-    .badge.status-offer { border-color: #5e5e5e; color: #d0d0d0; }
-    .badge.status-assigned { border-color: #7a5f12; color: #f2cf63; }
-    .badge.status-accepted { border-color: #8d6b0b; color: #ffd45a; }
-    .badge.status-heading-to-pickup { border-color: #8b5d00; color: #ffc266; }
-    .badge.status-arrived { border-color: #8c7400; color: #ffe06a; }
-    .badge.status-in-progress { border-color: #2e6099; color: #89c2ff; }
-    .badge.status-completed { border-color: #2f7d32; color: #87e18b; }
-    .badge.status-released { border-color: #4d6f91; color: #a7c6e6; }
-    .badge.status-cancelled { border-color: #a33a3a; color: #ff8b8b; }
-
-    .badge.urgency-critical {
-      border-color: #c0392b;
-      color: #ff9a92;
-      box-shadow: 0 0 8px rgba(255, 0, 0, 0.35);
-    }
-    .badge.urgency-urgent { border-color: #d35400; color: #ffbb80; }
-    .badge.urgency-high { border-color: #b7950b; color: #ffe178; }
-    .badge.urgency-medium { border-color: #2e86c1; color: #8fd3ff; }
-    .badge.urgency-low { border-color: #5d6d7e; color: #c9d4df; }
-    .badge.urgency-past-due { border-color: #7b241c; color: #ff8b8b; }
-
-    .assign-row,
-    .card-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .card-actions-3 {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-   .small-btn {
-      padding: 11px 10px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      min-height: 44px;
-    }
-
-.status-btn {
-      background: linear-gradient(180deg, #201805 0%, #151005 100%);
-      color: #f2cf63;
-      border: 1px solid #7a5f12;
-      box-shadow: 0 0 10px rgba(212,175,55,0.12);
-    }
-
-    .assign-btn {
-      background: #0f0f0f;
-      color: white;
-      border: 1px solid #2f2f2f;
-    }
-
-    .empty-state {
-      color: var(--muted);
-      padding: 12px 0;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .count-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 6px;
-    }
-
-    .count-pill {
-      font-size: 12px;
-      color: var(--muted);
-      border: 1px solid #2a2a2a;
-      border-radius: 999px;
-      padding: 6px 10px;
-      background: #101010;
-    }
-
-    .edit-mode {
-      color: #9fe6a0;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    @media (max-width: 900px) {
-      .search-row {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-   @media (max-width: 700px) {
-      .assign-row,
-      .card-actions {
-        grid-template-columns: 1fr;
-      }
-
-      .card-actions-3 {
-        grid-template-columns: 1fr 1fr 1fr;
-      }
-
-      .card {
-        padding: 16px;
-        border-radius: 16px;
-      }
-
-      .client-name {
-        font-size: 20px;
-      }
-
-      .job-route {
-        font-size: 17px;
-      }
-
-      .badge {
-        font-size: 11px;
-        padding: 6px 10px;
-      }
-    }
+.dispatch-job-info {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.dispatch-current-driver {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.dispatch-current-driver span { color: #87e18b; font-weight: 700; }
+.dispatch-input-wrap { position: relative; margin-bottom: 16px; }
+.dispatch-input-wrap input {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 10px;
+  border: 1px solid #3a2e10;
+  background: #0a0a0a;
+  color: var(--text);
+  font-size: 15px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.dispatch-input-wrap input:focus { border-color: var(--gold-soft); }
+#dispatchSuggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: #131313;
+  border: 1px solid #3a2e10;
+  border-radius: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0; padding: 4px 0;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+}
+#dispatchSuggestions li {
+  padding: 11px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #e0e0e0;
+  border-radius: 6px;
+  margin: 2px 4px;
+  transition: background 0.12s;
+}
+#dispatchSuggestions li:hover,
+#dispatchSuggestions li.highlighted {
+  background: #1e1806;
+  color: var(--gold);
+}
+.dispatch-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dispatch-actions button {
+  padding: 13px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  min-height: 48px;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.dispatch-actions button:active { transform: scale(0.97); }
+.dispatch-actions button:hover { opacity: 0.88; }
+.btn-dispatch-cancel {
+  background: #1a1a1a;
+  color: var(--muted);
+  border: 1px solid #2a2a2a !important;
+}
+.btn-dispatch-confirm {
+  background: linear-gradient(180deg, #f2cf00 0%, #d4af37 100%);
+  color: #000;
+}
   </style>
 </head>
 <body>
@@ -1038,5 +788,31 @@ async function dispatchJob(jobId) {
 setActiveTabButton();
 loadJobs();
   </script>
+<!-- Dispatch Modal -->
+<div id="dispatchModal" class="dispatch-overlay" onclick="handleOverlayClick(event)">
+  <div class="dispatch-modal">
+    <h3 id="dispatchModalTitle">Assign Driver</h3>
+    <div class="dispatch-job-info" id="dispatchJobInfo"></div>
+    <div class="dispatch-current-driver" id="dispatchCurrentDriver"></div>
+
+    <div class="dispatch-input-wrap">
+      <input
+        id="dispatchDriverInput"
+        type="text"
+        placeholder="Type driver name..."
+        autocomplete="off"
+        oninput="renderDispatchSuggestions(this.value)"
+        onkeydown="handleDispatchKey(event)"
+        onblur="scheduleHideSuggestions()"
+      />
+      <ul id="dispatchSuggestions"></ul>
+    </div>
+
+    <div class="dispatch-actions">
+      <button class="btn-dispatch-cancel" onclick="closeDispatchModal()">Cancel</button>
+      <button class="btn-dispatch-confirm" onclick="confirmDispatch()">Confirm Assign</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
