@@ -6,76 +6,364 @@
   <title>OJO Luxe Portal</title>
 
   <style>
-  /* Dispatch Modal */
-.dispatch-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.65);
-  z-index: 9999;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
+    :root {
+      --bg: #070707;
+      --panel: #111111;
+      --panel-2: #161616;
+      --border: #262626;
+      --gold: #d4af37;
+      --gold-soft: #c9a85d;
+      --text: #f4f4f4;
+      --muted: #a0a0a0;
+      --green: #2f7d32;
+      --red: #b23b3b;
+      --orange: #b76a00;
+      --blue: #225b9a;
+      --gray: #666666;
+    }
 
-.dispatch-modal {
-  width: min(92vw, 400px);
-  background: #111;
-  border: 1px solid rgba(212,175,55,0.2);
-  border-radius: 14px;
-  padding: 20px;
-  color: #fff;
-}
+    * {
+      box-sizing: border-box;
+    }
 
-.dispatch-input-wrap input {
-  width: 100%;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #333;
-  background: #1a1a1a;
-  color: #fff;
-}
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+    }
 
-#dispatchSuggestions {
-  margin-top: 8px;
+    .header {
+      padding: 18px 16px;
+      border-bottom: 1px solid #1c1c1c;
+      color: var(--gold);
+      font-size: 20px;
+      font-weight: 700;
+      background: #050505;
+    }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .topbar {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+.tabs {
   display: flex;
-  flex-direction: column;
   gap: 6px;
+  width: 100%;
 }
 
-.dispatch-suggestion-item {
-  padding: 8px 10px;
-  background: #1a1a1a;
-  border-radius: 8px;
+.tabs .tab-btn {
+  flex: 1;
+  padding: 10px 2px;
+  font-size: 11px;
+  border-radius: 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+.tab-btn {
+  padding: 10px 4px;
+  font-size: 12px;
+  border-radius: 10px;
+  border: 1px solid #2a2a2a;
+  background: #0e0e0e;
+  color: var(--text);
+  font-weight: 700;
   cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
 }
 
-.dispatch-suggestion-item:hover {
-  background: #2a2a2a;
+.tab-btn.active {
+  background: #1a1405;
+  border-color: #6f5712;
+  color: var(--gold);
 }
 
-.dispatch-actions {
-  margin-top: 16px;
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}
+    .search-row {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr 1fr 1fr auto;
+      gap: 10px;
+    }
 
-.btn-cancel {
-  background: #333;
-  color: #ccc;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
-}
+    h3 {
+      color: var(--gold);
+      margin: 18px 0 12px;
+      font-size: 18px;
+    }
 
-.btn-confirm {
-  background: #d4af37;
-  color: #111;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
-}
+    .panel {
+      background: transparent;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-group label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gold-soft);
+    }
+
+    .full-width {
+      grid-column: 1 / -1;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      width: 100%;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      background: #0d0d0d;
+      color: var(--text);
+      margin: 0;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: #7f7f7f;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .primary-btn {
+      background: #f2cf00;
+      color: #000;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+    }
+
+    .secondary-btn {
+      background: #161616;
+      color: var(--gold);
+      border: 1px solid #5a4720;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .danger-btn {
+      background: #2a1111;
+      color: #ff9f9f;
+      border: 1px solid #733;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .job-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, #111111 0%, #090909 100%);
+      border: 1px solid #2a2a2a;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 0 0 1px rgba(212,175,55,0.08), 0 10px 30px rgba(0,0,0,0.28);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+   .client-name {
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.08;
+      margin-bottom: 6px;
+      letter-spacing: 0.2px;
+    }
+
+    .job-meta,
+    .job-route,
+    .job-line,
+    .job-driver,
+    .job-note {
+      font-size: 15px;
+      line-height: 1.35;
+      margin-top: 4px;
+    }
+
+   .job-route {
+      font-size: 18px;
+      font-weight: 600;
+      color: #f0f0f0;
+      margin-top: 6px;
+    }
+
+    .job-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid #6a5520;
+      color: var(--gold);
+      background: linear-gradient(180deg, #161616 0%, #101010 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+    }
+
+    .badge.status-offer { border-color: #5e5e5e; color: #d0d0d0; }
+    .badge.status-assigned { border-color: #7a5f12; color: #f2cf63; }
+    .badge.status-accepted { border-color: #8d6b0b; color: #ffd45a; }
+    .badge.status-heading-to-pickup { border-color: #8b5d00; color: #ffc266; }
+    .badge.status-arrived { border-color: #8c7400; color: #ffe06a; }
+    .badge.status-in-progress { border-color: #2e6099; color: #89c2ff; }
+    .badge.status-completed { border-color: #2f7d32; color: #87e18b; }
+    .badge.status-released { border-color: #4d6f91; color: #a7c6e6; }
+    .badge.status-cancelled { border-color: #a33a3a; color: #ff8b8b; }
+
+    .badge.urgency-critical {
+      border-color: #c0392b;
+      color: #ff9a92;
+      box-shadow: 0 0 8px rgba(255, 0, 0, 0.35);
+    }
+    .badge.urgency-urgent { border-color: #d35400; color: #ffbb80; }
+    .badge.urgency-high { border-color: #b7950b; color: #ffe178; }
+    .badge.urgency-medium { border-color: #2e86c1; color: #8fd3ff; }
+    .badge.urgency-low { border-color: #5d6d7e; color: #c9d4df; }
+    .badge.urgency-past-due { border-color: #7b241c; color: #ff8b8b; }
+
+    .assign-row,
+    .card-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .card-actions-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+   .small-btn {
+      padding: 11px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 44px;
+    }
+
+.status-btn {
+      background: linear-gradient(180deg, #201805 0%, #151005 100%);
+      color: #f2cf63;
+      border: 1px solid #7a5f12;
+      box-shadow: 0 0 10px rgba(212,175,55,0.12);
+    }
+
+    .assign-btn {
+      background: #0f0f0f;
+      color: white;
+      border: 1px solid #2f2f2f;
+    }
+
+    .empty-state {
+      color: var(--muted);
+      padding: 12px 0;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .count-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .count-pill {
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid #2a2a2a;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: #101010;
+    }
+
+    .edit-mode {
+      color: #9fe6a0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 900px) {
+      .search-row {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+   @media (max-width: 700px) {
+      .assign-row,
+      .card-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .card-actions-3 {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      .card {
+        padding: 16px;
+        border-radius: 16px;
+      }
+
+      .client-name {
+        font-size: 20px;
+      }
+
+      .job-route {
+        font-size: 17px;
+      }
+
+      .badge {
+        font-size: 11px;
+        padding: 6px 10px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -553,177 +841,69 @@ async function dispatchJob(jobId) {
     return;
   }
 
-  const modal = document.getElementById("dispatchModal");
-  const input = document.getElementById("dispatchDriverInput");
-  const suggestions = document.getElementById("dispatchSuggestions");
-  const title = document.getElementById("dispatchModalTitle");
-  const confirmBtn = document.getElementById("dispatchConfirmBtn");
-  const cancelBtn = document.getElementById("dispatchCancelBtn");
-  const closeBtn = document.getElementById("dispatchCloseBtn");
+  const currentDriver = job.assigned_driver || "";
+  const newDriver = prompt("Assign / reassign driver for this job:", currentDriver);
 
-  if (!modal || !input || !suggestions || !title || !confirmBtn || !cancelBtn || !closeBtn) {
-    alert("Dispatch modal is missing");
+  if (newDriver === null) return;
+
+  const assignedDriver = String(newDriver).trim();
+  if (!assignedDriver) {
+    alert("Driver name is required");
     return;
   }
-
-  const currentDriver = String(job.assigned_driver || "").trim();
-  const driverNames = [...new Set(
-    allJobs
-      .map(j => String(j.assigned_driver || "").trim())
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b))
-  )];
-
-  modal.dataset.jobId = String(jobId);
-  title.textContent = currentDriver ? "Reassign Driver" : "Assign Driver";
-  input.value = currentDriver;
-  suggestions.innerHTML = "";
-  modal.style.display = "flex";
-
-  setTimeout(() => {
-    input.focus();
-    input.select();
-  }, 30);
-
-  function closeDispatchModal() {
-    modal.style.display = "none";
-    modal.dataset.jobId = "";
-    suggestions.innerHTML = "";
-    input.value = "";
-    input.oninput = null;
-    input.onkeydown = null;
-    confirmBtn.onclick = null;
-    cancelBtn.onclick = null;
-    closeBtn.onclick = null;
-    modal.onclick = null;
-    document.removeEventListener("keydown", escHandler);
-  }
-
-  function renderSuggestions(keyword) {
-    const q = String(keyword || "").trim().toLowerCase();
-    if (!q) {
-      suggestions.innerHTML = "";
-      return;
-    }
-
-    const matches = driverNames
-      .filter(name => name.toLowerCase().includes(q))
-      .slice(0, 8);
-
-    if (matches.length === 0) {
-      suggestions.innerHTML = "";
-      return;
-    }
-
-    suggestions.innerHTML = matches.map(name => `
-      <button type="button" class="dispatch-suggestion-item" data-name="${escapeHtml(name)}">
-        ${escapeHtml(name)}
-      </button>
-    `).join("");
-
-    suggestions.querySelectorAll(".dispatch-suggestion-item").forEach(btn => {
-      btn.onclick = () => {
-        input.value = btn.dataset.name || "";
-        suggestions.innerHTML = "";
-        input.focus();
-      };
-    });
-  }
-
-  async function saveDispatch() {
-    const assignedDriver = String(input.value || "").trim();
-
-    if (!assignedDriver) {
-      alert("Driver name is required");
-      input.focus();
-      return;
-    }
-
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = "Saving...";
-
-    const { error } = await db
-      .from("jobs")
-      .update({
-        assigned_driver: assignedDriver,
-        status: "Assigned"
-      })
-      .eq("id", jobId);
-
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = "Confirm Assign";
-
-    if (error) {
-      alert("Dispatch failed: " + error.message);
-      return;
-    }
-
-    closeDispatchModal();
-    alert(currentDriver ? "Driver reassigned successfully" : "Driver assigned successfully");
-    await loadJobs();
-  }
-
-  function escHandler(e) {
-    if (e.key === "Escape") closeDispatchModal();
-  }
-
-  input.oninput = () => renderSuggestions(input.value);
-
-  input.onkeydown = async (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      await saveDispatch();
-    }
-  };
-
-  confirmBtn.onclick = saveDispatch;
-  cancelBtn.onclick = closeDispatchModal;
-  closeBtn.onclick = closeDispatchModal;
-
-  modal.onclick = (e) => {
-    if (e.target === modal) closeDispatchModal();
-  };
-
-  document.addEventListener("keydown", escHandler);
-
-  renderSuggestions(currentDriver);
-}
-
-async function updateAssignedDriver(jobId) {
-  const input = document.getElementById(`driver-${jobId}`);
-  if (!input) return;
-
-  const assignedDriver = input.value.trim();
 
   const { error } = await db
     .from("jobs")
-    .update({ assigned_driver: assignedDriver })
+    .update({
+      assigned_driver: assignedDriver,
+      status: "Assigned"
+    })
     .eq("id", jobId);
 
   if (error) {
-    alert("Driver update failed: " + error.message);
+    alert("Dispatch failed: " + error.message);
     return;
   }
 
+  alert("Driver assigned successfully");
   await loadJobs();
 }
 
-async function deleteJob(jobId) {
-  const confirmed = confirm("Delete this job?");
-  if (!confirmed) return;
+    async function updateAssignedDriver(jobId) {
+      const input = document.getElementById(`driver-${jobId}`);
+      if (!input) return;
 
-  const { error } = await db
-    .from("jobs")
-    .delete()
-    .eq("id", jobId);
+      const assignedDriver = input.value.trim();
 
-  if (error) {
-    alert("Delete failed: " + error.message);
-    return;
-  }
+      const { error } = await db
+        .from("jobs")
+        .update({ assigned_driver: assignedDriver })
+        .eq("id", jobId);
 
-  await loadJobs();
-}
+      if (error) {
+        alert("Driver update failed: " + error.message);
+        return;
+      }
+
+      await loadJobs();
+    }
+
+    async function deleteJob(jobId) {
+      const confirmed = confirm("Delete this job?");
+      if (!confirmed) return;
+
+      const { error } = await db
+        .from("jobs")
+        .delete()
+        .eq("id", jobId);
+
+      if (error) {
+        alert("Delete failed: " + error.message);
+        return;
+      }
+
+      await loadJobs();
+    }
 
     function openMap(address) {
       if (!address) return;
@@ -858,26 +1038,5 @@ async function deleteJob(jobId) {
 setActiveTabButton();
 loadJobs();
   </script>
-<div id="dispatchModal" class="dispatch-overlay" style="display:none;">
-  <div id="dispatchModalCard" class="dispatch-modal">
-    <h3 id="dispatchModalTitle">Assign Driver</h3>
-
-    <div class="dispatch-input-wrap">
-      <input
-        id="dispatchDriverInput"
-        type="text"
-        placeholder="Type driver name..."
-        autocomplete="off"
-      />
-      <div id="dispatchSuggestions"></div>
-    </div>
-
-    <div class="dispatch-actions">
-      <button type="button" id="dispatchCancelBtn" class="btn-cancel">Cancel</button>
-      <button type="button" id="dispatchConfirmBtn" class="btn-confirm">Confirm</button>
-      <button type="button" id="dispatchCloseBtn" style="display:none;"></button>
-    </div>
-  </div>
-</div>
 </body>
 </html>
