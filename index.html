@@ -1,4 +1,4 @@
-<!-- OJO LUXE PORTAL — V8 | Built on V7 | Added: Clients module (People tab), auto-fill client contact on Post Job form -->
+<!-- OJO LUXE PORTAL — V9 | Built on V8 | Added: status toggle buttons on job cards -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -272,6 +272,19 @@ input,select,textarea,button{font-family:var(--font-ui);}
 .empty-icon{font-size:40px;margin-bottom:12px;opacity:.4;}
 .empty-text{font-size:15px;font-weight:600;}
 .empty-sub{font-size:12px;margin-top:4px;color:#555;}
+
+/* ─── STATUS TOGGLE BUTTONS ──────────────────────────────── */
+.status-flow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.btn-status{
+  flex:1;min-width:100px;padding:10px 8px;
+  border-radius:var(--radius-sm);font-size:12px;font-weight:800;
+  cursor:pointer;border:none;transition:opacity .12s,transform .1s;
+  font-family:var(--font-ui);letter-spacing:.04em;
+}
+.btn-status:active{opacity:.75;transform:scale(.98);}
+.btn-status.next{background:linear-gradient(135deg,#c9a84c 0%,#f2cf63 50%,#c9a84c 100%);color:#000;}
+.btn-status.cancel{background:#2a1111;color:var(--red);border:1px solid #5c1a1a;}
+.btn-status.complete{background:#0d2b0d;color:var(--green);border:1px solid #2e7d32;}
 
 /* ─── POST JOB FORM ──────────────────────────────────── */
 .form-card{
@@ -2184,6 +2197,7 @@ function renderJobs() {
                 style="background:#050d00;border:1px solid #2a3a00;color:var(--text);padding:7px 8px;font-size:12px;width:100%;border-radius:7px;">
             </div>
           </div>`:""}
+          ${renderStatusButtons(j)}
           <div class="action-row">
             <button class="btn btn-sec" onclick="showWaybill('${j.id}')">Waybill</button>
             ${isAdminMode()?`<button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button><button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
@@ -2741,6 +2755,89 @@ async function saveJob() {
   }
 }
 function cancelEdit(){editingId=null;getEl("formTitle").textContent="+ New Booking";getEl("editModeLabel").style.display="none";clearForm();}
+
+// ── Status Flow ───────────────────────────────────────────────────────────────
+const STATUS_FLOW = [
+  "Offer",
+  "Assigned",
+  "Accepted",
+  "Heading to Pickup",
+  "Arrived",
+  "In Progress",
+  "Completed"
+];
+const OPEN_STATUSES = ["Offer","Assigned","Accepted","Heading to Pickup","Arrived","In Progress"];
+
+function getNextStatus(current) {
+  const idx = STATUS_FLOW.indexOf(current);
+  if (idx === -1 || idx >= STATUS_FLOW.length - 1) return null;
+  return STATUS_FLOW[idx + 1];
+}
+
+function renderStatusButtons(j) {
+  const status = j.status || "Offer";
+  if (status === "Completed" || status === "Cancelled") return "";
+
+  const next = getNextStatus(status);
+  const labelMap = {
+    "Assigned":        "✅ Accept Job",
+    "Accepted":        "🚗 Heading to Pickup",
+    "Heading to Pickup": "📍 Arrived",
+    "Arrived":         "▶️ Start Job",
+    "In Progress":     "✅ Complete Job",
+    "Completed":       null
+  };
+  const nextLabel = next ? (labelMap[next] || ("→ " + next)) : null;
+  const isComplete = next === "Completed";
+
+  return `<div class="status-flow">
+    ${nextLabel ? `<button class="btn-status ${isComplete ? "complete" : "next"}" onclick="updateJobStatus('${j.id}','${next}')">${nextLabel}</button>` : ""}
+    <button class="btn-status cancel" onclick="updateJobStatus('${j.id}','Cancelled')">✕ Cancel</button>
+  </div>`;
+}
+
+async function updateJobStatus(jobId, newStatus) {
+  const j = allJobs.find(x => String(x.id) === String(jobId));
+  if (!j) return;
+
+  const confirmMsg = newStatus === "Cancelled"
+    ? `Cancel this job for ${escapeHtml(j.client||"client")}?`
+    : `Move to "${newStatus}"?`;
+  if (!confirm(confirmMsg)) return;
+
+  const patch = { status: newStatus };
+  // Auto-set timestamps for key transitions
+  if (newStatus === "In Progress") patch.time_start = new Date().toTimeString().slice(0,5);
+  if (newStatus === "Completed")   patch.time_end   = new Date().toTimeString().slice(0,5);
+
+  try {
+    const r = await fetch(SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(jobId), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": "Bearer " + (SERVICE_KEY || SUPABASE_KEY),
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify(patch)
+    });
+    if (!r.ok && r.status !== 204) {
+      const err = await r.json().catch(() => ({}));
+      alert("Status update failed: " + (err.message || r.status));
+      return;
+    }
+    // Update local cache immediately
+    j.status = newStatus;
+    if (patch.time_start) j.time_start = patch.time_start;
+    if (patch.time_end)   j.time_end   = patch.time_end;
+    updateStats();
+    renderJobs();
+    console.log("[OJO] ✅ Status updated:", jobId, "→", newStatus);
+  } catch(e) {
+    console.error("[OJO] updateJobStatus crash:", e.message);
+    alert("Status update failed: " + e.message);
+  }
+}
 
 // ── Multi-Day Tour: generate N job entries ────────────────────────────────────
 // ── Multi-Day Tour: split total evenly, generate N sequential job entries ─────
