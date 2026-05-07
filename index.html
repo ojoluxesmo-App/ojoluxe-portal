@@ -1,4 +1,4 @@
-<!-- OJO LUXE PORTAL — V9 | Built on V8 | Added: status toggle buttons on job cards -->
+<!-- OJO LUXE PORTAL — V10 | Built on V9 | Added: reference_code (OJO-YYYYMMDD-XXXX) on job cards, waybill, form -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1651,7 +1651,7 @@ window.addEventListener("unhandledrejection", function(e) {
 
 <!-- Waybill Modal -->
 <div id="waybillModal" class="overlay" style="display:none;" onclick="if(event.target===this)closeWaybill()">
-  <div class="modal" style="background:#fff;border:none;max-width:640px;">
+  <div class="modal" style="background:#fff;border:none;max-width:420px;width:100%;">
     <div id="waybillContent"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:14px 18px;background:#f5f5f5;border-top:1px solid #ddd;">
       <button style="background:#eee;color:#333;border:1px solid #ccc;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;" onclick="closeWaybill()">Close</button>
@@ -1792,6 +1792,14 @@ let portalMode = "admin";
 function escapeHtml(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function money(v){return "$"+(parseFloat(v)||0).toFixed(2);}
 function num(v){return parseFloat(v)||0;}
+function generateRefCode() {
+  const now = new Date();
+  const datePart = now.getFullYear().toString() +
+    String(now.getMonth()+1).padStart(2,"0") +
+    String(now.getDate()).padStart(2,"0");
+  const seq = String(Math.floor(Math.random()*9000)+1000); // 4-digit random
+  return "OJO-" + datePart + "-" + seq;
+}
 function getEl(id){return document.getElementById(id);}
 function getValue(id){const el=getEl(id);return el?el.value.trim():"";}
 function setValue(id,val){
@@ -2118,7 +2126,7 @@ function renderJobs() {
         <div class="jc-avatar">${icon}</div>
         <div class="jc-main">
           <div class="jc-client">${escapeHtml(j.client||"-")}</div>
-          <div class="jc-meta">${agentBadge}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${escapeHtml(j.assigned_driver||"Unassigned")}</div>
+          <div class="jc-meta">${agentBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${escapeHtml(j.assigned_driver||"Unassigned")}</div>
         </div>
         <div class="jc-right">
           <div class="jc-price">${money(pricing.totalPrice)}</div>
@@ -2688,10 +2696,13 @@ async function saveJob() {
   const bookingMode = (typeof currentBookingMode !== "undefined") ? currentBookingMode : "standard";
 
   console.log("[S6] building payload");
+  // Generate reference code for new jobs only
+  const existingRef = editingId ? (allJobs.find(x=>String(x.id)===String(editingId))?.reference_code||null) : null;
   const payload={
     client, date, pickup_time:getValue("pickupTime"),
     client_phone:getValue("clientPhone")||null,
     client_email:getValue("clientEmail")||null,
+    reference_code: existingRef || generateRefCode(),
     from_loc:getValue("pickup_from"), to_loc:getValue("to"),
     stops:(typeof getStops==="function" ? getStops() : []),
     job_type:jobType, vehicle_type:vehicleType,
@@ -2901,6 +2912,7 @@ async function saveMultiDayTour() {
 
       return {
         client,
+        reference_code: generateRefCode(),
         date:        dayDate,
         pickup_time: getValue("pickupTime"),
         from_loc:    getValue("pickup_from"),
@@ -3192,34 +3204,89 @@ function showWaybill(jobId) {
   const pricing=calculateJobPrice(j);
   const modal=getEl("waybillModal"),content=getEl("waybillContent");
   if(!modal||!content) return;
-  const modeTag=j.pricing_mode==="manual"?'<span style="background:#fffbe6;color:#b7860b;border:1px solid #f5d76e;border-radius:6px;font-size:11px;font-weight:700;padding:2px 8px;margin-left:8px;">MANUAL</span>':'<span style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:6px;font-size:11px;font-weight:700;padding:2px 8px;margin-left:8px;">AUTO</span>';
-  const wRow=(l,v)=>`<tr><td style="padding:6px 0;color:#666;font-size:13px;width:42%;border-bottom:1px solid #f0f0f0;">${l}</td><td style="padding:6px 0;font-weight:700;font-size:13px;text-align:right;border-bottom:1px solid #f0f0f0;">${escapeHtml(String(v))}</td></tr>`;
-  content.innerHTML=`<div style="background:#fff;color:#111;font-family:Arial,sans-serif;">
-    <div style="background:#0c0b09;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
-      <div><div style="color:#c9a84c;font-size:18px;font-weight:800;letter-spacing:.08em;">OJO LUXE LLC</div><div style="color:#888;font-size:11px;margin-top:2px;">TCP # PSG0049661</div></div>
-      <div style="text-align:right;"><div style="color:#c9a84c;font-size:10px;font-weight:700;letter-spacing:.18em;">WAYBILL</div><div style="color:#fff;font-size:20px;font-weight:800;">#${escapeHtml(String(j.id||"-"))}</div></div>
+  const modeTag=j.pricing_mode==="manual"
+    ?'<span style="background:#fffbe6;color:#b7860b;border:1px solid #f5d76e;border-radius:4px;font-size:10px;font-weight:700;padding:1px 6px;">MANUAL</span>'
+    :'<span style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:4px;font-size:10px;font-weight:700;padding:1px 6px;">AUTO</span>';
+
+  const row=(l,v)=>`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f0f0f0;gap:8px;">
+      <span style="color:#888;font-size:12px;white-space:nowrap;">${l}</span>
+      <span style="font-weight:700;font-size:12px;text-align:right;color:#111;">${escapeHtml(String(v))}</span>
+    </div>`;
+
+  content.innerHTML=`
+  <div id="waybill-card" style="width:100%;background:#fff;font-family:'Helvetica Neue',Arial,sans-serif;overflow:hidden;box-sizing:border-box;">
+
+    <!-- Header -->
+    <div style="background:#0c0b09;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img src="${getEl('logoImg')?.src||''}" alt="OJO Luxe" style="height:36px;width:auto;object-fit:contain;" onerror="this.style.display='none'">
+        <div style="color:#888;font-size:9px;margin-top:2px;">TCP49661-P</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="color:#888;font-size:9px;font-weight:700;letter-spacing:.16em;">WAYBILL</div>
+        <div style="color:#c9a84c;font-size:22px;font-weight:800;line-height:1.1;">${escapeHtml(String(j.reference_code||j.id||"-"))}</div>
+      </div>
     </div>
-    <div style="padding:18px 20px;">
-      <div style="font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;margin-bottom:8px;">TRIP DETAILS</div>
-      <table style="width:100%;border-collapse:collapse;">${wRow("Client",j.client||"-")}${j.client_phone?wRow("Client Phone",j.client_phone):""}${j.client_email?wRow("Client Email",j.client_email):""}${wRow("Date",j.date||"-")}${wRow("Pickup Time",j.pickup_time||"-")}${wRow("Job Type",j.job_type||"-")}${wRow("Status",j.status||"Offer")}${wRow("Payment",j.payment_type||"-")}</table>
-      <div style="margin:16px 0 8px;font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;">ROUTE</div>
-      <div style="background:#f9f9f9;border:1px solid #eee;border-radius:10px;overflow:hidden;">
-        <div style="padding:10px 14px;border-bottom:1px solid #eee;"><div style="font-size:10px;font-weight:800;letter-spacing:.12em;color:#999;margin-bottom:3px;">PICKUP</div><div style="font-size:14px;font-weight:700;">${escapeHtml(j.from_loc||"-")}</div></div>
-        ${Array.isArray(j.stops)&&j.stops.length?`<div style="padding:10px 14px;border-bottom:1px solid #eee;">${j.stops.map(s=>`<div style="font-size:13px;margin-bottom:4px;">📍 ${escapeHtml(s.address)}</div>`).join("")}</div>`:""}
-        <div style="padding:10px 14px;"><div style="font-size:10px;font-weight:800;letter-spacing:.12em;color:#999;margin-bottom:3px;">DROPOFF</div><div style="font-size:14px;font-weight:700;">${escapeHtml(j.to_loc||"-")}</div></div>
-      </div>
-      <div style="margin:16px 0 8px;font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;">DRIVER & VEHICLE</div>
-      <table style="width:100%;border-collapse:collapse;">${wRow("Driver",j.assigned_driver||"Unassigned")}${wRow("Vehicle",j.vehicle_type||"-")}</table>
-      <div style="background:#fafafa;border:1px solid #e0e0e0;border-radius:10px;padding:14px;margin:16px 0;">
-        <div style="font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;margin-bottom:10px;">PRICING</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:13px;color:#555;">Total Fare ${modeTag}</span>
-          <span style="font-size:26px;font-weight:800;color:#111;">${money(pricing.totalPrice)}</span>
+
+    <div style="padding:14px 18px;">
+
+      <!-- Client + Date row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;">
+          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:3px;">CLIENT</div>
+          <div style="font-size:13px;font-weight:800;color:#111;">${escapeHtml(j.client||"-")}</div>
+          ${j.client_phone?`<a href="tel:${escapeHtml(j.client_phone)}" style="font-size:11px;color:#2e7d32;font-weight:700;text-decoration:none;display:block;margin-top:2px;">📞 ${escapeHtml(j.client_phone)}</a>`:""}
+          ${j.client_email?`<div style="font-size:10px;color:#888;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">✉️ ${escapeHtml(j.client_email)}</div>`:""}
         </div>
-        ${j.posted_by?`<div style="margin-top:8px;font-size:11px;color:#888;text-align:right;">Posted by: ${escapeHtml(j.posted_by)}</div>`:""}
+        <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;">
+          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:3px;">DATE & TIME</div>
+          <div style="font-size:13px;font-weight:800;color:#111;">${escapeHtml(j.date||"-")}</div>
+          <div style="font-size:12px;color:#555;margin-top:2px;">${escapeHtml(j.pickup_time||"—")}</div>
+          <div style="font-size:10px;color:#888;margin-top:2px;">${escapeHtml(j.job_type||"-")}</div>
+        </div>
       </div>
-      ${j.waybill_notes?`<div style="background:#f0fff4;border:1px solid #c6f6d5;border-radius:10px;padding:12px 14px;"><div style="font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;margin-bottom:6px;">DRIVER NOTES</div><div style="font-size:13px;color:#1a4731;line-height:1.5;">${escapeHtml(j.waybill_notes)}</div></div>`:""}
-      <div style="text-align:center;margin-top:16px;padding-top:12px;border-top:1px solid #eee;"><div style="font-size:10px;color:#bbb;">147 W Route 66 Suite 757, Glendora CA 91740</div><div style="font-size:10px;color:#bbb;">(310) 406-6692 · info@ojoluxe.com · www.ojoluxe.com</div></div>
+
+      <!-- Route -->
+      <div style="background:#f4f4f4;border-radius:8px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:9px 12px;border-bottom:1px solid #eaeaea;">
+          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">PICKUP</div>
+          <div style="font-size:12px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.from_loc||"-")}</div>
+        </div>
+        ${Array.isArray(j.stops)&&j.stops.length?`<div style="padding:7px 12px;border-bottom:1px solid #eaeaea;">${j.stops.map(s=>`<div style="font-size:11px;color:#555;">📍 ${escapeHtml(s.address)}</div>`).join("")}</div>`:""}
+        <div style="padding:9px 12px;">
+          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">DROPOFF</div>
+          <div style="font-size:12px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.to_loc||"-")}</div>
+        </div>
+      </div>
+
+      <!-- Driver + Fare row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;">
+          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:3px;">DRIVER</div>
+          <div style="font-size:13px;font-weight:800;color:${j.assigned_driver?"#111":"#bbb"};">${escapeHtml(j.assigned_driver||"Unassigned")}</div>
+          <div style="font-size:11px;color:#888;margin-top:2px;">${escapeHtml(j.vehicle_type||"-")}</div>
+        </div>
+        <div style="background:#0c0b09;border-radius:8px;padding:10px 12px;text-align:right;">
+          <div style="font-size:9px;font-weight:700;color:#888;letter-spacing:.14em;margin-bottom:3px;">TOTAL FARE ${modeTag}</div>
+          <div style="font-size:24px;font-weight:800;color:#c9a84c;line-height:1.1;">${money(pricing.totalPrice)}</div>
+          <div style="font-size:10px;color:#666;margin-top:2px;">${escapeHtml(j.payment_type||"-")} · ${escapeHtml(j.status||"Offer")}</div>
+        </div>
+      </div>
+
+      <!-- Driver Notes -->
+      ${j.waybill_notes?`
+      <div style="background:#f0fff4;border:1px solid #c6f6d5;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+        <div style="font-size:9px;font-weight:700;color:#999;letter-spacing:.14em;margin-bottom:4px;">DRIVER NOTES</div>
+        <div style="font-size:12px;color:#1a4731;line-height:1.5;">${escapeHtml(j.waybill_notes)}</div>
+      </div>`:""}
+
+      <!-- Footer -->
+      <div style="text-align:center;padding-top:10px;border-top:1px solid #eee;">
+        <div style="font-size:9px;color:#ccc;line-height:1.6;">147 W Route 66 Suite 757, Glendora CA 91740</div>
+        <div style="font-size:9px;color:#ccc;">(310) 406-6692 · info@ojoluxe.com · ojoluxe.com · TCP49661-P</div>
+      </div>
+
     </div>
   </div>`;
   modal.style.display="flex";
@@ -3247,7 +3314,13 @@ async function shareWaybillImage(){
         s.onload=res; s.onerror=rej; document.head.appendChild(s);
       });
     }
-    const canvas = await html2canvas(content,{scale:2,useCORS:true,backgroundColor:"#ffffff",logging:false});
+    // Target the inner card for a clean fixed-width capture
+    const card = getEl("waybill-card") || content;
+    const cardWidth = card.offsetWidth || 390;
+    const canvas = await html2canvas(card,{
+      scale:2, useCORS:true, backgroundColor:"#ffffff", logging:false,
+      width:cardWidth, windowWidth:cardWidth
+    });
     canvas.toBlob(async(blob)=>{
       if(!blob){alert("Could not capture image.");return;}
       const file=new File([blob],"OJO_Waybill.png",{type:"image/png"});
