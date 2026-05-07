@@ -1,3 +1,4 @@
+<!-- OJO LUXE PORTAL — V8 | Built on V7 | Added: Clients module (People tab), auto-fill client contact on Post Job form -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -770,7 +771,19 @@ window.addEventListener("unhandledrejection", function(e) {
 
         <div class="field">
           <label>Client Name</label>
-          <input id="name" placeholder="e.g. John Smith">
+          <input id="name" placeholder="e.g. John Smith" list="clientNameSuggestions" oninput="onClientNameInput()" autocomplete="off">
+          <datalist id="clientNameSuggestions"></datalist>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Client Phone</label>
+            <input id="clientPhone" type="tel" placeholder="e.g. (310) 555-0000">
+          </div>
+          <div class="field">
+            <label>Client Email</label>
+            <input id="clientEmail" type="email" placeholder="e.g. john@email.com">
+          </div>
         </div>
 
         <div class="field-row">
@@ -1131,14 +1144,14 @@ window.addEventListener("unhandledrejection", function(e) {
       <button class="sec-btn active" onclick="setPeopleTab('drivers')" id="pt-drivers">👤 Drivers</button>
       <button class="sec-btn" onclick="setPeopleTab('fleet')" id="pt-fleet">🚗 Fleet</button>
       <button class="sec-btn" onclick="setPeopleTab('affiliates')" id="pt-affiliates">🏢 Affiliates</button>
+      <button class="sec-btn" onclick="setPeopleTab('clients')" id="pt-clients">💼 Clients</button>
     </div>
 
-    <!-- Alerts -->
-    <div id="teamAlerts" style="margin-bottom:10px;"></div>
-    <div id="companyAlerts" style="margin-bottom:10px;display:none;"></div>
+    <!-- Alerts — shown per tab -->
 
     <!-- Drivers sub-view -->
     <div id="pv-drivers">
+      <div id="teamAlerts" style="margin-bottom:10px;"></div>
       <div class="form-toggle" onclick="toggleFormPanel('member-form')">
         <span>➕ Add / Edit Driver</span><span>▼</span>
       </div>
@@ -1320,6 +1333,7 @@ window.addEventListener("unhandledrejection", function(e) {
 
     <!-- Affiliates sub-view -->
     <div id="pv-affiliates" style="display:none;">
+      <div id="companyAlerts" style="margin-bottom:10px;"></div>
       <div class="form-toggle" onclick="toggleFormPanel('company-form')">
         <span>➕ Add / Edit Company</span><span>▼</span>
       </div>
@@ -1454,6 +1468,56 @@ window.addEventListener("unhandledrejection", function(e) {
       </div>
       <div id="companyList"></div>
     </div>
+
+    <!-- Clients sub-view -->
+    <div id="pv-clients" style="display:none;">
+      <div class="form-toggle" onclick="toggleFormPanel('client-form')">
+        <span>➕ Add / Edit Client</span><span>▼</span>
+      </div>
+      <div id="client-form" style="display:none;">
+        <div class="form-card" id="clientFormCard">
+          <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:14px;" id="clientFormTitle">➕ ADD CLIENT</div>
+          <div class="form-section">CLIENT INFO</div>
+          <div class="field">
+            <label>Full Name</label>
+            <input id="clFullName" placeholder="e.g. John Smith">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Phone</label>
+              <input id="clPhone" type="tel" placeholder="(310) 555-0000">
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input id="clEmail" type="email" placeholder="john@email.com">
+            </div>
+          </div>
+          <div class="field">
+            <label>Company</label>
+            <input id="clCompany" placeholder="e.g. Globetrotter Inc.">
+          </div>
+          <div class="field">
+            <label>Address</label>
+            <input id="clAddress" placeholder="Street, City, State, ZIP">
+          </div>
+          <div class="field" style="display:flex;align-items:center;gap:10px;padding:10px 0;">
+            <input type="checkbox" id="clIsVip" style="width:auto;margin:0;accent-color:var(--gold);">
+            <label for="clIsVip" style="font-size:13px;font-weight:700;color:var(--gold);margin:0;cursor:pointer;">⭐ VIP Client</label>
+          </div>
+          <div class="field">
+            <label>Notes</label>
+            <textarea id="clNotes" placeholder="Preferences, special requests, internal notes..."></textarea>
+          </div>
+          <input id="editingClientId" type="hidden">
+          <div class="action-row">
+            <button class="btn btn-gold" type="button" id="saveClientBtn" style="flex:2;">Save Client</button>
+            <button class="btn btn-sec" type="button" id="clearClientBtn">Clear</button>
+          </div>
+        </div>
+      </div>
+      <div id="clientList"></div>
+    </div>
+
   </div>
 </div>
 
@@ -1744,8 +1808,6 @@ function setMainTab(tab) {
   if(tab==="finance") renderFinance();
   if(tab==="people") {
     renderMembers(); renderVehicles(); renderTeamAlerts();
-    const ca = getEl("companyAlerts");
-    if(ca) ca.style.display = "none";
   }
 }
 
@@ -1785,17 +1847,16 @@ function setJobTab(tab) {
 // ── People Tab Navigation ─────────────────────────────────────────────────────
 function setPeopleTab(tab) {
   currentPeopleTab = tab;
-  ["drivers","fleet","affiliates"].forEach(t => {
+  ["drivers","fleet","affiliates","clients"].forEach(t => {
     const b = getEl("pt-"+t);
     const v = getEl("pv-"+t);
     if(b) b.classList.toggle("active", t===tab);
     if(v) v.style.display = t===tab ? "block" : "none";
   });
-  const ca = getEl("companyAlerts");
-  if(ca) ca.style.display = tab==="affiliates" ? "block" : "none";
   if(tab==="affiliates") { renderCompanies(); renderCompanyAlerts(); populateDriverCheckboxes([]); }
   if(tab==="drivers") { renderMembers(); renderTeamAlerts(); }
   if(tab==="fleet") { renderVehicles(); renderTeamAlerts(); populateAssignedMemberDropdown(); }
+  if(tab==="clients") { renderClients(); }
 }
 
 // ── Finance Tab Navigation ────────────────────────────────────────────────────
@@ -2078,6 +2139,14 @@ function renderJobs() {
             <span class="driver-lbl">DRIVER</span>
             <span class="driver-val" style="color:${j.assigned_driver?"var(--green)":"#444"}">${escapeHtml(j.assigned_driver||"Unassigned")}</span>
           </div>
+          ${(j.client_phone||j.client_email)?`
+          <div class="driver-row" style="margin-bottom:12px;">
+            <span class="driver-lbl">CLIENT CONTACT</span>
+            <span style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              ${j.client_phone?`<a href="tel:${escapeHtml(j.client_phone)}" style="font-size:13px;font-weight:700;color:var(--green);text-decoration:none;">📞 ${escapeHtml(j.client_phone)}</a>`:""}
+              ${j.client_email?`<a href="mailto:${escapeHtml(j.client_email)}" style="font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;">✉️ ${escapeHtml(j.client_email)}</a>`:""}
+            </span>
+          </div>`:""}
           ${j.waybill_notes?`<div style="font-size:12px;color:var(--muted);padding:7px 10px;background:#0a0a0a;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;line-height:1.5;">🚘 ${escapeHtml(j.waybill_notes)}</div>`:""}
           ${j.internal_notes&&isAdminMode()?`<div style="font-size:12px;color:#c87a7a;padding:7px 10px;background:#110808;border-radius:8px;border:1px solid #3a1a1a;margin-bottom:12px;line-height:1.5;">🔒 ${escapeHtml(j.internal_notes)}</div>`:""}
           ${j.agent_ref_num&&j.agent_ref_num.startsWith("TOUR-")?`
@@ -2607,6 +2676,8 @@ async function saveJob() {
   console.log("[S6] building payload");
   const payload={
     client, date, pickup_time:getValue("pickupTime"),
+    client_phone:getValue("clientPhone")||null,
+    client_email:getValue("clientEmail")||null,
     from_loc:getValue("pickup_from"), to_loc:getValue("to"),
     stops:(typeof getStops==="function" ? getStops() : []),
     job_type:jobType, vehicle_type:vehicleType,
@@ -2646,6 +2717,21 @@ async function saveJob() {
     return;
   }
     alert("✅ Job saved!");
+    // Auto-create client record if not already in clients table
+    const clientName = getValue("name");
+    const clientPhone = getValue("clientPhone");
+    const clientEmail = getValue("clientEmail");
+    if (clientName && (clientPhone || clientEmail)) {
+      const exists = allClients.find(c => c.full_name.toLowerCase() === clientName.toLowerCase());
+      if (!exists) {
+        const newClient = { full_name: clientName };
+        if (clientPhone) newClient.phone = clientPhone;
+        if (clientEmail) newClient.email = clientEmail;
+        await db.from("clients").insert([newClient]);
+        await loadClientsFromSupabase();
+        updateClientAutocomplete();
+      }
+    }
     await loadJobs();
     cancelEdit();
     setJobTab("offers");
@@ -2893,6 +2979,7 @@ async function updateTourLog(jobId, startVal, endVal) {
 }
 function clearForm(){
   ["name","pickup_from","to","driverNotes","internalNotes","assignedDriver","postedBy","miles","hours","manualPrice",
+   "clientPhone","clientEmail",
    "agentName","agentRefNum","agentInvoiceDue","agentNumDays","agentDepositAmt","tourTotalAmount"
   ].forEach(id=>setValue(id,""));
   // Reset OT rule to defaults
@@ -2911,6 +2998,7 @@ function fillFormById(id) {
   editingId=j.id;
   getEl("formTitle").textContent="✏️ Edit Booking";getEl("editModeLabel").style.display="block";
   const map={name:j.client,pickup_from:j.from_loc,to:j.to_loc,pickupTime:j.pickup_time,
+    clientPhone:j.client_phone||"",clientEmail:j.client_email||"",
     jobType:j.job_type,vehicleType:j.vehicle_type,paymentType:j.payment_type,
     status:j.status,assignedDriver:j.assigned_driver,
     driverNotes:j.waybill_notes||"",
@@ -3016,7 +3104,7 @@ function showWaybill(jobId) {
     </div>
     <div style="padding:18px 20px;">
       <div style="font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;margin-bottom:8px;">TRIP DETAILS</div>
-      <table style="width:100%;border-collapse:collapse;">${wRow("Client",j.client||"-")}${wRow("Date",j.date||"-")}${wRow("Pickup Time",j.pickup_time||"-")}${wRow("Job Type",j.job_type||"-")}${wRow("Status",j.status||"Offer")}${wRow("Payment",j.payment_type||"-")}</table>
+      <table style="width:100%;border-collapse:collapse;">${wRow("Client",j.client||"-")}${j.client_phone?wRow("Client Phone",j.client_phone):""}${j.client_email?wRow("Client Email",j.client_email):""}${wRow("Date",j.date||"-")}${wRow("Pickup Time",j.pickup_time||"-")}${wRow("Job Type",j.job_type||"-")}${wRow("Status",j.status||"Offer")}${wRow("Payment",j.payment_type||"-")}</table>
       <div style="margin:16px 0 8px;font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;">ROUTE</div>
       <div style="background:#f9f9f9;border:1px solid #eee;border-radius:10px;overflow:hidden;">
         <div style="padding:10px 14px;border-bottom:1px solid #eee;"><div style="font-size:10px;font-weight:800;letter-spacing:.12em;color:#999;margin-bottom:3px;">PICKUP</div><div style="font-size:14px;font-weight:700;">${escapeHtml(j.from_loc||"-")}</div></div>
@@ -3739,6 +3827,8 @@ document.addEventListener("DOMContentLoaded", async function() {
   await loadMembersFromSupabase();
   await loadVehiclesFromSupabase();
   await loadCompaniesFromSupabase();
+  await loadClientsFromSupabase();
+  updateClientAutocomplete();
 
   // Render people data
   renderTeamAlerts();
@@ -5173,6 +5263,192 @@ document.getElementById("clearCompanyBtn")?.addEventListener("click", clearCompa
 
 // Company init handled by main DOMContentLoaded
 
+
+</script>
+
+<script>
+// ===================== CLIENTS MODULE JS =====================
+
+let allClients = [];
+
+// ── Supabase CRUD ─────────────────────────────────────────────────────────────
+async function loadClientsFromSupabase() {
+  if (!db) return [];
+  const { data, error } = await db.from("clients").select("*").order("full_name", { ascending: true });
+  if (error) { console.error("[OJO] loadClients:", error.message); return []; }
+  allClients = data || [];
+  return allClients;
+}
+
+async function upsertClientToSupabase(client) {
+  if (!db) { alert("Database not connected."); return false; }
+  const { error } = await db.from("clients").upsert(client, { onConflict: "id" });
+  if (error) { alert("Failed to save client: " + (error.message || JSON.stringify(error))); return false; }
+  await loadClientsFromSupabase();
+  return true;
+}
+
+async function deleteClientFromSupabase(id) {
+  if (!db) return false;
+  const { error } = await db.from("clients").delete().eq("id", id);
+  if (error) { alert("Failed to delete client: " + error.message); return false; }
+  await loadClientsFromSupabase();
+  return true;
+}
+
+// ── Form Data ─────────────────────────────────────────────────────────────────
+function getClientFormData() {
+  return {
+    id:        getValue("editingClientId") || null,
+    full_name: getValue("clFullName"),
+    phone:     getValue("clPhone"),
+    email:     getValue("clEmail"),
+    company:   getValue("clCompany"),
+    address:   getValue("clAddress"),
+    is_vip:    getEl("clIsVip") ? getEl("clIsVip").checked : false,
+    notes:     getValue("clNotes")
+  };
+}
+
+// ── Clear Form ────────────────────────────────────────────────────────────────
+function clearClientForm() {
+  ["editingClientId","clFullName","clPhone","clEmail","clCompany","clAddress","clNotes"]
+    .forEach(id => setValue(id, ""));
+  const vip = getEl("clIsVip"); if (vip) vip.checked = false;
+  const title = getEl("clientFormTitle"); if (title) title.textContent = "➕ ADD CLIENT";
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+async function saveClient() {
+  const data = getClientFormData();
+  if (!data.full_name) { alert("Full Name is required."); return; }
+  const client = { ...data };
+  if (!client.id) delete client.id;
+  const ok = await upsertClientToSupabase(client);
+  if (!ok) return;
+  const formEl = getEl("client-form");
+  if (formEl) formEl.style.display = "none";
+  clearClientForm();
+  renderClients();
+  updateClientAutocomplete();
+  alert("✅ Client saved!");
+}
+
+// ── Edit ──────────────────────────────────────────────────────────────────────
+function editClient(id) {
+  const item = allClients.find(c => c.id === id);
+  if (!item) return;
+  setValue("editingClientId", item.id);
+  setValue("clFullName",  item.full_name);
+  setValue("clPhone",     item.phone || "");
+  setValue("clEmail",     item.email || "");
+  setValue("clCompany",   item.company || "");
+  setValue("clAddress",   item.address || "");
+  setValue("clNotes",     item.notes || "");
+  const vip = getEl("clIsVip"); if (vip) vip.checked = !!(item.is_vip);
+  const title = getEl("clientFormTitle");
+  if (title) title.textContent = "✏️ EDIT: " + item.full_name;
+  setPeopleTab("clients");
+  toggleFormPanel("client-form", true);
+  getEl("clientFormCard").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+async function deleteClient(id) {
+  const item = allClients.find(c => c.id === id);
+  if (!item) return;
+
+  const openStatuses = ["Offer","Assigned","Accepted","Heading to Pickup","Arrived","In Progress"];
+  const openJobs = allJobs.filter(j =>
+    j.client && item.full_name &&
+    j.client.toLowerCase() === item.full_name.toLowerCase() &&
+    openStatuses.includes(j.status)
+  );
+
+  if (openJobs.length > 0) {
+    alert(`Cannot delete — "${item.full_name}" has ${openJobs.length} active job${openJobs.length > 1 ? "s" : ""}.\n\nClose or complete those jobs first, then delete the client.`);
+    return;
+  }
+
+  if (!confirm(`Delete "${item.full_name}"? This cannot be undone.`)) return;
+  const ok = await deleteClientFromSupabase(id);
+  if (ok) { renderClients(); updateClientAutocomplete(); alert("Client deleted."); }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderClients() {
+  const list = getEl("clientList");
+  if (!list) return;
+  if (!allClients.length) {
+    list.innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--muted);">
+      <div style="font-size:32px;margin-bottom:10px;opacity:.4;">💼</div>
+      <div style="font-size:14px;font-weight:600;">No clients yet</div>
+      <div style="font-size:12px;margin-top:4px;color:#555;">Add your first client above</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = allClients.map(c => {
+    const vipBadge = c.is_vip
+      ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #7a5f12;color:#f2cf63;background:#0a0800;">⭐ VIP</span>`
+      : "";
+    const jobCount = allJobs.filter(j =>
+      j.client && c.full_name && j.client.toLowerCase() === c.full_name.toLowerCase()
+    ).length;
+
+    return `
+    <div class="p-card" style="margin-bottom:8px;">
+      <div class="p-card-top">
+        <div class="p-avatar" style="background:${c.is_vip?"#1a1405":"var(--surface2)"};border-color:${c.is_vip?"var(--gold-dim)":"var(--border2)"};">
+          ${c.is_vip ? "⭐" : "💼"}
+        </div>
+        <div class="p-info">
+          <div class="p-name">${escapeHtml(c.full_name)}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap;">
+            ${vipBadge}
+            ${c.company ? `<span style="font-size:11px;color:var(--muted);">🏢 ${escapeHtml(c.company)}</span>` : ""}
+            ${jobCount ? `<span style="font-size:11px;color:var(--blue);">📋 ${jobCount} job${jobCount>1?"s":""}</span>` : ""}
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-bottom:10px;">
+        ${c.phone ? `<div style="font-size:12px;"><a href="tel:${escapeHtml(c.phone)}" style="color:var(--green);text-decoration:none;font-weight:700;">📞 ${escapeHtml(c.phone)}</a></div>` : "<div></div>"}
+        ${c.email ? `<div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;"><a href="mailto:${escapeHtml(c.email)}" style="color:var(--blue);text-decoration:none;">✉️ ${escapeHtml(c.email)}</a></div>` : "<div></div>"}
+        ${c.address ? `<div style="font-size:11px;color:#666;grid-column:1/-1;">📍 ${escapeHtml(c.address)}</div>` : ""}
+      </div>
+      ${c.notes ? `<div style="font-size:11px;color:#555;padding:6px 8px;background:#0a0a0a;border-radius:7px;border:1px solid #1a1a1a;margin-bottom:8px;">${escapeHtml(c.notes)}</div>` : ""}
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sec" style="flex:1;padding:8px;" type="button" onclick="editClient('${escapeHtml(c.id)}')">✏️ Edit</button>
+        <button class="btn btn-danger" style="flex:1;padding:8px;" type="button" onclick="deleteClient('${escapeHtml(c.id)}')">🗑 Delete</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ── Auto-fill on Post Job form ────────────────────────────────────────────────
+function updateClientAutocomplete() {
+  const list = getEl("clientNameSuggestions");
+  if (!list) return;
+  list.innerHTML = allClients.map(c =>
+    `<option value="${escapeHtml(c.full_name)}" data-phone="${escapeHtml(c.phone||"")}" data-email="${escapeHtml(c.email||"")}">`
+  ).join("");
+}
+
+function onClientNameInput() {
+  const name = getValue("name").toLowerCase().trim();
+  if (!name) return;
+  const match = allClients.find(c => c.full_name.toLowerCase() === name);
+  if (match) {
+    if (match.phone && !getValue("clientPhone")) setValue("clientPhone", match.phone);
+    if (match.email && !getValue("clientEmail")) setValue("clientEmail", match.email);
+  }
+}
+
+// ── Bind buttons + init ───────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", function() {
+  const sc = getEl("saveClientBtn");  if (sc) sc.onclick = saveClient;
+  const cc = getEl("clearClientBtn"); if (cc) cc.onclick = clearClientForm;
+});
 
 </script>
 
