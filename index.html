@@ -100,7 +100,8 @@ input,select,textarea,button{font-family:var(--font-ui);}
 /* ─── CONTAINER ──────────────────────────────────────── */
 .page{display:none;padding-bottom:24px;}
 .page.active{display:block;}
-.container{max-width:680px;margin:0 auto;padding:14px 14px 80px;}
+.container{max-width:680px;margin:0 auto;padding:12px 12px 80px;}
+@media(max-width:400px){.container{padding:10px 10px 80px;}}
 
 /* ─── SECTION HEADERS ────────────────────────────────── */
 .sec-bar{
@@ -333,9 +334,12 @@ input,select,textarea,button{font-family:var(--font-ui);}
 .qm-inputs.single{grid-template-columns:1fr;}
 .qm-commission{margin-bottom:12px;}
 .qm-comm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;}
+@media(max-width:480px){.qm-comm-grid{grid-template-columns:1fr;gap:8px;}}
 .comm-block{}
 .comm-label{font-size:10px;font-weight:700;color:var(--muted);margin-bottom:5px;letter-spacing:.06em;}
 .comm-row{display:grid;grid-template-columns:60px 1fr;gap:6px;}
+.comm-row select{min-width:0;}
+.comm-row input{min-width:0;}
 .qm-summary{
   background:#0a0a0a;border:1px solid var(--border);
   border-radius:var(--radius-sm);padding:14px;
@@ -344,9 +348,10 @@ input,select,textarea,button{font-family:var(--font-ui);}
 .qm-total-label{font-size:13px;color:var(--muted);}
 .qm-total-value{font-size:24px;font-weight:800;color:var(--gold);}
 .qm-payouts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-.payout-cell{text-align:center;padding:8px;background:var(--surface);border-radius:var(--radius-sm);}
+.payout-cell{text-align:center;padding:8px 4px;background:var(--surface);border-radius:var(--radius-sm);}
 .payout-label{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.1em;margin-bottom:3px;}
-.payout-val{font-size:15px;font-weight:800;}
+.payout-val{font-size:14px;font-weight:800;}
+@media(max-width:360px){.payout-val{font-size:12px;}}
 
 /* ─── PEOPLE TAB ─────────────────────────────────────── */
 .people-sections{display:flex;flex-direction:column;gap:10px;}
@@ -416,6 +421,43 @@ input,select,textarea,button{font-family:var(--font-ui);}
 }
 .upload-box:hover{border-color:var(--gold);}
 .upload-box.has-file{border-color:var(--green);border-style:solid;}
+
+/* ─── MEMBER / VEHICLE COLLAPSIBLE CARDS ────────────────── */
+.mc-header{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;cursor:pointer;
+  background:var(--surface);border-radius:var(--radius-sm);
+  border:1px solid var(--border);transition:border-color .15s;
+  user-select:none;
+}
+.mc-header:active{background:var(--surface2);}
+.mc-header.mc-open{border-color:var(--gold-dim);}
+.mc-name{font-size:14px;font-weight:800;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mc-role-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;flex-shrink:0;}
+.mc-arrow{font-size:11px;color:var(--muted);flex-shrink:0;transition:color .15s;}
+.mc-header.mc-open .mc-arrow{color:var(--gold);}
+.mc-body{
+  max-height:0;overflow:hidden;opacity:0;
+  transition:max-height .25s ease,opacity .18s;
+}
+.mc-body.mc-open{max-height:800px;opacity:1;}
+.mc-inner{padding:10px 12px 12px;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-sm) var(--radius-sm);background:var(--surface);}
+/* Section header (Members/Fleet/Companies group) */
+.section-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:11px 14px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius);
+  cursor:pointer;user-select:none;transition:border-color .15s;
+  margin-bottom:8px;
+}
+.section-header:hover{border-color:var(--border2);}
+.section-header.open{border-color:var(--gold-dim);}
+.sh-title{font-size:14px;font-weight:800;color:var(--text);}
+.sh-meta{font-size:11px;color:var(--muted);margin-top:1px;}
+.sh-arrow{font-size:11px;color:var(--muted);transition:color .15s;}
+.section-header.open .sh-arrow{color:var(--gold);}
+.section-body{display:none;}
+.section-body.open{display:block;}
 
 /* ─── FINANCE PAGE ───────────────────────────────────── */
 .finance-tabs{
@@ -856,7 +898,53 @@ window.addEventListener("unhandledrejection", function(e) {
           </div>
           <div class="field" id="numDaysWrap" style="display:none;">
             <label>Number of Days</label>
-            <input id="agentNumDays" type="number" min="1" placeholder="e.g. 3" oninput="updateQuoteSummary()">
+            <input id="agentNumDays" type="number" min="1" placeholder="e.g. 6" oninput="syncMultiDayPreview()">
+          </div>
+          <!-- Multi-Day Tour generator — shown only when Multi-Day / Tour is selected -->
+          <div id="multiDayBannerWrap" style="display:none;">
+            <div style="background:#0a0f00;border:1px solid #2a3a00;border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;">
+              <div style="font-size:10px;font-weight:700;color:#8aaa00;letter-spacing:.12em;margin-bottom:10px;">🗓 MULTI-DAY TOUR GENERATOR</div>
+              <!-- OT Rule — set once, applies to every day in this tour -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                <div class="field" style="margin:0;">
+                  <label style="color:#8aaa00;">Regular Hours/Day</label>
+                  <input id="tourOtThreshold" type="number" min="1" max="24" step="0.5"
+                    placeholder="e.g. 10" value="10" oninput="syncMultiDayPreview()"
+                    style="background:#050d00;border-color:#2a3a00;color:var(--text);">
+                </div>
+                <div class="field" style="margin:0;">
+                  <label style="color:#8aaa00;">OT Rate ($/hr)</label>
+                  <input id="tourOtRate" type="number" min="0" step="0.01"
+                    placeholder="e.g. 75" value="75" oninput="syncMultiDayPreview()"
+                    style="background:#050d00;border-color:#2a3a00;color:var(--text);">
+                </div>
+              </div>
+              <!-- Total contract amount -->
+              <div class="field" style="margin-bottom:10px;">
+                <label style="color:#8aaa00;">Total Contract Amount ($)</label>
+                <input id="tourTotalAmount" type="number" min="0" step="0.01" placeholder="e.g. 4950.00"
+                  oninput="syncMultiDayPreview()"
+                  style="background:#050d00;border-color:#2a3a00;color:var(--text);">
+              </div>
+              <!-- Live split preview -->
+              <div id="mdSplitPreview" style="background:#040a00;border:1px solid #1a2a00;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:none;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <span style="font-size:11px;color:#6a8a00;">TOTAL CONTRACT</span>
+                  <span id="mdTotal" style="font-size:15px;font-weight:800;color:var(--gold);">—</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <span style="font-size:11px;color:#6a8a00;">÷ <span id="mdDays2">—</span> DAYS</span>
+                  <span id="mdPerDay" style="font-size:15px;font-weight:800;color:#8aaa00;">—</span>
+                </div>
+                <div style="height:1px;background:#1a2a00;margin:6px 0;"></div>
+                <div style="font-size:11px;color:#556600;" id="mdDateRange">Dates: —</div>
+                <div style="font-size:11px;color:#556600;margin-top:3px;">Each day: OJO <span id="mdOjoCom">—</span> · Poster <span id="mdPosterCom">—</span> · Driver <span id="mdDriverPay">—</span></div>
+                <div style="font-size:11px;color:#6a8a00;margin-top:4px;padding-top:4px;border-top:1px solid #1a2a00;">⏱ OT after <span id="mdOtThresh">—</span>h · <span id="mdOtRate">—</span>/hr</div>
+              </div>
+              <button type="button" class="btn btn-gold" style="width:100%;padding:12px;font-size:14px;" onclick="saveMultiDayTour()">
+                ✦ Generate <span id="mdGenLabel">All Days</span>
+              </button>
+            </div>
           </div>
           <div class="field">
             <label>Deposit Amount ($) <span style="color:var(--muted);font-weight:400;">(if Deposit &amp; Balance)</span></label>
@@ -951,9 +1039,20 @@ window.addEventListener("unhandledrejection", function(e) {
         </div>
       </div>
 
+      <!-- ── Notes (split: driver-facing vs internal admin) ── -->
       <div class="field">
-        <label>Waybill Notes</label>
-        <textarea id="waybillNotes" placeholder="Internal notes for the driver..."></textarea>
+        <label style="display:flex;align-items:center;gap:6px;">
+          🚘 <span>Driver Notes</span>
+          <span style="font-size:10px;font-weight:600;color:var(--green);padding:1px 7px;border-radius:999px;border:1px solid #2e7d32;background:#0a130a;">Shown on waybill</span>
+        </label>
+        <textarea id="driverNotes" placeholder="Meet & greet, car seat needed, help with luggage, disability assist, gate code, flight #..." style="min-height:60px;"></textarea>
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:6px;">
+          🔒 <span>Internal Notes</span>
+          <span style="font-size:10px;font-weight:600;color:var(--red);padding:1px 7px;border-radius:999px;border:1px solid #5c1a1a;background:#1a0808;">Admin only</span>
+        </label>
+        <textarea id="internalNotes" placeholder="Pricing details, commission notes, client background, business context..." style="min-height:60px;"></textarea>
       </div>
 
       <div class="action-row" style="margin-bottom:16px;">
@@ -1050,9 +1149,23 @@ window.addEventListener("unhandledrejection", function(e) {
           <div class="field"><label>Full Name</label><input id="teamFullName" placeholder="e.g. John Smith"></div>
           <div class="field-row">
             <div class="field"><label>Role</label>
-              <select id="teamRole"><option value="admin">Admin</option><option value="member">Member</option><option value="driver" selected>Driver</option></select>
+              <select id="teamRole">
+                <option value="admin">Admin</option>
+                <option value="driver" selected>Driver</option>
+                <option value="member">Member</option>
+              </select>
             </div>
             <div class="field"><label>Date of Birth</label><input id="teamDob" type="date"></div>
+          </div>
+          <!-- Partner / Investor flag — independent of role -->
+          <div class="field" style="margin-bottom:14px;">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;">
+              <input type="checkbox" id="teamIsPartner" style="width:18px;height:18px;accent-color:var(--gold);flex-shrink:0;">
+              <span>
+                <span style="font-size:13px;font-weight:700;color:var(--gold);">Partner / Investor</span>
+                <span style="display:block;font-size:11px;color:var(--muted);margin-top:1px;">Included in monthly contribution tracking (equity member)</span>
+              </span>
+            </label>
           </div>
           <div class="field-row">
             <div class="field">
@@ -1386,10 +1499,14 @@ window.addEventListener("unhandledrejection", function(e) {
     <!-- Contributions -->
     <div id="fv-contrib" style="display:none;">
       <div class="contrib-header">
-        <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.14em;">MONTHLY CONTRIBUTIONS ($100/person)</div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.14em;">MONTHLY CONTRIBUTIONS ($100/person)</div>
+          <div style="font-size:11px;color:#555;margin-top:2px;">Partners &amp; Investors only · <span style="color:var(--gold);">is_partner = true</span></div>
+        </div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-sec" style="min-width:auto;padding:7px 12px;font-size:11px;" onclick="addContribYear()">+ Year</button>
           <button class="btn btn-sec" style="min-width:auto;padding:7px 12px;font-size:11px;" onclick="exportContribCSV()">Export CSV</button>
+          <button id="contribShareBtn" class="btn btn-sec" style="min-width:auto;padding:7px 12px;font-size:11px;" onclick="shareContribMonth()">📸 Share</button>
         </div>
       </div>
       <!-- All-time total banner -->
@@ -1459,9 +1576,10 @@ window.addEventListener("unhandledrejection", function(e) {
 <div id="waybillModal" class="overlay" style="display:none;" onclick="if(event.target===this)closeWaybill()">
   <div class="modal" style="background:#fff;border:none;max-width:640px;">
     <div id="waybillContent"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 18px;background:#f5f5f5;border-top:1px solid #ddd;">
-      <button style="background:#eee;color:#333;border:1px solid #ccc;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;" onclick="closeWaybill()">Close</button>
-      <button style="background:#111;color:var(--gold2);border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;" onclick="shareWaybill()">Share</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:14px 18px;background:#f5f5f5;border-top:1px solid #ddd;">
+      <button style="background:#eee;color:#333;border:1px solid #ccc;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;" onclick="closeWaybill()">Close</button>
+      <button style="background:#111;color:#c9a84c;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;" onclick="shareWaybillText()">Share Text</button>
+      <button style="background:#c9a84c;color:#000;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;" onclick="shareWaybillImage()">📸 Share Image</button>
     </div>
   </div>
 </div>
@@ -1710,6 +1828,37 @@ function toggleFormPanel(id, forceOpen) {
   }
 }
 
+// ── Section collapse (Members / Vehicles / Companies list headers) ────────────
+function toggleSection(key) {
+  const hdr = getEl("sh-" + key);
+  const body = getEl("sb-" + key);
+  if(!hdr || !body) return;
+  const isOpen = body.classList.contains("open");
+  body.classList.toggle("open", !isOpen);
+  hdr.classList.toggle("open", !isOpen);
+  const arrow = hdr.querySelector(".sh-arrow");
+  if(arrow) arrow.textContent = isOpen ? "▼" : "▲";
+}
+
+// ── Per-member card collapse ──────────────────────────────────────────────────
+function toggleMemberCard(id) {
+  const body = document.querySelector('[data-member-body="' + id + '"]');
+  const arrow = document.querySelector('[data-member-arrow="' + id + '"]');
+  if(!body) return;
+  const isOpen = body.classList.contains("mc-open");
+  body.classList.toggle("mc-open", !isOpen);
+  if(arrow) arrow.textContent = isOpen ? "▼" : "▲";
+}
+
+function toggleVehicleCard(id) {
+  const body = document.querySelector('[data-vehicle-body="' + id + '"]');
+  const arrow = document.querySelector('[data-vehicle-arrow="' + id + '"]');
+  if(!body) return;
+  const isOpen = body.classList.contains("mc-open");
+  body.classList.toggle("mc-open", !isOpen);
+  if(arrow) arrow.textContent = isOpen ? "▼" : "▲";
+}
+
 // ── Stats bar ─────────────────────────────────────────────────────────────────
 function updateStats() {
   const open     = allJobs.filter(j=>!["Completed","Cancelled","Released"].includes(j.status||"Offer")).length;
@@ -1929,7 +2078,43 @@ function renderJobs() {
             <span class="driver-lbl">DRIVER</span>
             <span class="driver-val" style="color:${j.assigned_driver?"var(--green)":"#444"}">${escapeHtml(j.assigned_driver||"Unassigned")}</span>
           </div>
-          ${j.waybill_notes?`<div style="font-size:12px;color:var(--muted);padding:7px 10px;background:#0a0a0a;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;line-height:1.5;">📋 ${escapeHtml(j.waybill_notes)}</div>`:""}
+          ${j.waybill_notes?`<div style="font-size:12px;color:var(--muted);padding:7px 10px;background:#0a0a0a;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;line-height:1.5;">🚘 ${escapeHtml(j.waybill_notes)}</div>`:""}
+          ${j.internal_notes&&isAdminMode()?`<div style="font-size:12px;color:#c87a7a;padding:7px 10px;background:#110808;border-radius:8px;border:1px solid #3a1a1a;margin-bottom:12px;line-height:1.5;">🔒 ${escapeHtml(j.internal_notes)}</div>`:""}
+          ${j.agent_ref_num&&j.agent_ref_num.startsWith("TOUR-")?`
+          <div style="background:#0a0f00;border:1px solid #2a3a00;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div style="font-size:9px;font-weight:700;color:#6a8a00;letter-spacing:.1em;">🗓 TOUR DAY LOG</div>
+              ${(j.ot_threshold||j.ot_rate)?`<div style="font-size:10px;color:#556600;">⏱ OT after ${j.ot_threshold||10}h · ${j.ot_rate?money(j.ot_rate)+"/hr":"no OT rate"}</div>`:""}
+            </div>
+            <!-- Start / End time inputs -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+              <div>
+                <div style="font-size:10px;color:#6a8a00;margin-bottom:3px;">Start Time</div>
+                <input type="time" id="ts_${j.id}" value="${escapeHtml(j.time_start||"")}"
+                  onchange="updateTourLog('${j.id}',this.value,document.getElementById('te_${j.id}').value)"
+                  style="background:#050d00;border:1px solid #2a3a00;color:var(--text);padding:7px 8px;font-size:12px;width:100%;border-radius:7px;">
+              </div>
+              <div>
+                <div style="font-size:10px;color:#6a8a00;margin-bottom:3px;">End Time</div>
+                <input type="time" id="te_${j.id}" value="${escapeHtml(j.time_end||"")}"
+                  onchange="updateTourLog('${j.id}',document.getElementById('ts_${j.id}').value,this.value)"
+                  style="background:#050d00;border:1px solid #2a3a00;color:var(--text);padding:7px 8px;font-size:12px;width:100%;border-radius:7px;">
+              </div>
+            </div>
+            <!-- Auto-calculated summary -->
+            <div id="tlog_${j.id}" style="background:#040a00;border:1px solid #1a2a00;border-radius:7px;padding:8px 10px;margin-bottom:8px;font-size:12px;${j.time_start&&j.time_end?"":"display:none;"}">
+              ${j.time_start&&j.time_end ? renderTourLogSummary(j) : ""}
+            </div>
+            <!-- Notes -->
+            <div>
+              <div style="font-size:10px;color:#6a8a00;margin-bottom:3px;">Day Notes / OT Context</div>
+              <input type="text" id="tn_${j.id}"
+                placeholder="e.g. traffic delay, extra stop, client request…"
+                value="${escapeHtml(j.overtime_notes||"")}"
+                onchange="saveTourTimeField('${j.id}','overtime_notes',this.value)"
+                style="background:#050d00;border:1px solid #2a3a00;color:var(--text);padding:7px 8px;font-size:12px;width:100%;border-radius:7px;">
+            </div>
+          </div>`:""}
           <div class="action-row">
             <button class="btn btn-sec" onclick="showWaybill('${j.id}')">Waybill</button>
             ${isAdminMode()?`<button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button><button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
@@ -1963,25 +2148,42 @@ async function handleFileUpload(input,storageKey,previewId,placeholderId,hiddenF
   const file=input.files[0]; if(!file) return;
   const ph=getEl(placeholderId),hidden=getEl(hiddenFieldId);
   if(ph) ph.textContent="⏳ Uploading…";
+  // Show local preview immediately for images
   if(previewId&&file.type.startsWith("image/")) {
     const r=new FileReader();
     r.onload=e=>{const img=getEl(previewId);if(img){img.src=e.target.result;img.style.display="block";}if(ph)ph.style.display="none";};
     r.readAsDataURL(file);
   }
   try {
-    const ext=file.name.split(".").pop();
+    const ext=file.name.split(".").pop().toLowerCase();
     const folder=storageKey.startsWith("co")?"companies":storageKey.startsWith("v")?"vehicles":"members";
     const path=folder+"/"+storageKey+"_"+Date.now()+"."+ext;
-    const {error}=await db.storage.from("ojo-docs").upload(path,file,{upsert:true});
-    if(error) throw error;
-    const {data:urlData}=db.storage.from("ojo-docs").getPublicUrl(path);
-    if(hidden) hidden.value=urlData.publicUrl;
+    // Upload to Supabase Storage
+    const res=await fetch(SUPABASE_URL+"/storage/v1/object/ojo-docs/"+path,{
+      method:"POST",
+      headers:{"apikey":SUPABASE_KEY,"Authorization":"Bearer "+(SERVICE_KEY||SUPABASE_KEY),"Content-Type":file.type,"x-upsert":"true"},
+      body:file
+    });
+    if(!res.ok) {
+      const errBody = await res.json().catch(()=>({}));
+      throw new Error("Storage upload failed ("+res.status+"): "+(errBody.message||errBody.error||"check bucket RLS"));
+    }
+    const publicUrl=SUPABASE_URL+"/storage/v1/object/public/ojo-docs/"+path;
+    if(hidden) hidden.value=publicUrl;
     if(ph){ph.textContent="✓ "+file.name.slice(0,22);ph.style.display="";}
     const box=input.parentElement;
     if(box&&box.classList.contains("upload-box")) box.classList.add("has-file");
+    console.log("[OJO] Upload OK:", publicUrl);
   } catch(err) {
+    console.warn("[OJO] Storage upload failed, using base64 fallback:", err.message);
+    // Fallback: store as base64 in hidden field
     const r=new FileReader();
-    r.onload=e=>{if(hidden) hidden.value=e.target.result;if(ph) ph.textContent="✓ "+file.name.slice(0,22)+" (local)";};
+    r.onload=e=>{
+      if(hidden) hidden.value=e.target.result;
+      if(ph) { ph.textContent="✓ "+file.name.slice(0,22)+" (local)"; ph.style.display=""; }
+      const box=input.parentElement;
+      if(box&&box.classList.contains("upload-box")) box.classList.add("has-file");
+    };
     r.readAsDataURL(file);
   }
 }
@@ -2410,7 +2612,8 @@ async function saveJob() {
     job_type:jobType, vehicle_type:vehicleType,
     payment_type:getValue("paymentType"), status:autoStatus,
     assigned_driver:assignedDriver,
-    waybill_notes:getValue("waybillNotes"),
+    waybill_notes:getValue("driverNotes"),
+    internal_notes:getValue("internalNotes"),
     pricing_mode:pricingMode,
     manual_price:pricingMode==="manual"?num(getValue("manualPrice")):null,
     total_price:totalPrice, miles:num(getValue("miles")), hours:num(getValue("hours")),
@@ -2452,10 +2655,249 @@ async function saveJob() {
   }
 }
 function cancelEdit(){editingId=null;getEl("formTitle").textContent="+ New Booking";getEl("editModeLabel").style.display="none";clearForm();}
+
+// ── Multi-Day Tour: generate N job entries ────────────────────────────────────
+// ── Multi-Day Tour: split total evenly, generate N sequential job entries ─────
+async function saveMultiDayTour() {
+  try {
+    const client   = getValue("name");
+    const dateStr  = getValue("date");
+    const days     = parseInt(getValue("agentNumDays")) || 0;
+    const totalAmt = num(getValue("tourTotalAmount"));
+
+    if (!client)       { alert("Client name is required."); return; }
+    if (!dateStr)      { alert("Start date is required."); return; }
+    if (days < 2)      { alert("Enter at least 2 days."); return; }
+    if (!totalAmt)     { alert("Enter the total contract amount."); return; }
+
+    // ── Split total evenly across all days ─────────────────────────────────
+    // Distribute remainder on last day to avoid rounding loss
+    const perDayBase   = Math.floor((totalAmt / days) * 100) / 100;
+    const lastDayAmt   = Math.round((totalAmt - perDayBase * (days - 1)) * 100) / 100;
+
+    const jobType      = getValue("jobType");
+    const vehicleType  = getValue("vehicleType");
+    const bookingMode  = (typeof currentBookingMode !== "undefined") ? currentBookingMode : "agent";
+    const assignedDriver = getValue("assignedDriver") || null;
+    const startDate    = new Date(dateStr + "T00:00:00");
+
+    const ojoType   = getValue("ojoCommissionType")  || "percent";
+    const ojoVal    = num(getValue("ojoCommissionValue"))  || 10;
+    const poType    = getValue("posterCommissionType") || "percent";
+    const poVal     = num(getValue("posterCommissionValue")) || 5;
+
+    // OT rule — per agreement, set when creating the tour
+    const otThreshold = num(getValue("tourOtThreshold")) || 10;  // regular hrs/day
+    const otRate      = num(getValue("tourOtRate")) || 0;         // $/hr OT
+
+    // Generate a shared tour reference code — links all days together
+    const tourRef = "TOUR-" + client.replace(/\s+/g,"").toUpperCase().slice(0,6) +
+                    "-" + dateStr.replace(/-/g,"").slice(2) +
+                    "-" + makeUUID().slice(0,4).toUpperCase();
+
+    // Build date list
+    const dates = Array.from({length: days}, (_, i) => {
+      const d = new Date(startDate); d.setDate(d.getDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+
+    const endDate = dates[dates.length - 1];
+    if (!confirm(
+      `Generate ${days} tour entries for "${client}"?\n\n` +
+      `📅 ${dateStr} → ${endDate}\n` +
+      `💰 ${money(totalAmt)} total ÷ ${days} days = ${money(perDayBase)}/day\n` +
+      `⏱ OT rule: after ${otThreshold}h @ ${otRate ? money(otRate)+"/hr" : "no OT rate set"}\n` +
+      `🔖 Tour Ref: ${tourRef}`
+    )) return;
+
+    const inserts = dates.map((dayDate, i) => {
+      const dayAmt    = (i === days - 1) ? lastDayAmt : perDayBase;
+      const ojoCom    = calculateCommissionAmount(dayAmt, ojoType, ojoVal);
+      const posterCom = calculateCommissionAmount(dayAmt, poType,  poVal);
+      const driverPay = dayAmt - ojoCom - posterCom;
+
+      return {
+        client,
+        date:        dayDate,
+        pickup_time: getValue("pickupTime"),
+        from_loc:    getValue("pickup_from"),
+        to_loc:      getValue("to"),
+        stops:       (typeof getStops === "function" ? getStops() : []),
+        job_type:    jobType,
+        vehicle_type: vehicleType,
+        payment_type: getValue("paymentType"),
+        status:       assignedDriver ? "Assigned" : "Offer",
+        assigned_driver: assignedDriver,
+        waybill_notes:   getValue("driverNotes"),
+        // Internal notes: include tour context + day label
+        internal_notes: [
+          getValue("internalNotes"),
+          `Tour: ${tourRef}`,
+          `Day ${i+1} of ${days}`,
+          `Contract total: ${money(totalAmt)}`
+        ].filter(Boolean).join(" | "),
+        pricing_mode:    "manual",
+        manual_price:    dayAmt,
+        total_price:     dayAmt,
+        miles:           num(getValue("miles")),
+        hours:           num(getValue("hours")),
+        posted_by:       getValue("postedBy"),
+        commission_ojo_type:    ojoType,
+        commission_ojo_value:   ojoVal,
+        commission_ojo_amount:  ojoCom,
+        commission_poster_type:  poType,
+        commission_poster_value: poVal,
+        commission_poster_amount: posterCom,
+        driver_pay:      driverPay,
+        booking_mode:    bookingMode,
+        agent_name:      getValue("agentName") || null,
+        agent_ref_num:   tourRef,                    // use tour ref as PO ref
+        agent_invoice_due: getValue("agentInvoiceDue") || null,
+        agent_num_days:  days,
+        agent_deposit_amt: i === 0 ? (num(getValue("agentDepositAmt")) || null) : null,
+        // Time log fields — driver fills these in on the day
+        time_start:      null,
+        time_end:        null,
+        overtime_hours:  null,
+        overtime_notes:  null,
+        // OT rule stored per job — consistent with the tour agreement
+        ot_threshold:    otThreshold,
+        ot_rate:         otRate
+      };
+    });
+
+    const { error } = await db.from("jobs").insert(inserts);
+    if (error) { alert("Failed to save tour:\n" + error.message); return; }
+
+    alert(
+      `✅ ${days} tour entries created!\n\n` +
+      `📅 ${dateStr} → ${endDate}\n` +
+      `💰 ${money(perDayBase)}/day · ${money(totalAmt)} total\n` +
+      `🔖 Ref: ${tourRef}\n\n` +
+      `Each entry is independent — assign drivers and log time day by day.`
+    );
+    await loadJobs();
+    cancelEdit();
+    setJobTab("active");
+  } catch(e) {
+    console.error("[OJO saveMultiDayTour CRASH]", e);
+    alert("Multi-day save crashed:\n" + e.message);
+  }
+}
+// ── Tour: save individual time log field ─────────────────────────────────────
+// ── Tour: save individual time log field ─────────────────────────────────────
+async function saveTourTimeField(jobId, field, value) {
+  const allowed = ["time_start","time_end","overtime_hours","overtime_notes","ot_threshold","ot_rate"];
+  if (!allowed.includes(field)) return;
+  try {
+    const patch = {}; patch[field] = value;
+    const r = await fetch(SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(jobId), {
+      method: "PATCH",
+      headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,
+                 "Authorization":"Bearer "+(SERVICE_KEY||SUPABASE_KEY),"Prefer":"return=minimal" },
+      body: JSON.stringify(patch)
+    });
+    if (!r.ok && r.status !== 204) {
+      console.error("[OJO] saveTourTimeField failed:", r.status);
+    } else {
+      const j = allJobs.find(x => String(x.id) === String(jobId));
+      if (j) j[field] = value;
+      console.log("[OJO] ✅ Saved", field, "for job", jobId);
+    }
+  } catch(e) { console.error("[OJO] saveTourTimeField crash:", e.message); }
+}
+
+// ── Tour: calculate worked hours from time strings ────────────────────────────
+function calcWorkedHours(timeStart, timeEnd) {
+  if (!timeStart || !timeEnd) return null;
+  const [sh, sm] = timeStart.split(":").map(Number);
+  const [eh, em] = timeEnd.split(":").map(Number);
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins < 0) mins += 24 * 60; // crossed midnight
+  return Math.round(mins / 60 * 100) / 100;
+}
+
+// ── Tour: build the live summary HTML shown under the time inputs ─────────────
+function renderTourLogSummary(j) {
+  const worked    = calcWorkedHours(j.time_start, j.time_end);
+  if (worked === null) return "";
+
+  const threshold = num(j.ot_threshold) || 10;
+  const otRate    = num(j.ot_rate)      || 0;
+  const otHours   = Math.max(0, Math.round((worked - threshold) * 100) / 100);
+  const otPay     = otRate ? otHours * otRate : 0;
+
+  const hrs  = Math.floor(worked);
+  const mins = Math.round((worked - hrs) * 60);
+  const timeStr = hrs + "h" + (mins ? " " + mins + "m" : "");
+
+  const hasOT  = otHours > 0;
+  const otColor = hasOT ? "var(--red)" : "var(--green)";
+
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="color:#6a8a00;">⏱ Worked</span>
+      <span style="font-weight:800;color:var(--text);">${timeStr}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="color:#6a8a00;">Regular (≤${threshold}h)</span>
+      <span style="color:var(--green);">${Math.min(worked, threshold).toFixed(1)}h</span>
+    </div>
+    ${hasOT ? `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <span style="${"color:"+otColor};">Overtime</span>
+      <span style="${"font-weight:800;color:"+otColor};">+${otHours.toFixed(1)}h${otRate?" · "+money(otPay):""}</span>
+    </div>` : `
+    <div style="color:var(--green);font-size:11px;">✓ No overtime</div>`}
+    ${otPay ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-top:4px;border-top:1px solid #1a2a00;">
+      <span style="color:#6a8a00;font-size:10px;">OT PAY DUE</span>
+      <span style="font-weight:800;color:var(--red);">${money(otPay)}</span>
+    </div>` : ""}`;
+}
+
+// ── Tour: called when start or end time changes — recalculate + save ──────────
+async function updateTourLog(jobId, startVal, endVal) {
+  // Update local cache immediately for instant UI
+  const j = allJobs.find(x => String(x.id) === String(jobId));
+  if (j) { j.time_start = startVal; j.time_end = endVal; }
+
+  // Recalculate OT hours from times
+  const worked   = calcWorkedHours(startVal, endVal);
+  const threshold = j ? (num(j.ot_threshold) || 10) : 10;
+  const otHours  = worked !== null ? Math.max(0, Math.round((worked - threshold) * 100) / 100) : null;
+
+  // Update summary panel live
+  const panel = getEl("tlog_" + jobId);
+  if (panel) {
+    if (startVal && endVal && j) {
+      panel.innerHTML = renderTourLogSummary({...j, time_start:startVal, time_end:endVal});
+      panel.style.display = "block";
+    } else {
+      panel.style.display = "none";
+    }
+  }
+
+  // Persist all three fields at once
+  try {
+    const patch = { time_start: startVal || null, time_end: endVal || null,
+                    overtime_hours: otHours };
+    const r = await fetch(SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(jobId), {
+      method: "PATCH",
+      headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,
+                 "Authorization":"Bearer "+(SERVICE_KEY||SUPABASE_KEY),"Prefer":"return=minimal" },
+      body: JSON.stringify(patch)
+    });
+    if (j && otHours !== null) j.overtime_hours = otHours;
+    console.log("[OJO] ✅ Tour log updated job", jobId, "— worked:", worked, "OT:", otHours);
+  } catch(e) { console.error("[OJO] updateTourLog crash:", e.message); }
+}
 function clearForm(){
-  ["name","pickup_from","to","waybillNotes","assignedDriver","postedBy","miles","hours","manualPrice",
-   "agentName","agentRefNum","agentInvoiceDue","agentNumDays","agentDepositAmt"
+  ["name","pickup_from","to","driverNotes","internalNotes","assignedDriver","postedBy","miles","hours","manualPrice",
+   "agentName","agentRefNum","agentInvoiceDue","agentNumDays","agentDepositAmt","tourTotalAmount"
   ].forEach(id=>setValue(id,""));
+  // Reset OT rule to defaults
+  setValue("tourOtThreshold","10");
+  setValue("tourOtRate","75");
   setValue("status","Offer");setValue("jobType","Airport Transfer");setValue("vehicleType","Premium SUV");
   setValue("paymentType","Cash");setValue("pricingMode","auto");setValue("pickupTime","");
   setValue("ojoCommissionValue","10");setValue("posterCommissionValue","5");
@@ -2470,7 +2912,9 @@ function fillFormById(id) {
   getEl("formTitle").textContent="✏️ Edit Booking";getEl("editModeLabel").style.display="block";
   const map={name:j.client,pickup_from:j.from_loc,to:j.to_loc,pickupTime:j.pickup_time,
     jobType:j.job_type,vehicleType:j.vehicle_type,paymentType:j.payment_type,
-    status:j.status,assignedDriver:j.assigned_driver,waybillNotes:j.waybill_notes,
+    status:j.status,assignedDriver:j.assigned_driver,
+    driverNotes:j.waybill_notes||"",
+    internalNotes:j.internal_notes||"",
     pricingMode:j.pricing_mode||"auto",manualPrice:j.manual_price,
     miles:j.miles,hours:j.hours,postedBy:j.posted_by,
     ojoCommissionType:j.commission_ojo_type||"percent",ojoCommissionValue:j.commission_ojo_value||10,
@@ -2589,7 +3033,7 @@ function showWaybill(jobId) {
         </div>
         ${j.posted_by?`<div style="margin-top:8px;font-size:11px;color:#888;text-align:right;">Posted by: ${escapeHtml(j.posted_by)}</div>`:""}
       </div>
-      ${j.waybill_notes?`<div style="background:#fffde7;border:1px solid #fff176;border-radius:10px;padding:12px 14px;"><div style="font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;margin-bottom:6px;">NOTES</div><div style="font-size:13px;color:#333;line-height:1.5;">${escapeHtml(j.waybill_notes)}</div></div>`:""}
+      ${j.waybill_notes?`<div style="background:#f0fff4;border:1px solid #c6f6d5;border-radius:10px;padding:12px 14px;"><div style="font-size:10px;font-weight:800;letter-spacing:.2em;color:#999;margin-bottom:6px;">DRIVER NOTES</div><div style="font-size:13px;color:#1a4731;line-height:1.5;">${escapeHtml(j.waybill_notes)}</div></div>`:""}
       <div style="text-align:center;margin-top:16px;padding-top:12px;border-top:1px solid #eee;"><div style="font-size:10px;color:#bbb;">147 W Route 66 Suite 757, Glendora CA 91740</div><div style="font-size:10px;color:#bbb;">(310) 406-6692 · info@ojoluxe.com · www.ojoluxe.com</div></div>
     </div>
   </div>`;
@@ -2597,11 +3041,77 @@ function showWaybill(jobId) {
   modal.scrollTop=0;
 }
 function closeWaybill(){getEl("waybillModal").style.display="none";}
-async function shareWaybill(){
+
+// ── Waybill: share as plain text ─────────────────────────────────────────────
+async function shareWaybillText(){
   const content=getEl("waybillContent"); if(!content) return;
   if(navigator.share){try{await navigator.share({title:"OJO Luxe Waybill",text:content.innerText});return;}catch(e){}}
   const w=window.open("","_blank");
   w.document.write("<html><body>"+content.innerHTML+"</body></html>");w.document.close();w.print();
+}
+
+// ── Waybill: capture as image → share or download ────────────────────────────
+async function shareWaybillImage(){
+  const content = getEl("waybillContent"); if(!content) return;
+  const btn = event.currentTarget; btn.disabled=true; btn.textContent="⏳ Capturing...";
+  try {
+    if(!window.html2canvas){
+      await new Promise((res,rej)=>{
+        const s=document.createElement("script");
+        s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+    }
+    const canvas = await html2canvas(content,{scale:2,useCORS:true,backgroundColor:"#ffffff",logging:false});
+    canvas.toBlob(async(blob)=>{
+      if(!blob){alert("Could not capture image.");return;}
+      const file=new File([blob],"OJO_Waybill.png",{type:"image/png"});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        try{await navigator.share({files:[file],title:"OJO Luxe Waybill"});return;}catch(e){}
+      }
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="OJO_Waybill.png"; a.click();
+    },"image/png");
+  } catch(e){
+    console.error("[OJO] shareWaybillImage:",e);
+    alert("Image capture failed — try Share Text instead.");
+  } finally { btn.disabled=false; btn.textContent="📸 Share Image"; }
+}
+
+// ── Contribution: screenshot grid → share or download ────────────────────────
+async function shareContribMonth(){
+  const grid=getEl("contrib-grid"); if(!grid) return;
+  const btn=getEl("contribShareBtn");
+  if(btn){btn.disabled=true;btn.textContent="⏳ Capturing...";}
+  try {
+    if(!window.html2canvas){
+      await new Promise((res,rej)=>{
+        const s=document.createElement("script");
+        s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+    }
+    // Expand all year accordions for the capture
+    document.querySelectorAll(".contrib-year-body").forEach(b=>b.classList.add("open"));
+    await new Promise(r=>setTimeout(r,120)); // let CSS transitions settle
+    const canvas=await html2canvas(grid,{scale:2,useCORS:true,backgroundColor:"#101010",logging:false});
+    // Restore — only keep current year open
+    document.querySelectorAll(".contrib-year-body").forEach(b=>b.classList.remove("open"));
+    const firstBody=grid.querySelector(".contrib-year-body");
+    if(firstBody){firstBody.classList.add("open"); const h=firstBody.previousElementSibling; if(h)h.classList.add("open");}
+
+    canvas.toBlob(async(blob)=>{
+      if(!blob){alert("Could not capture image.");return;}
+      const month=new Date().toLocaleString("default",{month:"long",year:"numeric"});
+      const file=new File([blob],`OJO_Contributions_${month}.png`,{type:"image/png"});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        try{await navigator.share({files:[file],title:`OJO Contributions ${month}`});return;}catch(e){}
+      }
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`OJO_Contributions_${month}.png`; a.click();
+    },"image/png");
+  } catch(e){
+    console.error("[OJO] shareContribMonth:",e);
+    alert("Screenshot failed. Try Export CSV instead.");
+  } finally { if(btn){btn.disabled=false;btn.textContent="📸 Share Screenshot";} }
 }
 
 // ── Export CSV ────────────────────────────────────────────────────────────────
@@ -2781,6 +3291,11 @@ let _contribEdit = null;     // { memberId, year, month } being edited
 const CONTRIB_AMOUNT = 100;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+// ── Only Partner / Investor members appear in contribution tracking ───────────
+function getContribMembers() {
+  return getStoredMembers().filter(m => m.is_partner === true || m.is_partner === "true");
+}
+
 async function loadContribFromSupabase() {
   const r = await fetch(
     SUPABASE_URL + "/rest/v1/member_contributions?select=*&order=year.asc,month.asc",
@@ -2797,9 +3312,9 @@ function renderContrib() {
 
 function renderContribAccordion() {
   const grid = getEl("contrib-grid"); if (!grid) return;
-  const members = getStoredMembers();
+  const members = getContribMembers();
   if (!members.length) {
-    grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">No members yet.</div>';
+    grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">No partner/investor members found. Set a member\'s role to <strong style="color:var(--gold);">Partner / Investor</strong> to include them here.</div>';
     return;
   }
 
@@ -2951,9 +3466,9 @@ function setContribYear(y) {
 
 function renderContribGrid() {
   const grid = getEl("contrib-grid"); if (!grid) return;
-  const members = getStoredMembers();
+  const members = getContribMembers();
   if (!members.length) {
-    grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">No members yet.</div>';
+    grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">No partner/investor members found.</div>';
     return;
   }
 
@@ -3100,7 +3615,7 @@ async function markContribUnpaid() {
 }
 
 function exportContribCSV() {
-  const members = getStoredMembers();
+  const members = getContribMembers();
   const rows = [["Name", ...MONTHS]];
   members.forEach(m => {
     const cells = [m.full_name];
@@ -3132,26 +3647,57 @@ function openNavMenu(address,label){
 // ── One-time member seed ─────────────────────────────────────────────────────
 async function seedMembersIfEmpty() {
   try {
-    const members = [
-      { full_name:"Steventh Thatcher",    role:"driver", dob:"1980-09-25", dl_number:"D9025297", driver_license_expiry:"2030-09-25", phone:"213-536-3517",   email:"", address:"20700 San Jose Hills Rd Apt 31, Walnut, CA 91789",          notes:"CA Class C | Federal Limits Apply | Partner 12.5% | SSN last4: 8236" },
-      { full_name:"Yansen Setiawan",      role:"driver", dob:"1979-01-26", dl_number:"D6957584", driver_license_expiry:"2029-01-26", phone:"(818) 288-4494", email:"Yansen.Setiawan@yahoo.com", address:"127 E Colorado Ave, Glendora, CA 91740", notes:"CA Class C | Partner 12.5% | SSN last4: 3063" },
-      { full_name:"Rahmat Juliadi",       role:"driver", dob:"1985-07-19", dl_number:"D9837169", driver_license_expiry:"2028-07-19", phone:"(747) 388-2441", email:"", address:"7459 Ponce Ave, West Hills, CA 91307",                          notes:"CA Class C | Partner 12.5% | SSN last4: 5264" },
-      { full_name:"Wicky Thatcher Sabar", role:"driver", dob:"1984-07-07", dl_number:"Y9540558", driver_license_expiry:"2028-07-07", phone:"(909) 979-7683", email:"", address:"20700 San Jose Hills Rd Apt 31, Walnut, CA 91789",              notes:"CA Class C | RSTR: Corr Lens | Partner 12.5% | SSN last4: 7169" },
-      { full_name:"David",                role:"driver", dob:"1986-02-12", dl_number:"Y6168082", driver_license_expiry:"2030-02-12", phone:"(626) 566-4213", email:"", address:"12236 Kerrwood St Apt 3, El Monte, CA 91732",                   notes:"CA Class C Limited-Term | Partner 12.5% | SSN last4: 7641" },
-      { full_name:"Dewi",                 role:"driver", dob:"1985-05-15", dl_number:"Y5195666", driver_license_expiry:"2028-05-15", phone:"(626) 887-5221", email:"", address:"1020 El Norte Ave, Arcadia, CA 91006",                          notes:"CA Class C | Federal Limits Apply | Partner 12.5% | SSN last4: 1130" },
-      { full_name:"Charles Bernardi Wijaya", role:"driver", dob:"1987-04-30", dl_number:"D7480865", driver_license_expiry:"2028-04-30", phone:"(626) 290-9336", email:"bcharles_87@yahoo.com", address:"5639 N Earle St C, San Gabriel, CA 91776", notes:"CA Class C | Partner 12.5% | SSN last4: 3282" },
-      { full_name:"Silas Hosea",          role:"driver", dob:"1980-03-31", dl_number:"D1832215", driver_license_expiry:"2028-03-31", phone:"(951) 888-9888", email:"", address:"20651 Golden Springs Dr Apt 298, Walnut, CA 91789",             notes:"CA Class C | Partner 12.5% | SSN last4: 8920" }
+    // All 8 founders: role=driver (operational), is_partner=true (equity)
+    const founders = [
+      { full_name:"Steventh Thatcher",    role:"driver", is_partner:true, dob:"1980-09-25", dl_number:"D9025297", driver_license_expiry:"2030-09-25", phone:"213-536-3517",   email:"", address:"20700 San Jose Hills Rd Apt 31, Walnut, CA 91789",          notes:"CA Class C | Federal Limits Apply | Partner 12.5% | SSN last4: 8236" },
+      { full_name:"Yansen Setiawan",      role:"driver", is_partner:true, dob:"1979-01-26", dl_number:"D6957584", driver_license_expiry:"2029-01-26", phone:"(818) 288-4494", email:"Yansen.Setiawan@yahoo.com", address:"127 E Colorado Ave, Glendora, CA 91740", notes:"CA Class C | Partner 12.5% | SSN last4: 3063" },
+      { full_name:"Rahmat Juliadi",       role:"driver", is_partner:true, dob:"1985-07-19", dl_number:"D9837169", driver_license_expiry:"2028-07-19", phone:"(747) 388-2441", email:"", address:"7459 Ponce Ave, West Hills, CA 91307",                          notes:"CA Class C | Partner 12.5% | SSN last4: 5264" },
+      { full_name:"Wicky Thatcher Sabar", role:"driver", is_partner:true, dob:"1984-07-07", dl_number:"Y9540558", driver_license_expiry:"2028-07-07", phone:"(909) 979-7683", email:"", address:"20700 San Jose Hills Rd Apt 31, Walnut, CA 91789",              notes:"CA Class C | RSTR: Corr Lens | Partner 12.5% | SSN last4: 7169" },
+      { full_name:"David",                role:"driver", is_partner:true, dob:"1986-02-12", dl_number:"Y6168082", driver_license_expiry:"2030-02-12", phone:"(626) 566-4213", email:"", address:"12236 Kerrwood St Apt 3, El Monte, CA 91732",                   notes:"CA Class C Limited-Term | Partner 12.5% | SSN last4: 7641" },
+      { full_name:"Dewi",                 role:"driver", is_partner:true, dob:"1985-05-15", dl_number:"Y5195666", driver_license_expiry:"2028-05-15", phone:"(626) 887-5221", email:"", address:"1020 El Norte Ave, Arcadia, CA 91006",                          notes:"CA Class C | Federal Limits Apply | Partner 12.5% | SSN last4: 1130" },
+      { full_name:"Charles Bernardi Wijaya", role:"driver", is_partner:true, dob:"1987-04-30", dl_number:"D7480865", driver_license_expiry:"2028-04-30", phone:"(626) 290-9336", email:"bcharles_87@yahoo.com", address:"5639 N Earle St C, San Gabriel, CA 91776", notes:"CA Class C | Partner 12.5% | SSN last4: 3282" },
+      { full_name:"Silas Hosea",          role:"driver", is_partner:true, dob:"1980-03-31", dl_number:"D1832215", driver_license_expiry:"2028-03-31", phone:"(951) 888-9888", email:"", address:"20651 Golden Springs Dr Apt 298, Walnut, CA 91789",             notes:"CA Class C | Partner 12.5% | SSN last4: 8920" }
     ];
-    // Check if real members already exist by DL number
-    const { data } = await db.from("team_members").select("dl_number").limit(50);
-    const existingDLs = (data||[]).map(m=>m.dl_number).filter(Boolean);
-    const realDLs = members.map(m=>m.dl_number);
-    const toInsert = members.filter(m => !existingDLs.includes(m.dl_number));
-    if(toInsert.length === 0){ console.log("[OJO] All 8 real members already in DB"); return; }
-    console.log("[OJO] Inserting", toInsert.length, "missing members...");
-    const { error } = await db.from("team_members").insert(toInsert);
-    if (error) console.error("[OJO] Seed error:", error.message);
-    else console.log("[OJO] ✅ Seeded", toInsert.length, "members!");
+    const founderDLs = founders.map(f => f.dl_number);
+
+    // ── Try to ensure is_partner column exists (safe — fails silently if already exists) ──
+    await fetch(SUPABASE_URL + "/rest/v1/rpc/exec_sql", {
+      method: "POST",
+      headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+(SERVICE_KEY||SUPABASE_KEY) },
+      body: JSON.stringify({ query: "ALTER TABLE team_members ADD COLUMN IF NOT EXISTS is_partner boolean DEFAULT false;" })
+    }).catch(() => {}); // ignore — column may already exist or RPC may be restricted
+
+    // Fetch existing records
+    const { data } = await db.from("team_members").select("id,dl_number,role,is_partner").limit(100);
+    const existing = data || [];
+    const existingDLs = existing.map(m => m.dl_number).filter(Boolean);
+
+    // ── Insert any missing founders ──
+    const toInsert = founders.filter(f => !existingDLs.includes(f.dl_number));
+    if (toInsert.length > 0) {
+      const { error } = await db.from("team_members").insert(toInsert);
+      if (error) console.error("[OJO] Seed error:", error.message);
+      else console.log("[OJO] ✅ Seeded", toInsert.length, "founders");
+    } else {
+      console.log("[OJO] All 8 founders already in DB");
+    }
+
+    // ── Migrate existing founder records: set role=driver + is_partner=true ──
+    const toMigrate = existing.filter(m =>
+      founderDLs.includes(m.dl_number) &&
+      (m.is_partner !== true || m.role === "partner")
+    );
+    for (const rec of toMigrate) {
+      const patch = { is_partner: true };
+      if (rec.role === "partner") patch.role = "driver"; // fix legacy role value
+      await fetch(SUPABASE_URL + "/rest/v1/team_members?id=eq." + encodeURIComponent(rec.id), {
+        method: "PATCH",
+        headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+(SERVICE_KEY||SUPABASE_KEY),"Prefer":"return=minimal" },
+        body: JSON.stringify(patch)
+      }).catch(e => console.warn("[OJO] migrate failed:", e.message));
+    }
+    if (toMigrate.length) console.log("[OJO] ✅ Migrated", toMigrate.length, "founders → role=driver, is_partner=true");
+
   } catch(e) { console.error("[OJO] Seed crashed:", e.message); }
 }
 
@@ -3165,6 +3711,14 @@ document.addEventListener("DOMContentLoaded", async function() {
   // Bind job type change
   const jt=getEl("jobType"); if(jt) jt.addEventListener("change", onJobTypeChange);
   const vt=getEl("vehicleType"); if(vt) vt.addEventListener("change", updateQuoteSummary);
+
+  // NOTE: Tour time log columns — run once in Supabase SQL Editor if not done:
+  // ALTER TABLE jobs ADD COLUMN IF NOT EXISTS time_start text;
+  // ALTER TABLE jobs ADD COLUMN IF NOT EXISTS time_end text;
+  // ALTER TABLE jobs ADD COLUMN IF NOT EXISTS overtime_hours numeric;
+  // ALTER TABLE jobs ADD COLUMN IF NOT EXISTS overtime_notes text;
+  // ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ot_threshold numeric DEFAULT 10;
+  // ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ot_rate numeric DEFAULT 0;
 
   // Bind dispatch confirm
   const dcb=getEl("dispatchConfirmBtn"); if(dcb) dcb.onclick=confirmDispatch;
@@ -3396,8 +3950,62 @@ function setBookingMode(mode) {
 
 function syncNumDaysVisibility() {
   const jobType = (getEl("jobType")?.value||"").toLowerCase();
-  const wrap = getEl("numDaysWrap");
-  if (wrap) wrap.style.display = (currentBookingMode==="agent" && jobType.includes("multi")) ? "block" : "none";
+  const isMultiDay = currentBookingMode==="agent" && jobType.includes("multi");
+  const wrap   = getEl("numDaysWrap");
+  const banner = getEl("multiDayBannerWrap");
+  if (wrap)   wrap.style.display   = isMultiDay ? "block" : "none";
+  if (banner) banner.style.display = isMultiDay ? "block" : "none";
+  if (isMultiDay) syncMultiDayPreview();
+}
+
+// ── Multi-day preview — reads total contract ÷ days ─────────────────────────
+function syncMultiDayPreview() {
+  const days       = parseInt(getValue("agentNumDays")) || 0;
+  const totalAmt   = num(getValue("tourTotalAmount"));
+  const startDate  = getValue("date");
+  const otThresh   = num(getValue("tourOtThreshold")) || 10;
+  const otRate     = num(getValue("tourOtRate")) || 0;
+  const preview    = getEl("mdSplitPreview");
+  const genLabel   = getEl("mdGenLabel");
+
+  if (!preview) return;
+
+  if (!days || !totalAmt) {
+    preview.style.display = "none";
+    if (genLabel) genLabel.textContent = "All Days";
+    return;
+  }
+
+  const perDay     = totalAmt / days;
+  const ojoType    = getValue("ojoCommissionType")  || "percent";
+  const ojoVal     = num(getValue("ojoCommissionValue"))  || 10;
+  const poType     = getValue("posterCommissionType") || "percent";
+  const poVal      = num(getValue("posterCommissionValue")) || 5;
+  const ojoCom     = calculateCommissionAmount(perDay, ojoType, ojoVal);
+  const posterCom  = calculateCommissionAmount(perDay, poType,  poVal);
+  const driverPay  = perDay - ojoCom - posterCom;
+
+  // Date range string
+  let dateRange = "Set start date above";
+  if (startDate) {
+    const s = new Date(startDate + "T00:00:00");
+    const e = new Date(s); e.setDate(e.getDate() + days - 1);
+    const fmt = d => d.toLocaleDateString("en-US", {month:"short", day:"numeric"});
+    dateRange = fmt(s) + " → " + fmt(e) + " (" + days + " days)";
+  }
+
+  getEl("mdTotal").textContent     = money(totalAmt);
+  getEl("mdDays2").textContent     = days;
+  getEl("mdPerDay").textContent    = money(perDay) + "/day";
+  getEl("mdDateRange").textContent = "📅 " + dateRange;
+  getEl("mdOjoCom").textContent    = money(ojoCom);
+  getEl("mdPosterCom").textContent = money(posterCom);
+  getEl("mdDriverPay").textContent = money(driverPay);
+  getEl("mdOtThresh").textContent  = otThresh;
+  getEl("mdOtRate").textContent    = otRate ? money(otRate) : "not set";
+  if (genLabel) genLabel.textContent = days + " Days — " + money(totalAmt) + " Total";
+
+  preview.style.display = "block";
 }
 
 // ── Show/hide miles, hours, manual fields based on service + pricing mode ──
@@ -3735,6 +4343,7 @@ function getMemberFormData() {
     id:                          getValue("editingTeamMemberId") || null,
     full_name:                   getValue("teamFullName"),
     role:                        getValue("teamRole"),
+    is_partner:                  !!(getEl("teamIsPartner") && getEl("teamIsPartner").checked),
     dob:                         getValue("teamDob"),
     phone:                       getValue("teamPhone"),
     email:                       getValue("teamEmail"),
@@ -3783,6 +4392,7 @@ function clearMemberForm() {
    "teamWorkPermitExpiry","teamIdPhoto","teamProfessionalPhoto","teamDlFileUrl",
    "teamWpFileUrl","teamNotes","editingTeamMemberId"].forEach(id => setValue(id,""));
   setValue("teamRole","driver");
+  const ipEl = getEl("teamIsPartner"); if(ipEl) ipEl.checked = false;
   // Reset date picker dropdowns
   ["teamDob","teamDriverLicenseExpiry","teamWorkPermitExpiry"].forEach(id => {
     const wrap = document.querySelector(`.date-picker-wrap[data-for="${id}"]`);
@@ -3829,7 +4439,7 @@ function validateVehicle(data) {
 // ── Safe UUID generator (works on file://, http, https) ──────────────────────
 function makeUUID() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    try { return makeUUID(); } catch(e) {}
+    try { return crypto.randomUUID(); } catch(e) {}
   }
   // Fallback for file:// protocol
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -3840,10 +4450,13 @@ function makeUUID() {
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
+let _saveMemberBusy = false;
 async function saveMember() {
+  if (_saveMemberBusy) return;
+  _saveMemberBusy = true;
   try {
     const data   = getMemberFormData();
-    if (!validateMember(data)) return;
+    if (!validateMember(data)) { _saveMemberBusy = false; return; }
     const member = {};
     Object.entries(data).forEach(([k,v]) => { if(v !== null && v !== "") member[k] = v; });
     delete member.id;
@@ -3862,6 +4475,8 @@ async function saveMember() {
   } catch(e) {
     console.error("[OJO saveMember CRASH]", e);
     alert("saveMember crashed:\n" + e.message);
+  } finally {
+    _saveMemberBusy = false;
   }
 }
 
@@ -3897,6 +4512,10 @@ function editMember(id) {
     teamDlFileUrl: item.dl_file_url,
     teamWpFileUrl: item.wp_file_url,    teamNotes: item.notes
   }).forEach(([k,v]) => setValue(k, v));
+
+  // Restore is_partner checkbox
+  const ipEl = getEl("teamIsPartner");
+  if (ipEl) ipEl.checked = !!(item.is_partner);
 
   // Restore photo previews
   if (item.professional_photo_url && item.professional_photo_url.startsWith("http")) {
@@ -3992,81 +4611,95 @@ function renderMembers() {
   const members  = getStoredMembers();
   const vehicles = getStoredVehicles();
   if (!members.length) {
-    list.innerHTML = '<div class="card"><div class="job-meta">No members yet.</div></div>';
+    list.innerHTML = '<div class="card"><div style="padding:20px;text-align:center;color:var(--muted);">No members yet.</div></div>';
     return;
   }
 
   const today = new Date().toISOString().slice(0, 10);
 
-  list.innerHTML = '<div id="sh-members" class="section-header" onclick="toggleSection(\"members\")">' +
-    '<div><div class="sh-title">👤 Members (' + members.length + ')</div>' +
-    '<div class="sh-meta">Click to expand</div></div>' +
-    '<span class="sh-arrow">▼</span></div>' +
-    '<div id="sb-members" class="section-body">' +
-    members.map(m => {
-    // Expiry warnings
-    const dlWarn  = m.driver_license_expiry && m.driver_license_expiry < today;
-    const wpWarn  = m.work_permit_expiry    && m.work_permit_expiry < today;
+  const memberCards = members.map(m => {
+    const dlWarn = m.driver_license_expiry && m.driver_license_expiry < today;
+    const wpWarn = m.work_permit_expiry    && m.work_permit_expiry < today;
+    const hasAlert = dlWarn || wpWarn;
 
-    // Vehicles where this member is primary driver
     const primaryVehicles = vehicles.filter(v => v.assigned_member_id === m.id);
-    const fleetVehicles   = vehicles.filter(v => !v.assigned_member_id); // pool vehicles they can drive
+    const fleetVehicles   = vehicles.filter(v => !v.assigned_member_id);
 
     const roleBadgeStyle = {
-      admin:  "border-color:#7a5f12;color:#f2cf63;",
-      driver: "border-color:#2e7d32;color:#87e18b;",
-      member: "border-color:#2e4a6e;color:#89c2ff;"
-    }[m.role] || "border-color:#333;color:#aaa;";
+      admin:  "border-color:#7a5f12;color:#f2cf63;background:#0a0800;",
+      driver: "border-color:#2e7d32;color:#87e18b;background:#0a130a;",
+      member: "border-color:#2e4a6e;color:#89c2ff;background:#080f1a;"
+    }[m.role] || "border-color:#333;color:#aaa;background:#111;";
+
+    const partnerPip = (m.is_partner === true || m.is_partner === "true")
+      ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid #8a4a00;color:#ffb347;background:#140900;">🤝 Partner</span>`
+      : "";
 
     const photoHtml = m.professional_photo_url
-      ? `<img src="${escapeHtml(m.professional_photo_url)}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid #2a2a2a;flex-shrink:0;" onerror="this.style.display='none'">`
-      : `<div style="width:48px;height:48px;border-radius:50%;background:#1a1a1a;border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">👤</div>`;
+      ? `<img src="${escapeHtml(m.professional_photo_url)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #2a2a2a;flex-shrink:0;" onerror="this.style.display='none'">`
+      : `<div style="width:38px;height:38px;border-radius:50%;background:#1a1a1a;border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👤</div>`;
 
-    const vehiclesHtml = primaryVehicles.length || fleetVehicles.length ? `
+    const vehiclesHtml = (primaryVehicles.length || fleetVehicles.length) ? `
       <div style="margin-top:10px;">
-        <div style="font-size:10px;font-weight:700;color:#444;letter-spacing:.1em;margin-bottom:6px;">VEHICLES</div>
-        ${primaryVehicles.map(v => `
-          <div class="vehicle-chip primary">🚗 ${escapeHtml(v.vehicle_code)} · ${escapeHtml(v.vehicle_type||"")} · ${escapeHtml(v.plate||"")}</div>
-        `).join("")}
-        ${fleetVehicles.length ? `<div style="font-size:11px;color:#444;margin-top:6px;">+ Can drive ${fleetVehicles.length} fleet pool vehicle${fleetVehicles.length>1?"s":""}</div>` : ""}
+        <div style="font-size:9px;font-weight:700;color:#444;letter-spacing:.12em;margin-bottom:5px;">VEHICLES</div>
+        ${primaryVehicles.map(v => `<div style="font-size:12px;color:var(--muted);margin-bottom:3px;">🚗 ${escapeHtml(v.vehicle_code)} · ${escapeHtml(v.vehicle_type||"")} · ${escapeHtml(v.plate||"")}</div>`).join("")}
+        ${fleetVehicles.length ? `<div style="font-size:11px;color:#444;margin-top:4px;">+ ${fleetVehicles.length} fleet pool vehicle${fleetVehicles.length>1?"s":""}</div>` : ""}
       </div>` : "";
 
     const docsHtml = (m.id_photo_url || m.dl_file_url || m.wp_file_url) ? `
-      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
-        ${m.id_photo_url    ? `<a href="${escapeHtml(m.id_photo_url)}" target="_blank" style="font-size:11px;color:var(--gold);padding:3px 8px;border:1px solid #333;border-radius:999px;text-decoration:none;">🪪 ID</a>` : ""}
-        ${m.dl_file_url     ? `<a href="${escapeHtml(m.dl_file_url)}" target="_blank" style="font-size:11px;color:var(--gold);padding:3px 8px;border:1px solid #333;border-radius:999px;text-decoration:none;">📎 DL</a>` : ""}
-        ${m.wp_file_url     ? `<a href="${escapeHtml(m.wp_file_url)}" target="_blank" style="font-size:11px;color:var(--gold);padding:3px 8px;border:1px solid #333;border-radius:999px;text-decoration:none;">📋 Permit</a>` : ""}
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;">
+        ${m.id_photo_url ? `<a href="${escapeHtml(m.id_photo_url)}" target="_blank" style="font-size:11px;color:var(--gold);padding:3px 9px;border:1px solid #333;border-radius:999px;text-decoration:none;">🪪 ID</a>` : ""}
+        ${m.dl_file_url  ? `<a href="${escapeHtml(m.dl_file_url)}" target="_blank" style="font-size:11px;color:var(--gold);padding:3px 9px;border:1px solid #333;border-radius:999px;text-decoration:none;">📎 DL</a>` : ""}
+        ${m.wp_file_url  ? `<a href="${escapeHtml(m.wp_file_url)}" target="_blank" style="font-size:11px;color:var(--gold);padding:3px 9px;border:1px solid #333;border-radius:999px;text-decoration:none;">📋 Permit</a>` : ""}
       </div>` : "";
 
+    const safeId = escapeHtml(m.id);
     return `
-      <div class="card" style="margin-bottom:10px;" data-member-id="${m.id}">
-        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
+      <div style="margin-bottom:6px;">
+        <div class="mc-header" onclick="toggleMemberCard('${safeId}')" data-member-id="${safeId}">
           ${photoHtml}
           <div style="flex:1;min-width:0;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-              <div>
-                <div style="font-size:16px;font-weight:800;color:#f4f4f4;">${escapeHtml(m.full_name)}</div>
-                <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid;background:#111;${roleBadgeStyle}">${escapeHtml(m.role||"-")}</span>
-              </div>
-              <div style="display:flex;gap:5px;flex-shrink:0;">
-                <button class="small-btn secondary-btn" style="padding:6px 12px;" type="button" onclick="editMember('${m.id}')">Edit</button>
-                <button class="small-btn danger-btn" style="padding:6px 12px;" type="button" onclick="deleteMember('${m.id}')">Del</button>
-              </div>
+            <div style="font-size:14px;font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(m.full_name)}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:2px;flex-wrap:wrap;">
+              <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid;${roleBadgeStyle}">${escapeHtml(m.role||"driver")}</span>
+              ${partnerPip}
+              ${hasAlert ? '<span style="font-size:10px;color:var(--red);">⚠ Expiry</span>' : ""}
+              ${m.phone ? `<span style="font-size:11px;color:#666;">${escapeHtml(m.phone)}</span>` : ""}
             </div>
-            <div style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;">
+          </div>
+          <span data-member-arrow="${safeId}" style="font-size:11px;color:var(--muted);flex-shrink:0;">▼</span>
+        </div>
+        <div class="mc-body" data-member-body="${safeId}">
+          <div class="mc-inner">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-bottom:10px;">
               <div style="font-size:12px;color:#888;">📞 ${escapeHtml(m.phone||"-")}</div>
-              <div style="font-size:12px;color:#888;">✉️ ${escapeHtml(m.email||"-")}</div>
-              ${m.dob ? `<div style="font-size:12px;color:#888;">🎂 ${escapeHtml(m.dob)}</div>` : ""}
-              <div style="font-size:12px;${dlWarn?'color:#ff8b8b':'color:#888'}">🪪 DL: ${escapeHtml(m.dl_number||'')} · Exp: ${escapeHtml(m.driver_license_expiry||'-')}</div>
-              <div style="font-size:12px;${wpWarn?"color:#ff8b8b;":"color:#888;"}">📋 Permit: ${escapeHtml(m.work_permit_expiry||"-")}</div>
+              <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;">✉️ ${escapeHtml(m.email||"-")}</div>
+              ${m.dob ? `<div style="font-size:12px;color:#888;">🎂 ${escapeHtml(m.dob)}</div>` : "<div></div>"}
+              <div style="font-size:12px;${dlWarn?"color:#ff8b8b":"color:#888"}">🪪 ${escapeHtml(m.dl_number||"-")} · Exp: ${escapeHtml(m.driver_license_expiry||"-")}</div>
+              <div style="font-size:12px;${wpWarn?"color:#ff8b8b":"color:#888"}">📋 Permit: ${escapeHtml(m.work_permit_expiry||"-")}</div>
+              ${m.address ? `<div style="font-size:11px;color:#555;grid-column:1/-1;">📍 ${escapeHtml(m.address)}</div>` : ""}
+            </div>
+            ${docsHtml}
+            ${vehiclesHtml}
+            ${m.notes ? `<div style="margin-top:8px;font-size:11px;color:#555;padding:6px 8px;background:#0a0a0a;border-radius:7px;border:1px solid #1a1a1a;">${escapeHtml(m.notes)}</div>` : ""}
+            <div style="display:flex;gap:6px;margin-top:10px;">
+              <button class="btn btn-sec" style="flex:1;padding:8px;" type="button" onclick="editMember('${safeId}')">✏️ Edit</button>
+              <button class="btn btn-danger" style="flex:1;padding:8px;" type="button" onclick="deleteMember('${safeId}')">🗑 Delete</button>
             </div>
           </div>
         </div>
-        ${docsHtml}
-        ${vehiclesHtml}
-        ${m.notes ? `<div style="margin-top:8px;font-size:12px;color:#555;padding:6px 8px;background:#0a0a0a;border-radius:7px;border:1px solid #1a1a1a;">${escapeHtml(m.notes)}</div>` : ""}
       </div>`;
-  }).join("") + '</div>'; // close section-body
+  }).join("");
+
+  list.innerHTML =
+    `<div id="sh-members" class="section-header" onclick="toggleSection('members')">
+      <div>
+        <div class="sh-title">👤 Members (${members.length})</div>
+        <div class="sh-meta">Tap to expand list</div>
+      </div>
+      <span class="sh-arrow" id="sh-members-arrow">▼</span>
+    </div>
+    <div id="sb-members" class="section-body">${memberCards}</div>`;
 }
 
 // ── Render Vehicles ───────────────────────────────────────────────────────────
