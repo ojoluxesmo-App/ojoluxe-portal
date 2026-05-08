@@ -1707,12 +1707,20 @@ window.addEventListener("unhandledrejection", function(e) {
       </div>
 
       <!-- Meet & Greet auto line (read-only) -->
-      <div id="expMeetGreetRow" style="display:none;background:#0a130a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+      <div id="expMeetGreetRow" style="display:none;background:#0a130a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div style="font-size:11px;font-weight:700;color:var(--green);">🤝 Meet & Greet</div>
           <div style="font-size:10px;color:#666;">Standard service charge</div>
         </div>
         <div style="font-size:16px;font-weight:800;color:var(--green);">+$50.00</div>
+      </div>
+      <!-- Car Seat auto line (read-only) -->
+      <div id="expCarSeatRow" style="display:none;background:#0a130a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--green);">🪑 Car Seat</div>
+          <div style="font-size:10px;color:#666;">Child safety seat charge</div>
+        </div>
+        <div style="font-size:16px;font-weight:800;color:var(--green);">+$15.00</div>
       </div>
 
       <!-- Expense rows -->
@@ -2195,6 +2203,7 @@ function renderJobs() {
           <div class="jc-price">${money(pricing.grandTotal||pricing.totalPrice)}</div>
           ${pricing.otTotal>0?`<div style="font-size:10px;color:var(--red);font-weight:700;text-align:right;">+${money(pricing.otTotal)} OT</div>`:""}
           ${pricing.meetGreetCharge>0?`<div style="font-size:10px;color:var(--green);font-weight:700;text-align:right;">+$50 M&G</div>`:""}
+          ${pricing.carSeatCharge>0?`<div style="font-size:10px;color:var(--green);font-weight:700;text-align:right;">+$15 Car Seat</div>`:""}
           ${pricing.approvedAddons>0?`<div style="font-size:10px;color:#7ec8e3;font-weight:700;text-align:right;">+${money(pricing.approvedAddons)} exp</div>`:""}
           <div class="jc-status" style="color:${status==="Completed"?"var(--green)":status==="Offer"?"var(--muted)":"var(--gold)"}">${escapeHtml(status)}</div>
         </div>
@@ -2277,7 +2286,10 @@ function renderJobs() {
             <button class="btn btn-sec" onclick="showExpenseModal('${j.id}')" style="position:relative;">
               💳 Expenses${(()=>{const ch=Array.isArray(j.addon_charges)?j.addon_charges:[];const pending=ch.filter(x=>x.status==="pending").length;const approved=ch.filter(x=>x.status==="approved").length;return pending?`<span style="position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">${pending}</span>`:approved?`<span style="position:absolute;top:-4px;right:-4px;background:var(--green);color:#000;border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">✓</span>`:""})()}
             </button>
-            ${isAdminMode()?`<button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button><button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
+            ${isAdminMode()?`
+            <button class="btn btn-sec" onclick="shareJobLink('${j.id}')" title="Share job link with driver">🔗 Share</button>
+            <button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button>
+            <button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
           </div>
           ${isAdminMode()?`<div class="action-row" style="margin-top:6px;"><button class="btn btn-danger btn-full" onclick="deleteJob('${j.id}')">Delete</button></div>`:""}
         </div>
@@ -3423,6 +3435,8 @@ function showExpenseModal(jobId) {
   getEl("expModalRef").textContent = (j.reference_code||j.id||"") + " · " + escapeHtml(j.client||"");
   const mgRow = getEl("expMeetGreetRow");
   if (mgRow) mgRow.style.display = String(j.waybill_notes||"").includes("Meet & Greet") ? "flex" : "none";
+  const csRow = getEl("expCarSeatRow");
+  if (csRow) csRow.style.display = String(j.waybill_notes||"").includes("Car Seat") ? "flex" : "none";
   renderExpenseRows();
   getEl("expenseModal").style.display = "flex";
 }
@@ -3430,6 +3444,51 @@ function showExpenseModal(jobId) {
 function closeExpenseModal() {
   getEl("expenseModal").style.display = "none";
   expenseJobId = null; expenseRows = [];
+}
+
+// ── Share Job Link ────────────────────────────────────────────────────────────
+function generateShareToken() {
+  // UUID v4 style — 32 random hex chars
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+async function shareJobLink(jobId) {
+  const j = allJobs.find(x => String(x.id) === String(jobId)); if (!j) return;
+  let token = j.share_token;
+
+  // Generate and save token if not already set
+  if (!token) {
+    token = generateShareToken();
+    try {
+      const r = await fetch(SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(jobId), {
+        method: "PATCH",
+        headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Prefer":"return=minimal" },
+        body: JSON.stringify({ share_token: token })
+      });
+      if (!r.ok && r.status !== 204) { alert("Could not generate share link."); return; }
+      j.share_token = token;
+    } catch(e) { alert("Error: " + e.message); return; }
+  }
+
+  // Build the URL — same domain as current page, job.html
+  const base = window.location.origin + window.location.pathname.replace("index.html","").replace(/\/[^/]*$/, "/");
+  const url  = base + "job.html?token=" + token;
+  const msg  = `OJO Luxe Job Assignment\n${j.reference_code||""}\nClient: ${j.client||""}\nDate: ${j.date||""} ${j.pickup_time||""}\nPickup: ${j.from_loc||""}\n\nOpen your job card:\n${url}`;
+
+  if (navigator.share) {
+    try { await navigator.share({ title: "OJO Luxe Job", text: msg }); return; } catch(e) {}
+  }
+  // Fallback: copy to clipboard
+  try {
+    await navigator.clipboard.writeText(msg);
+    alert("✅ Job link copied to clipboard!\n\nPaste and send to driver via SMS.");
+  } catch(e) {
+    // Last resort: prompt
+    prompt("Copy this link to send to your driver:", url);
+  }
 }
 
 function addExpenseRow() {
@@ -4355,22 +4414,27 @@ function calculateJobPrice(job) {
   const hasMeetGreet = String(job.waybill_notes||"").includes("Meet & Greet");
   const meetGreetCharge = hasMeetGreet ? 50 : 0;
 
+  // Car Seat addon — $15 flat
+  const hasCarSeat = String(job.waybill_notes||"").includes("Car Seat");
+  const carSeatCharge = hasCarSeat ? 15 : 0;
+
   // Approved addon charges from addon_charges JSONB
   const addons = Array.isArray(job.addon_charges) ? job.addon_charges : [];
   const approvedAddons = addons.filter(x=>x.status==="approved").reduce((s,x)=>s+num(x.amount),0);
 
   if (pricingMode === "manual") {
     const base = num(job.manual_price ?? job.total_price);
-    const grandTotal = base + otTotal + meetGreetCharge + approvedAddons;
-    return { type:"manual", isManual:true, totalPrice:base, otTotal, meetGreetCharge, approvedAddons, grandTotal };
+    const grandTotal = base + otTotal + meetGreetCharge + carSeatCharge + approvedAddons;
+    return { type:"manual", isManual:true, totalPrice:base, otTotal, meetGreetCharge, carSeatCharge, approvedAddons, grandTotal };
   }
 
   const type = normalizeServiceType(job);
   const result = type === "hourly" ? calculateHourly(job) : calculatePointToPoint(job);
   result.otTotal        = otTotal;
   result.meetGreetCharge= meetGreetCharge;
+  result.carSeatCharge  = carSeatCharge;
   result.approvedAddons = approvedAddons;
-  result.grandTotal     = (result.totalPrice || 0) + otTotal + meetGreetCharge + approvedAddons;
+  result.grandTotal     = (result.totalPrice || 0) + otTotal + meetGreetCharge + carSeatCharge + approvedAddons;
   return result;
 }
 
@@ -4593,12 +4657,14 @@ function updateQuoteSummary() {
   const pricing    = calculateJobPrice(tempJob);
   const total      = pricing.totalPrice;
   const meetGreet  = [...document.querySelectorAll(".driver-tag.active")].some(b=>b.dataset.tag==="Meet & Greet") ? 50 : 0;
-  const grandTotal = total + meetGreet;
+  const carSeat    = [...document.querySelectorAll(".driver-tag.active")].some(b=>b.dataset.tag==="Car Seat") ? 15 : 0;
+  const grandTotal = total + meetGreet + carSeat;
   const ojoCom     = calculateCommissionAmount(grandTotal, ojType,  num(ojValue));
   const posterCom  = calculateCommissionAmount(grandTotal, poType,  num(poValue));
   const driverPay  = grandTotal - ojoCom - posterCom;
 
-  totalEl.textContent  = meetGreet ? `${money(total)} + $50 M&G = ${money(grandTotal)}` : money(grandTotal);
+  const addons = [meetGreet?"+$50 M&G":"", carSeat?"+$15 Car Seat":""].filter(Boolean).join(" ");
+  totalEl.textContent  = addons ? `${money(total)} ${addons} = ${money(grandTotal)}` : money(grandTotal);
   totalEl.className    = "qm-summary-total-value";
   ojoEl.textContent    = money(ojoCom);    ojoEl.className    = "qm-payout-value";
   posterEl.textContent = money(posterCom); posterEl.className = "qm-payout-value";
