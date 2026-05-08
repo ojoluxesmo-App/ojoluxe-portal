@@ -276,21 +276,41 @@ function calculateHourly(job) {
 }
 
 function calculateDriverNet(job) {
-  // Driver sees only their net pay — base driver_pay + OT + addons they earned
-  const basePay = num(job.driver_pay);
+  // Recalculate from grandTotal so M&G, Car Seat, OT, approved addons are all included
+  // before commissions are taken
+  const mode = String(job.pricing_mode||"").toLowerCase();
   const otHours = num(job.overtime_hours);
   const otRate  = num(job.ot_rate);
   const otTotal = (otHours > 0 && otRate > 0) ? Math.round(otHours * otRate * 100) / 100 : 0;
-  const hasMeetGreet = String(job.waybill_notes||"").includes("Meet & Greet");
-  const meetGreet    = hasMeetGreet ? 50 : 0;
-  const hasCarSeat   = String(job.waybill_notes||"").includes("Car Seat");
-  const carSeat      = hasCarSeat ? 15 : 0;
-  const addons = Array.isArray(job.addon_charges) ? job.addon_charges : [];
+  const meetGreet  = String(job.waybill_notes||"").includes("Meet & Greet") ? 50 : 0;
+  const carSeat    = String(job.waybill_notes||"").includes("Car Seat") ? 15 : 0;
+  const addons     = Array.isArray(job.addon_charges) ? job.addon_charges : [];
   const approvedAddons = addons.filter(x=>x.status==="approved").reduce((s,x)=>s+num(x.amount),0);
-  return {
-    basePay, otTotal, meetGreet, carSeat, approvedAddons,
-    netPay: basePay + otTotal + meetGreet + carSeat + approvedAddons
-  };
+
+  let base;
+  if (mode === "manual") {
+    base = num(job.manual_price ?? job.total_price);
+  } else {
+    const type = normalizeServiceType(job);
+    const r = type === "hourly" ? calculateHourly(job) : calculatePointToPoint(job);
+    base = r.totalPrice;
+  }
+  const grandTotal = base + otTotal + meetGreet + carSeat + approvedAddons;
+
+  // Apply same commission percentages stored on the job
+  const ojoType   = job.commission_ojo_type   || "percent";
+  const ojoVal    = num(job.commission_ojo_value   ?? 10);
+  const postType  = job.commission_poster_type || "percent";
+  const postVal   = num(job.commission_poster_value ?? 5);
+
+  function calcCom(total, type, val) {
+    return String(type).toLowerCase() === "fixed" ? val : total * (val / 100);
+  }
+  const ojoCom   = calcCom(grandTotal, ojoType,  ojoVal);
+  const postCom  = calcCom(grandTotal, postType, postVal);
+  const netPay   = grandTotal - ojoCom - postCom;
+
+  return { base, otTotal, meetGreet, carSeat, approvedAddons, grandTotal, ojoCom, postCom, netPay };
 }
 
 // ── Status flow (exact copy from portal) ─────────────────────────────────────
