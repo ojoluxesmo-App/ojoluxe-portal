@@ -2924,7 +2924,7 @@ async function updateJobStatus(jobId, newStatus) {
     if (patch.time_start) j.time_start = patch.time_start;
     if (patch.time_end)   j.time_end   = patch.time_end;
     updateStats();
-    renderJobs();
+    renderJobs(allJobs);
     console.log("[OJO] ✅ Status updated:", jobId, "→", newStatus);
   } catch(e) {
     console.error("[OJO] updateJobStatus crash:", e.message);
@@ -3473,9 +3473,8 @@ async function shareJobLink(jobId) {
     } catch(e) { alert("Error: " + e.message); return; }
   }
 
-  // Build the URL — same domain as current page, job.html
-  const base = window.location.origin + window.location.pathname.replace("index.html","").replace(/\/[^/]*$/, "/");
-  const url  = base + "job.html?token=" + token;
+  // Build the URL — always relative to origin root
+  const url  = window.location.origin + "/job.html?token=" + token;
   const msg  = `OJO Luxe Job Assignment\n${j.reference_code||""}\nClient: ${j.client||""}\nDate: ${j.date||""} ${j.pickup_time||""}\nPickup: ${j.from_loc||""}\n\nOpen your job card:\n${url}`;
 
   if (navigator.share) {
