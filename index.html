@@ -574,6 +574,7 @@ input,select,textarea,button{font-family:var(--font-ui);}
 
 /* ─── WAYBILL ────────────────────────────────────────── */
 #waybillModal .modal{background:#fff;max-width:640px;}
+.driver-tag.active{background:var(--gold)!important;color:#000!important;border-color:var(--gold)!important;font-weight:700;}
 
 /* ─── RESPONSIVE ─────────────────────────────────────── */
 @media(max-width:400px){
@@ -1071,7 +1072,30 @@ window.addEventListener("unhandledrejection", function(e) {
           🚘 <span>Driver Notes</span>
           <span style="font-size:10px;font-weight:600;color:var(--green);padding:1px 7px;border-radius:999px;border:1px solid #2e7d32;background:#0a130a;">Shown on waybill</span>
         </label>
-        <textarea id="driverNotes" placeholder="Meet & greet, car seat needed, help with luggage, disability assist, gate code, flight #..." style="min-height:60px;"></textarea>
+        <!-- Quick tags -->
+        <div id="driverTagsWrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+          <button type="button" class="driver-tag" data-tag="Meet & Greet" onclick="toggleDriverTag(this)" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;">Meet & Greet</button>
+          <button type="button" class="driver-tag" data-tag="Car Seat" onclick="toggleDriverTag(this)" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;">Car Seat</button>
+          <button type="button" class="driver-tag" data-tag="Help with Luggage" onclick="toggleDriverTag(this)" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;">Help with Luggage</button>
+          <button type="button" class="driver-tag" data-tag="Disability Assistance" onclick="toggleDriverTag(this)" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;">Disability Assistance</button>
+          <button type="button" class="driver-tag" data-tag="Suit & Tie" onclick="toggleDriverTag(this)" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;">Suit & Tie</button>
+          <button type="button" class="driver-tag" data-tag="Fiji Water" onclick="toggleDriverTag(this)" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;">Fiji Water</button>
+        </div>
+        <!-- Inline value fields -->
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div style="flex:1;">
+            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Gate Code</label>
+            <input id="noteGateCode" type="text" placeholder="e.g. #1234" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Flight #</label>
+            <input id="noteFlightNum" type="text" placeholder="e.g. AA123" style="width:100%;box-sizing:border-box;">
+          </div>
+        </div>
+        <!-- Special / free notes -->
+        <textarea id="noteSpecial" placeholder="Special instructions, allergies, VIP preferences..." style="min-height:50px;"></textarea>
+        <!-- Hidden combined field for save -->
+        <input type="hidden" id="driverNotes">
       </div>
       <div class="field">
         <label style="display:flex;align-items:center;gap:6px;">
@@ -1664,6 +1688,45 @@ window.addEventListener("unhandledrejection", function(e) {
 <!-- FAB -->
 <button id="fab" onclick="setJobTab('post');setMainTab('jobs');" title="Post new job">+</button>
 
+<!-- ── Expense Settlement Modal ─────────────────────────────────────────── -->
+<div id="expenseModal" class="overlay" style="display:none;" onclick="if(event.target===this)closeExpenseModal()">
+  <div class="modal" style="max-width:480px;padding:0;overflow:hidden;">
+    <div style="background:#0c0b09;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="color:#c9a84c;font-size:14px;font-weight:800;letter-spacing:.06em;">💳 EXPENSE SETTLEMENT</div>
+        <div id="expModalRef" style="color:#666;font-size:10px;margin-top:1px;"></div>
+      </div>
+      <button onclick="closeExpenseModal()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div style="padding:16px 18px;max-height:70vh;overflow-y:auto;">
+
+      <!-- Policy notice -->
+      <div style="background:#1a1000;border:1px solid #3a2800;border-radius:8px;padding:10px 12px;margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;color:#c9a84c;letter-spacing:.1em;margin-bottom:4px;">⚠️ POLICY</div>
+        <div style="font-size:11px;color:#aa8840;line-height:1.6;">All additional charges are subject to review and approval. Processing time is <strong style="color:#c9a84c;">3–10 business days</strong>. Receipts or photo proof are required for reimbursement. Unapproved charges will not be paid out.</div>
+      </div>
+
+      <!-- Meet & Greet auto line (read-only) -->
+      <div id="expMeetGreetRow" style="display:none;background:#0a130a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--green);">🤝 Meet & Greet</div>
+          <div style="font-size:10px;color:#666;">Standard service charge</div>
+        </div>
+        <div style="font-size:16px;font-weight:800;color:var(--green);">+$50.00</div>
+      </div>
+
+      <!-- Expense rows -->
+      <div id="expenseRows" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+
+      <!-- Add row button -->
+      <button onclick="addExpenseRow()" style="width:100%;padding:9px;border:1px dashed #333;border-radius:8px;background:transparent;color:#888;font-size:12px;cursor:pointer;margin-bottom:14px;">+ Add Expense</button>
+
+      <!-- Submit -->
+      <button onclick="submitExpenses()" style="width:100%;padding:12px;background:#c9a84c;border:none;border-radius:10px;color:#000;font-weight:800;font-size:14px;cursor:pointer;">Submit for Approval</button>
+    </div>
+  </div>
+</div>
+
 
 
 
@@ -2014,7 +2077,7 @@ function renderEarnings(done) {
     const d=j.assigned_driver||"Unassigned";
     if(!map[d]) map[d]={jobs:0,revenue:0,pay:0};
     const pricing = calculateJobPrice(j);
-    const total   = pricing ? pricing.totalPrice : num(j.total_price);
+    const total   = pricing ? (pricing.grandTotal || pricing.totalPrice) : num(j.total_price);
     let ojoCom = (j.commission_ojo_type && num(j.commission_ojo_value)>0)
       ? calculateCommissionAmount(total,j.commission_ojo_type,j.commission_ojo_value)
       : num(j.commission_ojo_amount);
@@ -2129,7 +2192,10 @@ function renderJobs() {
           <div class="jc-meta">${agentBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${escapeHtml(j.assigned_driver||"Unassigned")}</div>
         </div>
         <div class="jc-right">
-          <div class="jc-price">${money(pricing.totalPrice)}</div>
+          <div class="jc-price">${money(pricing.grandTotal||pricing.totalPrice)}</div>
+          ${pricing.otTotal>0?`<div style="font-size:10px;color:var(--red);font-weight:700;text-align:right;">+${money(pricing.otTotal)} OT</div>`:""}
+          ${pricing.meetGreetCharge>0?`<div style="font-size:10px;color:var(--green);font-weight:700;text-align:right;">+$50 M&G</div>`:""}
+          ${pricing.approvedAddons>0?`<div style="font-size:10px;color:#7ec8e3;font-weight:700;text-align:right;">+${money(pricing.approvedAddons)} exp</div>`:""}
           <div class="jc-status" style="color:${status==="Completed"?"var(--green)":status==="Offer"?"var(--muted)":"var(--gold)"}">${escapeHtml(status)}</div>
         </div>
         <span class="jc-arrow" id="jca-${jid}">▼</span>
@@ -2208,6 +2274,9 @@ function renderJobs() {
           ${renderStatusButtons(j)}
           <div class="action-row">
             <button class="btn btn-sec" onclick="showWaybill('${j.id}')">Waybill</button>
+            <button class="btn btn-sec" onclick="showExpenseModal('${j.id}')" style="position:relative;">
+              💳 Expenses${(()=>{const ch=Array.isArray(j.addon_charges)?j.addon_charges:[];const pending=ch.filter(x=>x.status==="pending").length;const approved=ch.filter(x=>x.status==="approved").length;return pending?`<span style="position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">${pending}</span>`:approved?`<span style="position:absolute;top:-4px;right:-4px;background:var(--green);color:#000;border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">✓</span>`:""})()}
+            </button>
             ${isAdminMode()?`<button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button><button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
           </div>
           ${isAdminMode()?`<div class="action-row" style="margin-top:6px;"><button class="btn btn-danger btn-full" onclick="deleteJob('${j.id}')">Delete</button></div>`:""}
@@ -2660,6 +2729,7 @@ function clearStops(){const sc=getEl("stopsContainer");if(sc){sc.innerHTML="";} 
 // ── Save Job ──────────────────────────────────────────────────────────────────
 async function saveJob() {
   try {
+  buildDriverNotes(); // compile tags + gate/flight + special into driverNotes hidden field
   console.log("[S1] saveJob started");
   const client=getValue("name");
   console.log("[S2] client=",client);
@@ -3086,11 +3156,51 @@ async function updateTourLog(jobId, startVal, endVal) {
     console.log("[OJO] ✅ Tour log updated job", jobId, "— worked:", worked, "OT:", otHours);
   } catch(e) { console.error("[OJO] updateTourLog crash:", e.message); }
 }
+// ── Driver Notes: tag toggle + build/parse ────────────────────────────────────
+function toggleDriverTag(btn) {
+  btn.classList.toggle("active");
+}
+function buildDriverNotes() {
+  const tags = [...document.querySelectorAll(".driver-tag.active")].map(b=>b.dataset.tag);
+  const gate  = (getValue("noteGateCode")||"").trim();
+  const flight= (getValue("noteFlightNum")||"").trim();
+  const special=(getValue("noteSpecial")||"").trim();
+  const parts = [...tags];
+  if (gate)   parts.push("Gate Code: " + gate);
+  if (flight) parts.push("Flight #: " + flight);
+  const combined = [parts.join(" · "), special].filter(Boolean).join("\n");
+  setValue("driverNotes", combined);
+  return combined;
+}
+function parseDriverNotes(raw) {
+  if (!raw) return;
+  const knownTags = ["Meet & Greet","Car Seat","Help with Luggage","Disability Assistance","Suit & Tie","Fiji Water"];
+  const lines = raw.split("\n");
+  const tagLine = lines[0] || "";
+  const special = lines.slice(1).join("\n");
+  // Restore tags
+  document.querySelectorAll(".driver-tag").forEach(btn => {
+    btn.classList.toggle("active", tagLine.includes(btn.dataset.tag));
+  });
+  // Restore gate/flight
+  const gateMatch  = tagLine.match(/Gate Code:\s*([^·\n]+)/);
+  const flightMatch= tagLine.match(/Flight #:\s*([^·\n]+)/);
+  setValue("noteGateCode",  gateMatch  ? gateMatch[1].trim()  : "");
+  setValue("noteFlightNum", flightMatch? flightMatch[1].trim(): "");
+  setValue("noteSpecial", special);
+}
+function clearDriverNotes() {
+  document.querySelectorAll(".driver-tag").forEach(b=>b.classList.remove("active"));
+  setValue("noteGateCode",""); setValue("noteFlightNum",""); setValue("noteSpecial","");
+  setValue("driverNotes","");
+}
+
 function clearForm(){
   ["name","pickup_from","to","driverNotes","internalNotes","assignedDriver","postedBy","miles","hours","manualPrice",
    "clientPhone","clientEmail",
    "agentName","agentRefNum","agentInvoiceDue","agentNumDays","agentDepositAmt","tourTotalAmount"
   ].forEach(id=>setValue(id,""));
+  clearDriverNotes();
   // Reset OT rule to defaults
   setValue("tourOtThreshold","10");
   setValue("tourOtRate","75");
@@ -3121,7 +3231,7 @@ function fillFormById(id) {
     agentDepositAmt:j.agent_deposit_amt||""
   };
   Object.entries(map).forEach(([k,v])=>setValue(k,v));
-  setDatePicker("date",j.date);
+  parseDriverNotes(j.waybill_notes||"");
   // Restore booking mode
   setBookingMode(j.booking_mode==="agent" ? "agent" : "standard");
   if(typeof clearStops==="function") clearStops();
@@ -3199,8 +3309,15 @@ async function releaseJob(id){
 }
 
 // ── Waybill ───────────────────────────────────────────────────────────────────
-function showWaybill(jobId) {
+async function showWaybill(jobId) {
   const j=allJobs.find(x=>String(x.id)===String(jobId)); if(!j) return;
+
+  // Auto-assign reference code if missing (pre-v10 jobs)
+  if (!j.reference_code) {
+    j.reference_code = generateRefCode();
+    if (db) await db.from("jobs").update({ reference_code: j.reference_code }).eq("id", j.id);
+  }
+
   const pricing=calculateJobPrice(j);
   const modal=getEl("waybillModal"),content=getEl("waybillContent");
   if(!modal||!content) return;
@@ -3269,7 +3386,7 @@ function showWaybill(jobId) {
         </div>
         <div style="background:#0c0b09;border-radius:8px;padding:10px 12px;text-align:right;">
           <div style="font-size:9px;font-weight:700;color:#888;letter-spacing:.14em;margin-bottom:3px;">TOTAL FARE ${modeTag}</div>
-          <div style="font-size:24px;font-weight:800;color:#c9a84c;line-height:1.1;">${money(pricing.totalPrice)}</div>
+          <div style="font-size:24px;font-weight:800;color:#c9a84c;line-height:1.1;">${money(pricing.grandTotal||pricing.totalPrice)}</div>
           <div style="font-size:10px;color:#666;margin-top:2px;">${escapeHtml(j.payment_type||"-")} · ${escapeHtml(j.status||"Offer")}</div>
         </div>
       </div>
@@ -3293,6 +3410,108 @@ function showWaybill(jobId) {
   modal.scrollTop=0;
 }
 function closeWaybill(){getEl("waybillModal").style.display="none";}
+
+
+// ── Expense Settlement ────────────────────────────────────────────────────────
+let expenseJobId = null;
+let expenseRows  = [];
+
+function showExpenseModal(jobId) {
+  const j = allJobs.find(x=>String(x.id)===String(jobId)); if(!j) return;
+  expenseJobId = jobId;
+  expenseRows  = Array.isArray(j.addon_charges) ? JSON.parse(JSON.stringify(j.addon_charges)) : [];
+  getEl("expModalRef").textContent = (j.reference_code||j.id||"") + " · " + escapeHtml(j.client||"");
+  const mgRow = getEl("expMeetGreetRow");
+  if (mgRow) mgRow.style.display = String(j.waybill_notes||"").includes("Meet & Greet") ? "flex" : "none";
+  renderExpenseRows();
+  getEl("expenseModal").style.display = "flex";
+}
+
+function closeExpenseModal() {
+  getEl("expenseModal").style.display = "none";
+  expenseJobId = null; expenseRows = [];
+}
+
+function addExpenseRow() {
+  expenseRows.push({ type:"Parking", amount:"", note:"", receipt_url:"", status:"pending" });
+  renderExpenseRows();
+}
+
+function renderExpenseRows() {
+  const container = getEl("expenseRows");
+  if (!container) return;
+  if (!expenseRows.length) {
+    container.innerHTML = '<div style="text-align:center;color:#555;font-size:12px;padding:10px 0;">No expenses added yet.</div>';
+    return;
+  }
+  container.innerHTML = expenseRows.map((row, i) => {
+    const isApproved = row.status === "approved";
+    const isRejected = row.status === "rejected";
+    const statusColor = isApproved ? "var(--green)" : isRejected ? "var(--red)" : "#888";
+    const statusLabel = isApproved ? "Approved" : isRejected ? "Rejected" : "Pending Review";
+    const dis = (isApproved||isRejected) ? "disabled" : "";
+    return `<div style="background:#111;border:1px solid ${isApproved?"#1a3a1a":isRejected?"#3a1a1a":"#222"};border-radius:8px;padding:10px 12px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <select onchange="expenseRows[${i}].type=this.value" ${dis}
+          style="flex:1;background:#0a0a0a;border:1px solid #333;color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;">
+          ${["Parking","Toll","Gratuity","Fuel","Other"].map(t=>`<option value="${t}"${row.type===t?" selected":""} >${t}</option>`).join("")}
+        </select>
+        <input type="number" placeholder="0.00" value="${row.amount||""}" min="0" step="0.01" ${dis}
+          onchange="expenseRows[${i}].amount=this.value"
+          style="width:80px;background:#0a0a0a;border:1px solid #333;color:#c9a84c;padding:5px 8px;border-radius:6px;font-size:13px;font-weight:700;text-align:right;">
+        ${!isApproved&&!isRejected?`<button onclick="expenseRows.splice(${i},1);renderExpenseRows()" style="background:none;border:none;color:#555;font-size:18px;cursor:pointer;line-height:1;">&#215;</button>`:""}
+      </div>
+      <input type="text" placeholder="Note: e.g. LAX parking 2hrs" value="${escapeHtml(row.note||"")}" ${dis}
+        onchange="expenseRows[${i}].note=this.value"
+        style="width:100%;background:#0a0a0a;border:1px solid #222;color:#ccc;padding:5px 8px;border-radius:6px;font-size:11px;box-sizing:border-box;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <span style="text-decoration:underline;">&#128206; ${row.receipt_url?"Change Receipt":"Upload Receipt"}</span>
+          <input type="file" accept="image/*" style="display:none;" onchange="handleReceiptUpload(event,${i})">
+        </label>
+        ${row.receipt_url?`<span style="font-size:10px;color:var(--green);">&#10003; Receipt attached</span>`:`<span style="font-size:10px;color:#555;">No receipt</span>`}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:10px;font-weight:700;color:${statusColor};">${statusLabel}</span>
+        ${isAdminMode()&&!isApproved&&!isRejected?`<div style="display:flex;gap:6px;">
+          <button onclick="setExpenseStatus(${i},'approved')" style="padding:3px 10px;background:#0a2a0a;border:1px solid #2a6a2a;color:var(--green);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;">Approve</button>
+          <button onclick="setExpenseStatus(${i},'rejected')" style="padding:3px 10px;background:#2a0a0a;border:1px solid #6a2a2a;color:var(--red);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;">Reject</button>
+        </div>`:""}
+        ${isAdminMode()&&isApproved?`<button onclick="setExpenseStatus(${i},'pending')" style="padding:3px 10px;background:#1a1a00;border:1px solid #444;color:#888;border-radius:6px;font-size:10px;cursor:pointer;">Undo</button>`:""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function setExpenseStatus(i, status) {
+  expenseRows[i].status = status;
+  renderExpenseRows();
+  saveExpenses();
+}
+
+async function handleReceiptUpload(event, i) {
+  const file = event.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { expenseRows[i].receipt_url = e.target.result; renderExpenseRows(); };
+  reader.readAsDataURL(file);
+}
+
+async function saveExpenses() {
+  if (!expenseJobId || !db) return;
+  const { error } = await db.from("jobs").update({ addon_charges: expenseRows }).eq("id", expenseJobId);
+  if (error) { console.error("[OJO] saveExpenses:", error.message); return; }
+  const j = allJobs.find(x=>String(x.id)===String(expenseJobId));
+  if (j) j.addon_charges = JSON.parse(JSON.stringify(expenseRows));
+  renderJobs(allJobs);
+}
+
+async function submitExpenses() {
+  const invalid = expenseRows.filter(r=>!r.amount||num(r.amount)<=0);
+  if (invalid.length) { alert("Please enter an amount for all expense rows."); return; }
+  await saveExpenses();
+  alert("Expenses submitted for review.\n\nProcessing time: 3-10 business days.\nApproved amounts will be added to your driver pay.");
+  closeExpenseModal();
+}
 
 // ── Waybill: share as plain text ─────────────────────────────────────────────
 async function shareWaybillText(){
@@ -4127,17 +4346,32 @@ function calculateHourly(job) {
 function calculateJobPrice(job) {
   const pricingMode = String(job.pricing_mode || "").toLowerCase();
 
+  // OT pay = overtime_hours (stored flat) × ot_rate
+  const otHours = num(job.overtime_hours);
+  const otRate  = num(job.ot_rate);
+  const otTotal = (otHours > 0 && otRate > 0) ? Math.round(otHours * otRate * 100) / 100 : 0;
+
+  // Meet & Greet addon — $50 flat if tag present in waybill_notes
+  const hasMeetGreet = String(job.waybill_notes||"").includes("Meet & Greet");
+  const meetGreetCharge = hasMeetGreet ? 50 : 0;
+
+  // Approved addon charges from addon_charges JSONB
+  const addons = Array.isArray(job.addon_charges) ? job.addon_charges : [];
+  const approvedAddons = addons.filter(x=>x.status==="approved").reduce((s,x)=>s+num(x.amount),0);
+
   if (pricingMode === "manual") {
-    return {
-      type: "manual",
-      isManual: true,
-      totalPrice: num(job.manual_price ?? job.total_price)
-    };
+    const base = num(job.manual_price ?? job.total_price);
+    const grandTotal = base + otTotal + meetGreetCharge + approvedAddons;
+    return { type:"manual", isManual:true, totalPrice:base, otTotal, meetGreetCharge, approvedAddons, grandTotal };
   }
 
   const type = normalizeServiceType(job);
-  if (type === "hourly") return calculateHourly(job);
-  return calculatePointToPoint(job);
+  const result = type === "hourly" ? calculateHourly(job) : calculatePointToPoint(job);
+  result.otTotal        = otTotal;
+  result.meetGreetCharge= meetGreetCharge;
+  result.approvedAddons = approvedAddons;
+  result.grandTotal     = (result.totalPrice || 0) + otTotal + meetGreetCharge + approvedAddons;
+  return result;
 }
 
 function calculateCommissionAmount(total, type, value) {
@@ -4358,11 +4592,13 @@ function updateQuoteSummary() {
   // Calculate using existing engine — do not modify
   const pricing    = calculateJobPrice(tempJob);
   const total      = pricing.totalPrice;
-  const ojoCom     = calculateCommissionAmount(total, ojType,  num(ojValue));
-  const posterCom  = calculateCommissionAmount(total, poType,  num(poValue));
-  const driverPay  = total - ojoCom - posterCom;
+  const meetGreet  = [...document.querySelectorAll(".driver-tag.active")].some(b=>b.dataset.tag==="Meet & Greet") ? 50 : 0;
+  const grandTotal = total + meetGreet;
+  const ojoCom     = calculateCommissionAmount(grandTotal, ojType,  num(ojValue));
+  const posterCom  = calculateCommissionAmount(grandTotal, poType,  num(poValue));
+  const driverPay  = grandTotal - ojoCom - posterCom;
 
-  totalEl.textContent  = money(total);
+  totalEl.textContent  = meetGreet ? `${money(total)} + $50 M&G = ${money(grandTotal)}` : money(grandTotal);
   totalEl.className    = "qm-summary-total-value";
   ojoEl.textContent    = money(ojoCom);    ojoEl.className    = "qm-payout-value";
   posterEl.textContent = money(posterCom); posterEl.className = "qm-payout-value";
@@ -4979,7 +5215,7 @@ function renderVehicles() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  list.innerHTML = '<div id="sh-vehicles" class="section-header" onclick="toggleSection(\"vehicles\")">' +
+  list.innerHTML = '<div id="sh-vehicles" class="section-header" onclick="toggleSection(\'vehicles\')">' +
     '<div><div class="sh-title">🚗 Fleet (' + vehicles.length + ')</div>' +
     '<div class="sh-meta">Click to expand</div></div>' +
     '<span class="sh-arrow">▼</span></div>' +
@@ -5081,13 +5317,17 @@ function showCompanyTab(tab) {
   const listView = document.getElementById("coListView");
   const formBtn  = document.getElementById("co-tab-form");
   const listBtn  = document.getElementById("co-tab-list");
+  // Elements may not exist — guard before touching classList
+  if (!formView || !listView) return;
   if (tab === "list") {
     formView.classList.add("hidden");    listView.classList.remove("hidden");
-    formBtn.classList.remove("active");  listBtn.classList.add("active");
+    if (formBtn) formBtn.classList.remove("active");
+    if (listBtn) listBtn.classList.add("active");
     renderCompanies();
   } else {
     listView.classList.add("hidden");    formView.classList.remove("hidden");
-    listBtn.classList.remove("active");  formBtn.classList.add("active");
+    if (listBtn) listBtn.classList.remove("active");
+    if (formBtn) formBtn.classList.add("active");
   }
 }
 
@@ -5143,14 +5383,14 @@ function getCompanyFormData() {
     insurance_provider:    getValue("coInsuranceProvider"),
     insurance_expiry:      getValue("coInsuranceExpiry"),
     insurance_policy_num:  getValue("coInsurancePolicyNum"),
-    insurance_coverage:    getValue("coInsuranceCoverage"),
+    insurance_coverage:    getValue("coInsuranceCoverage") ? parseFloat(getValue("coInsuranceCoverage").replace(/[^0-9.]/g,"")) || null : null,
     w9_url:                getValue("coW9Url"),
     tcp_doc_url:           getValue("coTcpUrl"),
     articles_url:          getValue("coArticlesUrl"),
     biz_license_doc_url:   getValue("coBizLicUrl"),
     coi_url:               getValue("coCoiUrl"),
     logo_url:              getValue("coLogoUrl"),
-    commission_rate:       getValue("coCommissionRate"),
+    commission_rate:       getValue("coCommissionRate") ? parseFloat(getValue("coCommissionRate").replace(/[^0-9.]/g,"")) || null : null,
     payment_terms:         getValue("coPaymentTerms"),
     notes:                 getValue("coNotes")
   };
@@ -5196,7 +5436,7 @@ async function saveCompany() {
   renderCompanies();
   renderCompanyAlerts();
   clearCompanyForm();
-  showCompanyTab("list");
+  toggleFormPanel("company-form", false);
   alert("Company saved.");
 }
 
@@ -5249,7 +5489,7 @@ function editCompany(id) {
   populateDriverCheckboxes(Array.isArray(c.linked_driver_ids) ? c.linked_driver_ids : []);
 
   getEl("companyFormTitle").textContent = "✏️ EDIT: " + c.legal_name;
-  showCompanyTab("form");
+  toggleFormPanel("company-form", true);
   getEl("companyFormCard").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -5308,7 +5548,7 @@ function renderCompanies() {
   const today = new Date().toISOString().slice(0, 10);
   const members = getStoredMembers();
 
-  list.innerHTML = '<div id="sh-companies" class="section-header" onclick="toggleSection(\"companies\")">' +
+  list.innerHTML = '<div id="sh-companies" class="section-header" onclick="toggleSection(\'companies\')">' +
     '<div><div class="sh-title">🏢 Companies (' + allCompanies.length + ')</div>' +
     '<div class="sh-meta">Click to expand</div></div>' +
     '<span class="sh-arrow">▼</span></div>' +
