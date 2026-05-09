@@ -1115,7 +1115,7 @@ window.addEventListener("unhandledrejection", function(e) {
     <div id="job-list-view">
       <!-- Post CTA (shown when no sub-tab is active yet) -->
       <div id="post-cta" style="display:none;">
-        <button class="cta-btn" onclick="setJobTab('post')">+ POST A NEW JOB OFFER</button>
+        <button class="cta-btn" onclick="openQuickQuoteModal()">+ POST A NEW JOB OFFER</button>
         <div class="hiw-card">
           <div class="hiw-title">HOW IT WORKS</div>
           <div class="hiw-row">
@@ -1674,6 +1674,117 @@ window.addEventListener("unhandledrejection", function(e) {
 </div>
 
 <!-- Waybill Modal -->
+<div id="statusLogModal" class="overlay" style="display:none;" onclick="if(event.target===this)closeStatusLog()">
+  <div class="modal" style="max-width:440px;padding:0;overflow:hidden;">
+    <div style="background:#0c0b09;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="color:#c9a84c;font-size:14px;font-weight:800;letter-spacing:.06em;">📋 STATUS LOG</div>
+        <div id="statusLogRef" style="color:#666;font-size:10px;margin-top:1px;"></div>
+      </div>
+      <button onclick="closeStatusLog()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;">&#x2715;</button>
+    </div>
+    <div id="statusLogBody" style="padding:16px 18px;max-height:60vh;overflow-y:auto;"></div>
+    <div style="padding:10px 18px 14px;">
+      <button onclick="closeStatusLog()" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--muted);font-family:var(--font-ui);font-size:13px;font-weight:700;cursor:pointer;">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ QUICK QUOTE MODAL ══════════ -->
+<div id="qqModal" class="overlay" style="display:none;" onclick="if(event.target===this)closeQuickQuoteModal()">
+  <div class="modal" style="max-width:480px;padding:0;overflow:hidden;">
+    <div style="background:#0c0b09;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="color:#c9a84c;font-size:16px;font-weight:800;letter-spacing:.06em;">🗺 QUICK QUOTE</div>
+        <div style="color:#666;font-size:11px;margin-top:1px;">Enter route to see price before booking</div>
+      </div>
+      <button onclick="closeQuickQuoteModal()" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1;">&#x2715;</button>
+    </div>
+    <div style="padding:16px 18px;">
+      <div style="margin-bottom:10px;">
+        <label style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.1em;display:block;margin-bottom:4px;">FROM (PICKUP)</label>
+        <div style="position:relative;">
+          <input id="qq-from" placeholder="e.g. LAX Terminal 4" autocomplete="off"
+            oninput="formAcInput(this,'qq-from')" onfocus="formAcFocus('qq-from')"
+            style="background:#0a0a0a;border:1px solid var(--border2);color:var(--text);padding:10px 12px;border-radius:var(--radius-sm);width:100%;box-sizing:border-box;font-family:var(--font-ui);font-size:13px;">
+          <div class="ac-list" id="ac-qq-from"></div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.1em;display:block;margin-bottom:4px;">TO (DROPOFF)</label>
+        <div style="position:relative;">
+          <input id="qq-to" placeholder="e.g. Beverly Hills Hotel" autocomplete="off"
+            oninput="formAcInput(this,'qq-to')" onfocus="formAcFocus('qq-to')"
+            style="background:#0a0a0a;border:1px solid var(--border2);color:var(--text);padding:10px 12px;border-radius:var(--radius-sm);width:100%;box-sizing:border-box;font-family:var(--font-ui);font-size:13px;">
+          <div class="ac-list" id="ac-qq-to"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.1em;display:block;margin-bottom:4px;">JOB TYPE</label>
+          <select id="qq-jobtype" onchange="qqToggleHours();qqUpdateSummary()"
+            style="background:#0a0a0a;border:1px solid var(--border2);color:var(--text);padding:9px 10px;border-radius:var(--radius-sm);width:100%;font-family:var(--font-ui);font-size:13px;">
+            <option value="Airport Transfer">Airport Transfer</option>
+            <option value="Point to Point">Point to Point</option>
+            <option value="Hourly">Hourly</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.1em;display:block;margin-bottom:4px;">VEHICLE</label>
+          <select id="qq-vehicle" onchange="qqUpdateSummary()"
+            style="background:#0a0a0a;border:1px solid var(--border2);color:var(--text);padding:9px 10px;border-radius:var(--radius-sm);width:100%;font-family:var(--font-ui);font-size:13px;">
+            <option>Mini Van</option>
+            <option>Premium Sedan</option>
+            <option selected>Premium SUV</option>
+            <option>Sprinter</option>
+          </select>
+        </div>
+      </div>
+      <div id="qq-hours-wrap" style="display:none;margin-bottom:10px;">
+        <label style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.1em;display:block;margin-bottom:4px;">HOURS NEEDED</label>
+        <input id="qq-hours" type="number" min="2" step="0.5" placeholder="Min 2 hrs" oninput="qqUpdateSummary()"
+          style="background:#0a0a0a;border:1px solid var(--border2);color:var(--text);padding:9px 10px;border-radius:var(--radius-sm);width:100%;box-sizing:border-box;font-family:var(--font-ui);font-size:13px;">
+      </div>
+      <button onclick="qqGetRoute()" id="qq-route-btn"
+        style="width:100%;padding:12px;background:linear-gradient(135deg,#1a1405,#2a2000);border:1px solid var(--gold-dim);border-radius:var(--radius-sm);color:var(--gold);font-family:var(--font-ui);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:10px;">
+        🗺 Calculate Route &amp; Price
+      </button>
+      <div id="qq-status" style="font-size:12px;color:var(--muted);margin-bottom:10px;min-height:18px;"></div>
+      <div id="qq-result" style="display:none;background:#0d0d0d;border:1px solid var(--border2);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.14em;">ESTIMATED TOTAL</span>
+          <span id="qq-price" style="font-size:28px;font-weight:800;color:var(--gold);">—</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+          <div style="background:#0a0a0a;border-radius:8px;padding:8px 10px;text-align:center;">
+            <div style="font-size:9px;color:var(--muted);margin-bottom:3px;letter-spacing:.1em;">OJO</div>
+            <div id="qq-ojo" style="font-size:14px;font-weight:800;color:var(--gold);">—</div>
+          </div>
+          <div style="background:#0a0a0a;border-radius:8px;padding:8px 10px;text-align:center;">
+            <div style="font-size:9px;color:var(--muted);margin-bottom:3px;letter-spacing:.1em;">POSTER</div>
+            <div id="qq-poster" style="font-size:14px;font-weight:800;color:var(--blue);">—</div>
+          </div>
+          <div style="background:#0a1a0a;border-radius:8px;padding:8px 10px;text-align:center;">
+            <div style="font-size:9px;color:#2e7d32;margin-bottom:3px;letter-spacing:.1em;">DRIVER</div>
+            <div id="qq-driver" style="font-size:14px;font-weight:800;color:var(--green);">—</div>
+          </div>
+        </div>
+        <div id="qq-route-info" style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="closeQuickQuoteModal()"
+          style="padding:13px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--muted);font-family:var(--font-ui);font-size:13px;font-weight:700;cursor:pointer;">
+          Cancel
+        </button>
+        <button onclick="qqProceedToForm()"
+          style="padding:13px;background:linear-gradient(135deg,#c9a84c,#f2cf63,#c9a84c);border:none;border-radius:var(--radius-sm);color:#000;font-family:var(--font-ui);font-size:13px;font-weight:800;cursor:pointer;">
+          Continue to Form &#8594;
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="waybillModal" class="overlay" style="display:none;" onclick="if(event.target===this)closeWaybill()">
   <div class="modal" style="background:#fff;border:none;max-width:420px;width:100%;">
     <div id="waybillContent"></div>
@@ -1686,7 +1797,7 @@ window.addEventListener("unhandledrejection", function(e) {
 </div>
 
 <!-- FAB -->
-<button id="fab" onclick="setJobTab('post');setMainTab('jobs');" title="Post new job">+</button>
+<button id="fab" onclick="openQuickQuoteModal();" title="Post new job">+</button>
 
 <!-- ── Expense Settlement Modal ─────────────────────────────────────────── -->
 <div id="expenseModal" class="overlay" style="display:none;" onclick="if(event.target===this)closeExpenseModal()">
@@ -2287,6 +2398,7 @@ function renderJobs() {
               💳 Expenses${(()=>{const ch=Array.isArray(j.addon_charges)?j.addon_charges:[];const pending=ch.filter(x=>x.status==="pending").length;const approved=ch.filter(x=>x.status==="approved").length;return pending?`<span style="position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">${pending}</span>`:approved?`<span style="position:absolute;top:-4px;right:-4px;background:var(--green);color:#000;border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">✓</span>`:""})()}
             </button>
             ${isAdminMode()?`
+            <button class="btn btn-sec" onclick="showStatusLog('${j.id}')" title="View status timeline" style="position:relative;">📋 Log${(()=>{const log=Array.isArray(j.extras?.status_log)?j.extras.status_log:[];return log.length?`<span style="position:absolute;top:-4px;right:-4px;background:var(--gold-dim);color:var(--gold2);border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">${log.length}</span>`:"";})()} </button>
             <button class="btn btn-sec" onclick="shareJobLink('${j.id}')" title="Share job link with driver">🔗 Share</button>
             <button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button>
             <button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
@@ -2849,6 +2961,102 @@ async function saveJob() {
 }
 function cancelEdit(){editingId=null;getEl("formTitle").textContent="+ New Booking";getEl("editModeLabel").style.display="none";clearForm();}
 
+// ── Quick Quote Modal ─────────────────────────────────────────────────────────
+let _qqMiles = 0;
+function openQuickQuoteModal() {
+  const m = getEl("qqModal"); if(!m) return;
+  // Reset state
+  getEl("qq-from").value = "";
+  getEl("qq-to").value = "";
+  getEl("qq-jobtype").value = "Airport Transfer";
+  getEl("qq-hours").value = "";
+  getEl("qq-hours-wrap").style.display = "none";
+  getEl("qq-status").textContent = "";
+  getEl("qq-result").style.display = "none";
+  _qqMiles = 0;
+  m.style.display = "flex";
+}
+function closeQuickQuoteModal() { getEl("qqModal").style.display = "none"; }
+function qqToggleHours() {
+  const isHourly = getEl("qq-jobtype").value === "Hourly";
+  getEl("qq-hours-wrap").style.display = isHourly ? "block" : "none";
+}
+async function qqGetRoute() {
+  const from = (getEl("qq-from")?.value||"").trim();
+  const to   = (getEl("qq-to")?.value||"").trim();
+  const st   = getEl("qq-status");
+  const btn  = getEl("qq-route-btn");
+  const isHourly = getEl("qq-jobtype").value === "Hourly";
+  if (isHourly) {
+    // For hourly, just calculate from hours input
+    qqUpdateSummary(true);
+    return;
+  }
+  if (!from || !to) { if(st){st.style.color="var(--red)";st.textContent="⚠ Fill in From and To fields first.";} return; }
+  if(btn){btn.disabled=true;btn.textContent="⏳ Calculating…";}
+  if(st){st.style.color="var(--muted)";st.textContent="Looking up route…";}
+  try {
+    const [coordFrom, coordTo] = await Promise.all([_geocode(from), _geocode(to)]);
+    const { miles, duration } = await _getRoute(coordFrom, coordTo);
+    _qqMiles = miles;
+    const dur = duration>=60 ? Math.floor(duration/60)+"h "+(duration%60)+"m" : duration+" min";
+    if(st){st.style.color="var(--green)";st.textContent="✓ "+miles+" mi · ~"+dur;}
+    qqUpdateSummary(true);
+  } catch(err) {
+    if(st){st.style.color="var(--red)";st.textContent="⚠ "+(err.message||"Route not found");}
+  } finally {
+    if(btn){btn.disabled=false;btn.textContent="🗺 Calculate Route & Price";}
+  }
+}
+function qqUpdateSummary(show) {
+  const jobType    = getEl("qq-jobtype")?.value || "Airport Transfer";
+  const vehicleType= getEl("qq-vehicle")?.value || "Premium SUV";
+  const isHourly   = jobType === "Hourly";
+  const hours      = parseFloat(getEl("qq-hours")?.value||0) || 0;
+  const miles      = _qqMiles;
+  if (!show && !miles && !isHourly) return;
+  if (isHourly && !hours) { getEl("qq-result").style.display="none"; return; }
+  const pricing = calculateJobPrice({
+    job_type: jobType, vehicle_type: vehicleType,
+    pricing_mode: "auto", miles, hours
+  });
+  const total = pricing.totalPrice;
+  const ojo   = calculateCommissionAmount(total, "percent", 10);
+  const poster= calculateCommissionAmount(total, "percent", 5);
+  const driver= total - ojo - poster;
+  getEl("qq-price").textContent  = money(total);
+  getEl("qq-ojo").textContent    = money(ojo);
+  getEl("qq-poster").textContent = money(poster);
+  getEl("qq-driver").textContent = money(driver);
+  const info = isHourly
+    ? `${hours}h · ${vehicleType}`
+    : (miles ? `${miles} mi · ${vehicleType}` : vehicleType);
+  getEl("qq-route-info").textContent = info;
+  getEl("qq-result").style.display = "block";
+}
+function qqProceedToForm() {
+  const from = (getEl("qq-from")?.value||"").trim();
+  const to   = (getEl("qq-to")?.value||"").trim();
+  const jt   = getEl("qq-jobtype")?.value || "Airport Transfer";
+  const vt   = getEl("qq-vehicle")?.value || "Premium SUV";
+  const hrs  = getEl("qq-hours")?.value || "";
+  closeQuickQuoteModal();
+  setJobTab("post");
+  setMainTab("jobs");
+  // Pre-fill route fields
+  if(from) { const el=getEl("pickup_from"); if(el) el.value=from; }
+  if(to)   { const el=getEl("to");          if(el) el.value=to;   }
+  if(_qqMiles) { const el=getEl("miles"); if(el) el.value=_qqMiles; }
+  if(hrs)  { const el=getEl("hours"); if(el) el.value=hrs; }
+  // Set job type + vehicle
+  const jtEl=getEl("jobType"); if(jtEl){jtEl.value=jt;}
+  const vtEl=getEl("vehicleType"); if(vtEl){vtEl.value=vt;}
+  togglePricingMode();
+  updateQuoteSummary();
+  // Scroll form to top
+  const pv=getEl("post-view"); if(pv) pv.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
 // ── Status Flow ───────────────────────────────────────────────────────────────
 const STATUS_FLOW = [
   "Offer",
@@ -2898,8 +3106,8 @@ async function updateJobStatus(jobId, newStatus) {
     : `Move to "${newStatus}"?`;
   if (!confirm(confirmMsg)) return;
 
+  // ── STEP 1: Save status (must succeed) ───────────────────────────────────
   const patch = { status: newStatus };
-  // Auto-set timestamps for key transitions
   if (newStatus === "In Progress") patch.time_start = new Date().toTimeString().slice(0,5);
   if (newStatus === "Completed")   patch.time_end   = new Date().toTimeString().slice(0,5);
 
@@ -2919,13 +3127,44 @@ async function updateJobStatus(jobId, newStatus) {
       alert("Status update failed: " + (err.message || r.status));
       return;
     }
-    // Update local cache immediately
+    // Update local cache
+    const prevStatus = j.status;
     j.status = newStatus;
     if (patch.time_start) j.time_start = patch.time_start;
     if (patch.time_end)   j.time_end   = patch.time_end;
+    console.log("[OJO] ✅ Status updated:", jobId, "→", newStatus);
+
+    // ── STEP 2: Append to status_log — fire-and-forget, won't block status ─
+    // Requires: ALTER TABLE jobs ADD COLUMN IF NOT EXISTS extras jsonb DEFAULT '{}'::jsonb;
+    try {
+      const now = new Date().toISOString();
+      const existingExtras = (typeof j.extras === "object" && j.extras !== null) ? j.extras : {};
+      const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
+      existingLog.push({ status: newStatus, prev: prevStatus || "Offer", ts: now });
+      const extrasPatch = { extras: { ...existingExtras, status_log: existingLog } };
+      const r2 = await fetch(SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(jobId), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": "Bearer " + (SERVICE_KEY || SUPABASE_KEY),
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify(extrasPatch)
+      });
+      if (r2.ok || r2.status === 204) {
+        j.extras = extrasPatch.extras;
+        console.log("[OJO] ✅ Status log saved (" + existingLog.length + " entries)");
+      } else {
+        const e2 = await r2.json().catch(() => ({}));
+        console.warn("[OJO] ⚠ Status log skipped (run SQL to enable):", e2.message || r2.status);
+      }
+    } catch(e2) {
+      console.warn("[OJO] Status log write failed (non-fatal):", e2.message);
+    }
+
     updateStats();
     renderJobs(allJobs);
-    console.log("[OJO] ✅ Status updated:", jobId, "→", newStatus);
   } catch(e) {
     console.error("[OJO] updateJobStatus crash:", e.message);
     alert("Status update failed: " + e.message);
@@ -3228,7 +3467,7 @@ function fillFormById(id) {
   const j=allJobs.find(x=>String(x.id)===String(id)); if(!j) return;
   editingId=j.id;
   getEl("formTitle").textContent="✏️ Edit Booking";getEl("editModeLabel").style.display="block";
-  const map={name:j.client,pickup_from:j.from_loc,to:j.to_loc,pickupTime:j.pickup_time,
+  const map={name:j.client,date:j.date||"",pickup_from:j.from_loc,to:j.to_loc,pickupTime:j.pickup_time,
     clientPhone:j.client_phone||"",clientEmail:j.client_email||"",
     jobType:j.job_type,vehicleType:j.vehicle_type,paymentType:j.payment_type,
     status:j.status,assignedDriver:j.assigned_driver,
@@ -3236,8 +3475,9 @@ function fillFormById(id) {
     internalNotes:j.internal_notes||"",
     pricingMode:j.pricing_mode||"auto",manualPrice:j.manual_price,
     miles:j.miles,hours:j.hours,postedBy:j.posted_by,
-    ojoCommissionType:j.commission_ojo_type||"percent",ojoCommissionValue:j.commission_ojo_value||10,
-    posterCommissionType:j.commission_poster_type||"percent",posterCommissionValue:j.commission_poster_value||5,
+    ojoCommissionType:j.commission_ojo_type??"percent",ojoCommissionValue:j.commission_ojo_value??10,
+    posterCommissionType:j.commission_poster_type??"percent",posterCommissionValue:j.commission_poster_value??5,
+    tourOtThreshold:j.ot_threshold??10,tourOtRate:j.ot_rate??75,
     agentName:j.agent_name||"", agentRefNum:j.agent_ref_num||"",
     agentInvoiceDue:j.agent_invoice_due||"", agentNumDays:j.agent_num_days||"",
     agentDepositAmt:j.agent_deposit_amt||""
@@ -3344,76 +3584,106 @@ async function showWaybill(jobId) {
     </div>`;
 
   content.innerHTML=`
-  <div id="waybill-card" style="width:100%;background:#fff;font-family:'Helvetica Neue',Arial,sans-serif;overflow:hidden;box-sizing:border-box;">
+  <div id="waybill-card" style="width:100%;max-width:420px;margin:0 auto;background:#fff;font-family:'Helvetica Neue',Arial,sans-serif;overflow:hidden;box-sizing:border-box;border-radius:0;">
 
-    <!-- Header -->
-    <div style="background:#0c0b09;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;">
+    <!-- Dark header band -->
+    <div style="background:#0c0b09;padding:16px 20px 14px;display:flex;align-items:center;justify-content:space-between;">
       <div style="display:flex;align-items:center;gap:10px;">
-        <img src="${getEl('logoImg')?.src||''}" alt="OJO Luxe" style="height:36px;width:auto;object-fit:contain;" onerror="this.style.display='none'">
-        <div style="color:#888;font-size:9px;margin-top:2px;">TCP49661-P</div>
+        <img src="${getEl('logoImg')?.src||''}" alt="OJO Luxe" style="height:38px;width:auto;object-fit:contain;" onerror="this.style.display='none'">
+        <div>
+          <div style="color:#c9a84c;font-family:'Georgia',serif;font-size:17px;font-weight:700;letter-spacing:.04em;line-height:1;">OJO LUXE</div>
+          <div style="color:#666;font-size:9px;letter-spacing:.12em;margin-top:1px;">TCP49661-P · LUXURY CHAUFFEUR</div>
+        </div>
       </div>
       <div style="text-align:right;">
-        <div style="color:#888;font-size:9px;font-weight:700;letter-spacing:.16em;">WAYBILL</div>
-        <div style="color:#c9a84c;font-size:22px;font-weight:800;line-height:1.1;">${escapeHtml(String(j.reference_code||j.id||"-"))}</div>
+        <div style="color:#555;font-size:8px;font-weight:700;letter-spacing:.2em;margin-bottom:2px;">WAYBILL</div>
+        <div style="color:#c9a84c;font-size:16px;font-weight:800;line-height:1;font-family:monospace;">${escapeHtml(String(j.reference_code||j.id||"-"))}</div>
+        ${modeTag}
       </div>
     </div>
 
-    <div style="padding:14px 18px;">
+    <!-- Gold accent stripe -->
+    <div style="height:3px;background:linear-gradient(90deg,#c9a84c,#f2cf63,#c9a84c);"></div>
 
-      <!-- Client + Date row -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-        <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:3px;">CLIENT</div>
-          <div style="font-size:13px;font-weight:800;color:#111;">${escapeHtml(j.client||"-")}</div>
-          ${j.client_phone?`<a href="tel:${escapeHtml(j.client_phone)}" style="font-size:11px;color:#2e7d32;font-weight:700;text-decoration:none;display:block;margin-top:2px;">📞 ${escapeHtml(j.client_phone)}</a>`:""}
-          ${j.client_email?`<div style="font-size:10px;color:#888;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">✉️ ${escapeHtml(j.client_email)}</div>`:""}
+    <div style="padding:16px 20px;">
+
+      <!-- Client block -->
+      <div style="background:#f8f8f8;border-radius:10px;padding:12px 14px;margin-bottom:12px;border-left:3px solid #c9a84c;">
+        <div style="font-size:8px;font-weight:700;color:#aaa;letter-spacing:.2em;margin-bottom:6px;">CLIENT</div>
+        <div style="font-size:17px;font-weight:800;color:#111;margin-bottom:4px;">${escapeHtml(j.client||"-")}</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          ${j.client_phone?`<div style="font-size:11px;color:#2e7d32;font-weight:700;">📞 ${escapeHtml(j.client_phone)}</div>`:""}
+          ${j.client_email?`<div style="font-size:11px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">✉ ${escapeHtml(j.client_email)}</div>`:""}
         </div>
-        <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:3px;">DATE & TIME</div>
-          <div style="font-size:13px;font-weight:800;color:#111;">${escapeHtml(j.date||"-")}</div>
+      </div>
+
+      <!-- Date / Driver row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div style="background:#f8f8f8;border-radius:10px;padding:11px 13px;">
+          <div style="font-size:8px;font-weight:700;color:#aaa;letter-spacing:.2em;margin-bottom:5px;">DATE &amp; TIME</div>
+          <div style="font-size:14px;font-weight:800;color:#111;">${escapeHtml(j.date||"-")}</div>
           <div style="font-size:12px;color:#555;margin-top:2px;">${escapeHtml(j.pickup_time||"—")}</div>
-          <div style="font-size:10px;color:#888;margin-top:2px;">${escapeHtml(j.job_type||"-")}</div>
+          <div style="margin-top:4px;display:inline-block;background:#111;color:#c9a84c;font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px;letter-spacing:.08em;">${escapeHtml(j.job_type||"-")}</div>
+        </div>
+        <div style="background:#0c0b09;border-radius:10px;padding:11px 13px;">
+          <div style="font-size:8px;font-weight:700;color:#666;letter-spacing:.2em;margin-bottom:5px;">DRIVER</div>
+          <div style="font-size:14px;font-weight:800;color:${j.assigned_driver?"#c9a84c":"#555"};">${escapeHtml(j.assigned_driver||"Unassigned")}</div>
+          <div style="font-size:11px;color:#555;margin-top:2px;">${escapeHtml(j.vehicle_type||"-")}</div>
         </div>
       </div>
 
-      <!-- Route -->
-      <div style="background:#f4f4f4;border-radius:8px;overflow:hidden;margin-bottom:12px;">
-        <div style="padding:9px 12px;border-bottom:1px solid #eaeaea;">
-          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">PICKUP</div>
-          <div style="font-size:12px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.from_loc||"-")}</div>
-        </div>
-        ${Array.isArray(j.stops)&&j.stops.length?`<div style="padding:7px 12px;border-bottom:1px solid #eaeaea;">${j.stops.map(s=>`<div style="font-size:11px;color:#555;">📍 ${escapeHtml(s.address)}</div>`).join("")}</div>`:""}
-        <div style="padding:9px 12px;">
-          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">DROPOFF</div>
-          <div style="font-size:12px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.to_loc||"-")}</div>
+      <!-- Route block -->
+      <div style="background:#f4f4f4;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+        <div style="display:flex;align-items:stretch;">
+          <!-- Dot-stem line -->
+          <div style="width:24px;display:flex;flex-direction:column;align-items:center;padding:12px 0;flex-shrink:0;">
+            <div style="width:9px;height:9px;border-radius:50%;background:#c9a84c;border:2px solid #c9a84c;flex-shrink:0;"></div>
+            <div style="flex:1;width:2px;background:#ddd;margin:3px 0;"></div>
+            ${Array.isArray(j.stops)&&j.stops.length?j.stops.map(()=>`<div style="width:7px;height:7px;border-radius:50%;border:2px solid #aaa;background:#fff;flex-shrink:0;margin-bottom:3px;"></div><div style="flex:1;width:2px;background:#ddd;margin-bottom:3px;"></div>`).join(""):""}
+            <div style="width:9px;height:9px;border-radius:50%;background:#111;flex-shrink:0;"></div>
+          </div>
+          <!-- Addresses -->
+          <div style="flex:1;padding:10px 12px 10px 4px;">
+            <div style="margin-bottom:${Array.isArray(j.stops)&&j.stops.length?8:10}px;">
+              <div style="font-size:8px;font-weight:700;color:#aaa;letter-spacing:.18em;margin-bottom:2px;">PICKUP</div>
+              <div style="font-size:12px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.from_loc||"-")}</div>
+            </div>
+            ${Array.isArray(j.stops)&&j.stops.length?j.stops.map(s=>`<div style="margin-bottom:8px;"><div style="font-size:8px;color:#aaa;letter-spacing:.12em;margin-bottom:1px;">STOP</div><div style="font-size:11px;color:#555;line-height:1.4;">📍 ${escapeHtml(s.address)}</div></div>`).join(""):""}
+            <div>
+              <div style="font-size:8px;font-weight:700;color:#aaa;letter-spacing:.18em;margin-bottom:2px;">DROPOFF</div>
+              <div style="font-size:12px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.to_loc||"-")}</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Driver + Fare row -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-        <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;">
-          <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:3px;">DRIVER</div>
-          <div style="font-size:13px;font-weight:800;color:${j.assigned_driver?"#111":"#bbb"};">${escapeHtml(j.assigned_driver||"Unassigned")}</div>
-          <div style="font-size:11px;color:#888;margin-top:2px;">${escapeHtml(j.vehicle_type||"-")}</div>
+      <!-- Fare block -->
+      <div style="background:#0c0b09;border-radius:10px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:8px;font-weight:700;color:#666;letter-spacing:.2em;margin-bottom:4px;">TOTAL FARE ${modeTag}</div>
+          <div style="font-size:32px;font-weight:800;color:#c9a84c;line-height:1;">${money(pricing.grandTotal||pricing.totalPrice)}</div>
+          ${pricing.otTotal>0?`<div style="font-size:10px;color:#e05555;font-weight:700;margin-top:2px;">+${money(pricing.otTotal)} overtime</div>`:""}
         </div>
-        <div style="background:#0c0b09;border-radius:8px;padding:10px 12px;text-align:right;">
-          <div style="font-size:9px;font-weight:700;color:#888;letter-spacing:.14em;margin-bottom:3px;">TOTAL FARE ${modeTag}</div>
-          <div style="font-size:24px;font-weight:800;color:#c9a84c;line-height:1.1;">${money(pricing.grandTotal||pricing.totalPrice)}</div>
-          <div style="font-size:10px;color:#666;margin-top:2px;">${escapeHtml(j.payment_type||"-")} · ${escapeHtml(j.status||"Offer")}</div>
+        <div style="text-align:right;">
+          <div style="background:#1a1405;border:1px solid #c9a84c44;border-radius:8px;padding:6px 10px;display:inline-block;">
+            <div style="font-size:8px;color:#666;letter-spacing:.12em;margin-bottom:2px;">PAYMENT</div>
+            <div style="font-size:12px;font-weight:800;color:#c9a84c;">${escapeHtml(j.payment_type||"Cash")}</div>
+            <div style="font-size:9px;color:#555;margin-top:1px;">${escapeHtml(j.status||"Offer")}</div>
+          </div>
         </div>
       </div>
 
       <!-- Driver Notes -->
       ${j.waybill_notes?`
-      <div style="background:#f0fff4;border:1px solid #c6f6d5;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
-        <div style="font-size:9px;font-weight:700;color:#999;letter-spacing:.14em;margin-bottom:4px;">DRIVER NOTES</div>
-        <div style="font-size:12px;color:#1a4731;line-height:1.5;">${escapeHtml(j.waybill_notes)}</div>
+      <div style="background:#f0fff4;border:1px solid #c6f6d5;border-radius:10px;padding:11px 13px;margin-bottom:12px;">
+        <div style="font-size:8px;font-weight:700;color:#2e7d32;letter-spacing:.18em;margin-bottom:4px;">DRIVER NOTES</div>
+        <div style="font-size:12px;color:#1a4731;line-height:1.6;">${escapeHtml(j.waybill_notes)}</div>
       </div>`:""}
 
       <!-- Footer -->
       <div style="text-align:center;padding-top:10px;border-top:1px solid #eee;">
-        <div style="font-size:9px;color:#ccc;line-height:1.6;">147 W Route 66 Suite 757, Glendora CA 91740</div>
-        <div style="font-size:9px;color:#ccc;">(310) 406-6692 · info@ojoluxe.com · ojoluxe.com · TCP49661-P</div>
+        <div style="font-size:9px;color:#c9a84c;font-weight:700;letter-spacing:.12em;margin-bottom:3px;">OJO LUXE LLC</div>
+        <div style="font-size:8px;color:#bbb;line-height:1.7;">147 W Route 66 Suite 757, Glendora CA 91740<br>(310) 406-6692 · info@ojoluxe.com · ojoluxe.com</div>
       </div>
 
     </div>
@@ -3422,6 +3692,58 @@ async function showWaybill(jobId) {
   modal.scrollTop=0;
 }
 function closeWaybill(){getEl("waybillModal").style.display="none";}
+
+// ── Status Log Modal ──────────────────────────────────────────────────────────
+function showStatusLog(jobId) {
+  const j = allJobs.find(x => String(x.id) === String(jobId)); if (!j) return;
+  const log = Array.isArray(j.extras?.status_log) ? j.extras.status_log : [];
+  getEl("statusLogRef").textContent = (j.reference_code||j.id||"") + " · " + escapeHtml(j.client||"");
+  const statusColors = {
+    "Offer":"#888","Assigned":"#4a90d9","Accepted":"#4a90d9",
+    "Heading to Pickup":"#c9a84c","Arrived":"#c9a84c",
+    "In Progress":"#f2cf63","Completed":"#4caf72","Cancelled":"#e05555"
+  };
+  if (!log.length) {
+    getEl("statusLogBody").innerHTML = `
+      <div style="text-align:center;padding:24px 0;">
+        <div style="font-size:28px;margin-bottom:8px;">📋</div>
+        <div style="color:var(--muted);font-size:13px;">No status changes logged yet.</div>
+        <div style="color:#555;font-size:11px;margin-top:4px;">Future status updates will appear here.</div>
+      </div>`;
+  } else {
+    let html = `<div style="display:flex;flex-direction:column;gap:0;">`;
+    log.forEach((entry, i) => {
+      const d = new Date(entry.ts);
+      const dateStr = d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+      const timeStr = d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
+      const color = statusColors[entry.status] || "#888";
+      const isLast = i === log.length - 1;
+      html += `
+        <div style="display:flex;gap:12px;align-items:flex-start;">
+          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:18px;">
+            <div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid ${color};flex-shrink:0;margin-top:3px;"></div>
+            ${!isLast?`<div style="width:2px;flex:1;background:var(--border2);min-height:24px;margin:2px 0;"></div>`:""}
+          </div>
+          <div style="flex:1;padding-bottom:${isLast?0:14}px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <div>
+                ${entry.prev?`<div style="font-size:9px;color:#555;margin-bottom:2px;">${escapeHtml(entry.prev)} &#x2192;</div>`:""}
+                <div style="font-size:14px;font-weight:800;color:${color};">${escapeHtml(entry.status)}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0;">
+                <div style="font-size:11px;color:var(--text);font-weight:700;">${timeStr}</div>
+                <div style="font-size:10px;color:var(--muted);">${dateStr}</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    });
+    html += `</div>`;
+    getEl("statusLogBody").innerHTML = html;
+  }
+  getEl("statusLogModal").style.display = "flex";
+}
+function closeStatusLog() { getEl("statusLogModal").style.display = "none"; }
 
 
 // ── Expense Settlement ────────────────────────────────────────────────────────
