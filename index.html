@@ -573,7 +573,7 @@ input,select,textarea,button{font-family:var(--font-ui);}
 }
 
 /* ─── WAYBILL ────────────────────────────────────────── */
-#waybillModal .modal{background:#f0f0f0;max-width:380px;}
+#waybillModal .modal{background:#fff;max-width:420px;padding:0;overflow:hidden;}
 .driver-tag.active{background:var(--gold)!important;color:#000!important;border-color:var(--gold)!important;font-weight:700;}
 
 /* ─── RESPONSIVE ─────────────────────────────────────── */
@@ -3609,97 +3609,101 @@ async function showWaybill(jobId) {
 
   const stopsHTML = Array.isArray(j.stops) && j.stops.length
     ? j.stops.map((s, i) =>
-        `<div style="display:flex;gap:12px;align-items:flex-start;margin:10px 0;">` +
-        `<div style="width:22px;height:22px;margin-top:2px;border:2px solid #aaa;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#aaa;flex-shrink:0;">${i+1}</div>` +
-        `<div><div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">STOP ${i+1}</div>` +
-        `<div style="font-size:12px;color:#555;line-height:1.4;">${escapeHtml(s.address)}</div></div></div>`
+        `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">` +
+        `<div style="width:20px;height:20px;border:1.5px solid #bbb;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#aaa;flex-shrink:0;margin-top:1px;">${i+1}</div>` +
+        `<div><div style="font-size:8px;font-weight:700;color:#bbb;letter-spacing:.12em;margin-bottom:1px;">STOP ${i+1}</div>` +
+        `<div style="font-size:11px;color:#555;line-height:1.4;">${escapeHtml(s.address)}</div></div></div>`
       ).join("")
     : "";
 
+  // Build rows — skip if value is empty/dash
+  const rowIf = (label, value, bold) => (value && value !== dash)
+    ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid #f2f2f2;gap:8px;">` +
+      `<span style="color:#999;font-size:10.5px;white-space:nowrap;flex-shrink:0;min-width:90px;">${label}</span>` +
+      `<span style="font-size:10.5px;font-weight:${bold?"700":"500"};color:#111;text-align:right;word-break:break-word;">${escapeHtml(String(value))}</span></div>`
+    : "";
+
+  const sec = (title) =>
+    `<div style="margin:10px 0 3px;font-size:8.5px;font-weight:800;color:#bbb;letter-spacing:.2em;">${title}</div>` +
+    `<div style="border-top:1px solid #e0e0e0;margin-bottom:1px;"></div>`;
+
+  const totalFare = pricing.grandTotal || pricing.totalPrice;
+
   content.innerHTML =
-  `<div id="waybill-card" style="width:360px;max-width:360px;margin:0 auto;background:#fff;font-family:'Helvetica Neue',Arial,sans-serif;box-sizing:border-box;">` +
+  `<div id="waybill-card" style="width:100%;max-width:100%;background:#fff;font-family:'Helvetica Neue',Arial,sans-serif;box-sizing:border-box;">` +
 
   // ── Header ──
-  `<div style="padding:16px 20px 12px;display:flex;align-items:flex-start;gap:14px;border-bottom:2px solid #111;">` +
-    `<img src="${getEl('logoImg')?.src||''}" alt="OJO" style="width:64px;height:64px;object-fit:contain;flex-shrink:0;border-radius:4px;" onerror="this.style.display='none'">` +
-    `<div style="flex:1;">` +
-      `<div style="font-size:16px;font-weight:800;color:#111;">OJO Luxe LLC</div>` +
-      `<div style="font-size:11px;color:#555;margin-top:2px;line-height:1.7;">147 W Route 66 Suite 757<br>Glendora, CA 91740<br>TCP: PSG0049661</div>` +
+  `<div style="padding:10px 14px 9px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #111;">` +
+    `<div style="display:flex;align-items:center;gap:9px;">` +
+      `<img src="${getEl('logoImg')?.src||''}" alt="OJO" style="width:42px;height:42px;object-fit:contain;flex-shrink:0;border-radius:3px;" onerror="this.style.display='none'">` +
+      `<div>` +
+        `<div style="font-size:13px;font-weight:800;color:#111;line-height:1.1;">OJO Luxe LLC</div>` +
+        `<div style="font-size:9px;color:#777;margin-top:2px;line-height:1.5;">147 W Route 66 Ste 757, Glendora CA 91740<br>TCP: PSG0049661</div>` +
+      `</div>` +
     `</div>` +
-    `<div style="text-align:right;flex-shrink:0;">` +
-      `<div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.16em;margin-bottom:3px;">WAYBILL CODE</div>` +
-      `<div style="font-size:12px;font-weight:800;color:#111;font-family:monospace;">${escapeHtml(String(j.reference_code||j.id||"-"))}</div>` +
-      (j.pricing_mode==="manual" ? `<div style="margin-top:4px;"><span style="background:#fffbe6;color:#b7860b;border:1px solid #f0c030;border-radius:4px;font-size:9px;font-weight:700;padding:2px 7px;">MANUAL</span></div>` : "") +
+    `<div style="text-align:right;flex-shrink:0;max-width:110px;">` +
+      `<div style="font-size:8px;color:#bbb;letter-spacing:.14em;margin-bottom:2px;">WAYBILL</div>` +
+      `<div style="font-size:10px;font-weight:800;color:#111;font-family:monospace;word-break:break-all;">${escapeHtml(String(j.reference_code||j.id||"-"))}</div>` +
+      (j.pricing_mode==="manual" ? `<span style="background:#fffbe6;color:#b7860b;border:1px solid #f0c030;border-radius:3px;font-size:8px;font-weight:700;padding:1px 5px;margin-top:2px;display:inline-block;">MANUAL</span>` : "") +
     `</div>` +
   `</div>` +
 
   // ── Title bar ──
-  `<div style="background:#111;padding:9px 20px;text-align:center;">` +
-    `<div style="font-size:11px;font-weight:700;color:#fff;letter-spacing:.2em;">PASSENGER TRANSPORTATION WAYBILL</div>` +
+  `<div style="background:#111;padding:6px 14px;">` +
+    `<div style="font-size:9.5px;font-weight:700;color:#fff;letter-spacing:.18em;text-align:center;">PASSENGER TRANSPORTATION WAYBILL</div>` +
   `</div>` +
 
   // ── Body ──
-  `<div style="padding:4px 20px 16px;">` +
+  `<div style="padding:2px 14px 12px;">` +
 
-  // Client
-  section("CLIENT INFORMATION") +
-  row("Client Name", j.client, true) +
-  row("Phone", j.client_phone) +
-  (j.client_email ? row("Email", j.client_email) : "") +
+  sec("CLIENT INFORMATION") +
+  rowIf("Client Name", j.client, true) +
+  rowIf("Phone", j.client_phone) +
+  rowIf("Email", j.client_email) +
 
-  // Trip
-  section("TRIP DETAILS") +
-  row("Date", dateFormatted, true) +
-  row("Pickup Time", j.pickup_time) +
-  row("Service Type", j.job_type) +
-  row("Payment Method", j.payment_type) +
-  row("Status", j.status||"Offer") +
+  sec("TRIP DETAILS") +
+  rowIf("Date", dateFormatted, true) +
+  rowIf("Pickup Time", j.pickup_time) +
+  rowIf("Service Type", j.job_type) +
+  rowIf("Payment", j.payment_type) +
+  rowIf("Status", j.status||"Offer") +
 
-  // Route
-  section("ROUTE") +
-  `<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">` +
-    `<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;">` +
-      `<div style="width:28px;height:28px;border-radius:50%;background:#c9a84c;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0;">P</div>` +
-      `<div><div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">PICK-UP</div>` +
-      `<div style="font-size:13px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.from_loc||dash)}</div></div>` +
+  sec("ROUTE") +
+  `<div style="padding:8px 0 6px;">` +
+    `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">` +
+      `<div style="width:20px;height:20px;border-radius:50%;background:#c9a84c;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;flex-shrink:0;margin-top:1px;">P</div>` +
+      `<div><div style="font-size:8px;font-weight:700;color:#bbb;letter-spacing:.14em;margin-bottom:1px;">PICK-UP</div>` +
+      `<div style="font-size:11px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.from_loc||dash)}</div></div>` +
     `</div>` +
     stopsHTML +
-    `<div style="display:flex;gap:12px;align-items:flex-start;">` +
-      `<div style="width:28px;height:28px;border-radius:50%;background:#e05555;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0;">D</div>` +
-      `<div><div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">DROP-OFF</div>` +
-      `<div style="font-size:13px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.to_loc||dash)}</div></div>` +
+    `<div style="display:flex;gap:10px;align-items:flex-start;">` +
+      `<div style="width:20px;height:20px;border-radius:50%;background:#111;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0;margin-top:1px;">D</div>` +
+      `<div><div style="font-size:8px;font-weight:700;color:#bbb;letter-spacing:.14em;margin-bottom:1px;">DROP-OFF</div>` +
+      `<div style="font-size:11px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.to_loc||dash)}</div></div>` +
     `</div>` +
   `</div>` +
+  `<div style="border-top:1px solid #f2f2f2;"></div>` +
 
-  // Pricing
-  section("PRICING") +
-  row("Trip Cost", money(pricing.grandTotal||pricing.totalPrice), true) +
-  (pricing.otTotal>0 ? row("Overtime", "+" + money(pricing.otTotal)) : "") +
-  `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:2px solid #111;gap:12px;">` +
-    `<span style="font-size:13px;font-weight:800;color:#111;">Customer Will Pay</span>` +
-    `<span style="font-size:13px;font-weight:800;color:#111;">${money(pricing.grandTotal||pricing.totalPrice)}</span>` +
-  `</div>` +
+  sec("FARE") +
+  rowIf("Total Fare", money(totalFare), true) +
+  (pricing.otTotal>0 ? rowIf("Overtime", "+"+money(pricing.otTotal)) : "") +
 
-  // Driver & Vehicle
-  section("DRIVER &amp; VEHICLE") +
-  row("Driver", j.assigned_driver, true) +
-  row("Driver Phone", driverPhone) +
-  row("Vehicle", vDesc) +
-  row("License Plate", vPlate) +
-  row("TCP Permit", "PSG0049661") +
+  sec("DRIVER &amp; VEHICLE") +
+  rowIf("Driver", j.assigned_driver, true) +
+  rowIf("Driver Phone", driverPhone!=="---" ? driverPhone : "") +
+  rowIf("Vehicle", vDesc) +
+  rowIf("License Plate", vPlate!=="---" ? vPlate : "") +
+  rowIf("TCP Permit", "PSG0049661") +
 
-  // Notes
   (j.waybill_notes
-    ? section("NOTES") +
-      `<div style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:12px;color:#333;line-height:1.6;">${escapeHtml(j.waybill_notes)}</div>`
+    ? sec("NOTES") + `<div style="padding:6px 0 4px;font-size:10.5px;color:#333;line-height:1.6;">${escapeHtml(j.waybill_notes)}</div>`
     : "") +
 
-  // Footer
-  `<div style="margin-top:18px;padding-top:12px;border-top:2px solid #111;text-align:center;">` +
-    `<div style="font-size:11px;font-weight:700;color:#111;">OJO Luxe LLC &nbsp;|&nbsp; TCP: PSG0049661</div>` +
-    `<div style="font-size:10px;color:#888;margin-top:2px;">147 W Route 66 Suite 757, Glendora CA 91740</div>` +
-    `<div style="font-size:10px;color:#888;">Ojoluxe.cs@gmail.com</div>` +
-    `<div style="font-size:9px;color:#bbb;margin-top:4px;">Generated: ${new Date().toLocaleString("en-US")} &nbsp;|&nbsp; Code: ${escapeHtml(String(j.reference_code||j.id||"-"))}</div>` +
+  `<div style="margin-top:12px;padding-top:8px;border-top:1.5px solid #111;text-align:center;">` +
+    `<div style="font-size:9.5px;font-weight:700;color:#111;">OJO Luxe LLC &nbsp;|&nbsp; TCP: PSG0049661</div>` +
+    `<div style="font-size:8.5px;color:#aaa;margin-top:2px;">147 W Route 66 Ste 757, Glendora CA 91740</div>` +
+    `<div style="font-size:8.5px;color:#aaa;">Ojoluxe.cs@gmail.com &nbsp;|&nbsp; ojoluxe.com</div>` +
+    `<div style="font-size:8px;color:#ccc;margin-top:3px;">Generated: ${new Date().toLocaleString("en-US")} &nbsp;|&nbsp; Code: ${escapeHtml(String(j.reference_code||j.id||"-"))}</div>` +
   `</div>` +
 
   `</div></div>`;
@@ -3929,15 +3933,12 @@ async function shareWaybillImage(){
         s.onload=res; s.onerror=rej; document.head.appendChild(s);
       });
     }
-    // Fix card to exactly 360px for clean full-width phone capture
     const card = getEl("waybill-card") || content;
-    const CARD_W = 360;
-    card.style.width = CARD_W + "px";
-    card.style.maxWidth = CARD_W + "px";
-    await new Promise(r => setTimeout(r, 60)); // let layout settle
+    await new Promise(r => setTimeout(r, 80));
+    const cardW = card.offsetWidth || 340;
     const canvas = await html2canvas(card,{
       scale:2, useCORS:true, backgroundColor:"#ffffff", logging:false,
-      width:CARD_W, windowWidth:CARD_W
+      width:cardW, windowWidth:cardW
     });
     canvas.toBlob(async(blob)=>{
       if(!blob){alert("Could not capture image.");return;}
