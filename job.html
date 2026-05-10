@@ -117,6 +117,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .btn-next{background:linear-gradient(135deg,var(--gold) 0%,#A8882A 100%);color:#000;box-shadow:0 4px 24px rgba(201,168,76,.25);}
 .btn-cancel{background:var(--surface2);color:var(--muted);border:1px solid var(--border2);}
 .btn-waybill{background:var(--surface2);color:var(--gold2);border:1px solid rgba(201,168,76,.25);padding:14px 20px;}
+.btn-contact{width:100%;padding:14px 10px;border:none;border-radius:14px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:border-color .2s,background .2s;}
+.btn-contact:active{background:var(--surface);}
 .completed-badge{padding:18px;border-radius:14px;background:linear-gradient(135deg,rgba(76,175,114,.12) 0%,rgba(76,175,114,.04) 100%);border:1px solid rgba(76,175,114,.3);text-align:center;}
 .completed-badge .cb-icon{font-size:32px;margin-bottom:8px;}
 .completed-badge .cb-text{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--green);}
@@ -241,13 +243,17 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
         <label class="form-label" for="iVehicle">Vehicle Type</label>
         <select class="form-input form-select" id="iVehicle">
           <option value="">Select vehicle type</option>
-          <option>Black Sedan</option>
-          <option>Black SUV</option>
-          <option>Black Suburban</option>
+          <option>Sedan</option>
+          <option>SUV</option>
+          <option>Suburban</option>
           <option>Luxury Van / Sprinter</option>
           <option>Limo</option>
           <option>Other</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="iModel">Vehicle Make & Model</label>
+        <input class="form-input" id="iModel" type="text" placeholder="e.g. Cadillac Escalade, Lincoln Navigator">
       </div>
       <div class="form-group">
         <label class="form-label" for="iPlate">License Plate</label>
@@ -319,6 +325,23 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
     <div class="status-btns" id="statusBtns"></div>
   </div>
 
+  <div class="section" id="contactSection" style="display:none;">
+    <div class="sec-label">Contact</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <button class="btn-contact" onclick="contactClient('call')">
+        <span style="font-size:18px;">📞</span>
+        <span>Call Client</span>
+      </button>
+      <button class="btn-contact" onclick="contactClient('sms')">
+        <span style="font-size:18px;">💬</span>
+        <span>Text Client</span>
+      </button>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:var(--muted);text-align:center;letter-spacing:.04em;">
+      🔒 Client number is routed privately through OJO Luxe dispatch
+    </div>
+  </div>
+
   <div class="section">
     <div class="sec-label">Documents</div>
     <button class="btn-status btn-waybill" onclick="openWaybill()">📄 View Waybill</button>
@@ -373,11 +396,12 @@ const STATUS_COLORS = {
   "In Progress":"#F2CF63","Completed":"#4CAF72","Cancelled":"#E05555"
 };
 const STATUS_FLOW = [
-  {from:"Assigned",        to:"Accepted",         label:"✅ Accept Job"},
-  {from:"Accepted",        to:"Heading to Pickup", label:"🚗 Heading to Pickup"},
-  {from:"Heading to Pickup",to:"Arrived",          label:"📍 I've Arrived"},
-  {from:"Arrived",         to:"In Progress",       label:"🛣️ Start Trip"},
-  {from:"In Progress",     to:"Completed",         label:"✅ Complete Trip"}
+  {from:"Offer",            to:"Accepted",         label:"✅ Accept Job"},
+  {from:"Assigned",         to:"Accepted",         label:"✅ Accept Job"},
+  {from:"Accepted",         to:"Heading to Pickup", label:"🚗 Heading to Pickup"},
+  {from:"Heading to Pickup",to:"Arrived",           label:"📍 I've Arrived"},
+  {from:"Arrived",          to:"In Progress",       label:"🛣️ Start Trip"},
+  {from:"In Progress",      to:"Completed",         label:"✅ Complete Trip"}
 ];
 const CONFIRM_COPY = {
   "Accepted":          {icon:"✅",title:"Accept this job?",          sub:"You'll be committed to this ride.",           danger:false},
@@ -460,6 +484,7 @@ function showIntake(token){
     if(ls.name)document.getElementById("iName").value=ls.name;
     if(ls.phone)document.getElementById("iPhone").value=ls.phone;
     if(ls.vehicle_type)document.getElementById("iVehicle").value=ls.vehicle_type;
+    if(ls.vehicle_model)document.getElementById("iModel").value=ls.vehicle_model;
     if(ls.plate)document.getElementById("iPlate").value=ls.plate;
   }
 
@@ -472,17 +497,18 @@ async function submitIntake(){
   const name=(document.getElementById("iName").value||"").trim();
   const phone=(document.getElementById("iPhone").value||"").trim();
   const vehicle=(document.getElementById("iVehicle").value||"").trim();
+  const model=(document.getElementById("iModel").value||"").trim();
   const plate=(document.getElementById("iPlate").value||"").trim().toUpperCase();
   const errEl=document.getElementById("intakeErr");
 
-  if(!name||!phone||!vehicle||!plate){
+  if(!name||!phone||!vehicle||!model||!plate){
     errEl.style.display="block";
     errEl.textContent="Please fill in all fields.";
     return;
   }
   errEl.style.display="none";
 
-  const driverData={name,phone,vehicle_type:vehicle,plate,submitted_at:new Date().toISOString()};
+  const driverData={name,phone,vehicle_type:vehicle,vehicle_model:model,plate,submitted_at:new Date().toISOString()};
 
   const btn=document.getElementById("intakeBtn");
   btn.disabled=true;btn.textContent="Saving…";
@@ -516,7 +542,7 @@ function showApp(driverData){
     document.getElementById("driverIdBar").style.display="flex";
     document.getElementById("driverAvatar").textContent=initials(driverData.name);
     document.getElementById("driverIdName").textContent=driverData.name+(driverData.phone?" · "+driverData.phone:"");
-    document.getElementById("driverIdVehicle").textContent=[driverData.vehicle_type,driverData.plate].filter(Boolean).join(" — ");
+    document.getElementById("driverIdVehicle").textContent=[driverData.vehicle_type,driverData.vehicle_model,driverData.plate].filter(Boolean).join(" — ");
   }
   render();
   document.getElementById("app").style.display="block";
@@ -543,6 +569,8 @@ function render(){
   renderInfoGrid();
   renderRoute();
   if(job.waybill_notes){document.getElementById("notesSection").style.display="";document.getElementById("notesBox").textContent=job.waybill_notes;}
+  // Show contact buttons only if client has a phone number
+  document.getElementById("contactSection").style.display=job.client_phone?"":"none";
   renderActions(status);
   renderTimeline(log);
 }
@@ -587,8 +615,12 @@ function renderActions(status){
   }
   const next=STATUS_FLOW.find(s=>s.from===status);
   let html="";
-  if(next)html+=`<button class="btn-status btn-next" onclick="askConfirm('${next.to}')">${esc(next.label)}</button>`;
-  if(!["Offer","Assigned"].includes(status))html+=`<button class="btn-status btn-cancel" onclick="askConfirm('Cancelled')" style="margin-top:4px;">✕ &nbsp;Cancel Job</button>`;
+  if(next){
+    html+=`<button class="btn-status btn-next" onclick="askConfirm('${next.to}')">${esc(next.label)}</button>`;
+  } else {
+    html+=`<div style="padding:14px;background:var(--surface);border-radius:12px;text-align:center;font-size:13px;color:var(--muted);">No actions available for current status.</div>`;
+  }
+  html+=`<button class="btn-status btn-cancel" onclick="askConfirm('Cancelled')" style="margin-top:4px;">✕ &nbsp;Cancel Job</button>`;
   btnsEl.innerHTML=html;
 }
 
@@ -670,7 +702,7 @@ function buildWaybillCard(){
   const to=j.to_loc||j.dropoff_address||dash;
   const driverName=od?od.name:(j.assigned_driver||"");
   const driverPhone=od?od.phone:"";
-  const driverVehicle=od?[od.vehicle_type,od.plate].filter(Boolean).join(" — "):(j.vehicle_type||"");
+  const driverVehicle=od?[od.vehicle_type,od.vehicle_model,od.plate].filter(Boolean).join(" — "):(j.vehicle_type||"");
   const logo=getLogoSrc();
 
   const rowIf=(label,value,bold)=>(value&&value!==dash)?`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:4px 0;border-bottom:1px solid #f2f2f2;gap:8px;"><span style="color:#999;font-size:10px;white-space:nowrap;flex-shrink:0;min-width:80px;">${esc(label)}</span><span style="font-size:10px;font-weight:${bold?"700":"500"};color:#111;text-align:right;word-break:break-word;">${esc(String(value))}</span></div>`:"";
@@ -745,6 +777,20 @@ async function shareWaybillImg(){
     },"image/png");
   }catch(e){console.error("[OJO]",e);alert("Capture failed. Try a screenshot instead.");}
   finally{btn.disabled=false;btn.textContent="📸 Share Image";}
+}
+
+// ── Contact client (number never shown to driver) ─────────────────────────
+function contactClient(type){
+  if(!job?.client_phone){showToast("No client phone on file.");return;}
+  const phone=job.client_phone.replace(/\D/g,"");
+  if(!phone){showToast("No client phone on file.");return;}
+  if(type==="call"){
+    window.location.href="tel:"+phone;
+  } else {
+    const ref=job.reference_code||"";
+    const msg=encodeURIComponent("Hi, this is your OJO Luxe driver"+(ref?" for job "+ref:"")+". I'm on my way.");
+    window.location.href="sms:+"+phone+"?body="+msg;
+  }
 }
 
 // ── Logo ───────────────────────────────────────────────────────────────────
