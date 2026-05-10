@@ -1786,8 +1786,8 @@ window.addEventListener("unhandledrejection", function(e) {
 </div>
 
 <div id="waybillModal" class="overlay" style="display:none;" onclick="if(event.target===this)closeWaybill()">
-  <div class="modal" style="background:#fff;border:none;max-width:420px;width:100%;">
-    <div id="waybillContent"></div>
+  <div class="modal" style="background:#fff;border:none;max-width:420px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div id="waybillContent" style="flex:1;overflow-y:auto;"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:14px 18px;background:#f5f5f5;border-top:1px solid #ddd;">
       <button style="background:#eee;color:#333;border:1px solid #ccc;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;" onclick="closeWaybill()">Close</button>
       <button style="background:#111;color:#c9a84c;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;" onclick="shareWaybillText()">Share Text</button>
@@ -2398,7 +2398,7 @@ function renderJobs() {
               💳 Expenses${(()=>{const ch=Array.isArray(j.addon_charges)?j.addon_charges:[];const pending=ch.filter(x=>x.status==="pending").length;const approved=ch.filter(x=>x.status==="approved").length;return pending?`<span style="position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">${pending}</span>`:approved?`<span style="position:absolute;top:-4px;right:-4px;background:var(--green);color:#000;border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">✓</span>`:""})()}
             </button>
             ${isAdminMode()?`
-            <button class="btn btn-sec" onclick="showStatusLog('${j.id}')" title="View status timeline" style="position:relative;">📋 Log${(()=>{const log=Array.isArray(j.extras?.status_log)?j.extras.status_log:[];return log.length?`<span style="position:absolute;top:-4px;right:-4px;background:var(--gold-dim);color:var(--gold2);border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">${log.length}</span>`:"";})()} </button>
+            <button class="btn btn-sec" onclick="showStatusLog('${j.id}')" title="View status timeline" style="position:relative;">📋 Log${(()=>{const _ex=(typeof j.extras==="string")?JSON.parse(j.extras||"{}")||{}:(j.extras||{});const log=Array.isArray(_ex.status_log)?_ex.status_log:[];return log.length?`<span style="position:absolute;top:-4px;right:-4px;background:var(--gold-dim);color:var(--gold2);border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">${log.length}</span>`:"";})()} </button>
             <button class="btn btn-sec" onclick="shareJobLink('${j.id}')" title="Share job link with driver">🔗 Share</button>
             <button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button>
             <button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
@@ -3138,7 +3138,10 @@ async function updateJobStatus(jobId, newStatus) {
     // Requires: ALTER TABLE jobs ADD COLUMN IF NOT EXISTS extras jsonb DEFAULT '{}'::jsonb;
     try {
       const now = new Date().toISOString();
-      const existingExtras = (typeof j.extras === "object" && j.extras !== null) ? j.extras : {};
+      const rawExtras = j.extras;
+      const existingExtras = (typeof rawExtras === "string")
+        ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
+        : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
       const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
       existingLog.push({ status: newStatus, prev: prevStatus || "Offer", ts: now });
       const extrasPatch = { extras: { ...existingExtras, status_log: existingLog } };
@@ -3561,7 +3564,9 @@ async function releaseJob(id){
 }
 
 // ── Waybill ───────────────────────────────────────────────────────────────────
+let _lastWaybillJobId = null;
 async function showWaybill(jobId) {
+  _lastWaybillJobId = jobId;
   const j=allJobs.find(x=>String(x.id)===String(jobId)); if(!j) return;
 
   // Auto-assign reference code if missing
@@ -3716,7 +3721,11 @@ function closeWaybill(){getEl("waybillModal").style.display="none";}
 // ── Status Log Modal ──────────────────────────────────────────────────────────
 function showStatusLog(jobId) {
   const j = allJobs.find(x => String(x.id) === String(jobId)); if (!j) return;
-  const log = Array.isArray(j.extras?.status_log) ? j.extras.status_log : [];
+  // extras may arrive as a JSON string from the REST layer — parse it if needed
+  const extrasObj = (typeof j.extras === "string")
+    ? (() => { try { return JSON.parse(j.extras); } catch(e) { return {}; } })()
+    : (j.extras && typeof j.extras === "object" ? j.extras : {});
+  const log = Array.isArray(extrasObj.status_log) ? extrasObj.status_log : [];
   getEl("statusLogRef").textContent = (j.reference_code||j.id||"") + " · " + escapeHtml(j.client||"");
   const statusColors = {
     "Offer":"#888","Assigned":"#4a90d9","Accepted":"#4a90d9",
@@ -3925,6 +3934,7 @@ async function shareWaybillText(){
 async function shareWaybillImage(){
   const content = getEl("waybillContent"); if(!content) return;
   const btn = event.currentTarget; btn.disabled=true; btn.textContent="⏳ Capturing...";
+  let offscreen = null;
   try {
     if(!window.html2canvas){
       await new Promise((res,rej)=>{
@@ -3933,12 +3943,129 @@ async function shareWaybillImage(){
         s.onload=res; s.onerror=rej; document.head.appendChild(s);
       });
     }
-    const card = getEl("waybill-card") || content;
-    await new Promise(r => setTimeout(r, 80));
-    const cardW = card.offsetWidth || 340;
-    const canvas = await html2canvas(card,{
-      scale:2, useCORS:true, backgroundColor:"#ffffff", logging:false,
-      width:cardW, windowWidth:cardW
+
+    // ── Build landscape card from current job data ──────────────────────────
+    const jobId = content.querySelector("[data-job-id]")?.dataset?.jobId
+                || content.innerHTML.match(/data-job-id="([^"]+)"/)?.[1]
+                || (getEl("waybill-card") ? _lastWaybillJobId : null);
+    const j = jobId ? allJobs.find(x=>String(x.id)===String(jobId)) : null;
+    const origCard = getEl("waybill-card");
+
+    const CAPTURE_W = 780;
+    offscreen = document.createElement("div");
+    offscreen.style.cssText = `position:fixed;left:-9999px;top:0;width:${CAPTURE_W}px;z-index:-1;`;
+    document.body.appendChild(offscreen);
+
+    if (j) {
+      // Re-render as landscape 2-col
+      const pricing = calculateJobPrice(j);
+      const totalFare = pricing.grandTotal || pricing.totalPrice;
+      const members  = getStoredMembers();
+      const vehicles = getStoredVehicles();
+      const driverMember = j.assigned_driver
+        ? members.find(m => m.full_name && m.full_name.toLowerCase().includes(j.assigned_driver.toLowerCase().split(" ")[0]))
+        : null;
+      const driverVehicle = driverMember
+        ? vehicles.find(v => String(v.assigned_member_id) === String(driverMember.id))
+        : null;
+      const driverPhone = driverMember?.phone || "---";
+      const vMake  = driverVehicle?.make  || "";
+      const vModel = driverVehicle?.model || "";
+      const vYear  = driverVehicle?.year  || "";
+      const vColor = driverVehicle?.color || "";
+      const vPlate = driverVehicle?.plate || "---";
+      const vDesc  = [vYear,vColor,vMake,vModel].filter(Boolean).join(" ") || (j.vehicle_type||"---");
+      const dash = "---";
+      const dateObj = j.date ? new Date(j.date+"T00:00") : null;
+      const dateFormatted = dateObj
+        ? dateObj.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})
+        : (j.date||dash);
+
+      const lsec = t => `<div style="margin:0 0 3px;font-size:8px;font-weight:800;color:#999;letter-spacing:.2em;text-transform:uppercase;">${t}</div><div style="border-top:1px solid #e0e0e0;margin-bottom:4px;"></div>`;
+      const lrow = (label,value,bold) => (value&&value!==dash&&value!=="---")
+        ? `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:3px 0;gap:8px;border-bottom:1px solid #f5f5f5;">
+            <span style="color:#999;font-size:9.5px;white-space:nowrap;flex-shrink:0;">${label}</span>
+            <span style="font-size:9.5px;font-weight:${bold?"700":"500"};color:#111;text-align:right;word-break:break-word;">${escapeHtml(String(value))}</span>
+           </div>` : "";
+
+      const stopsLS = Array.isArray(j.stops)&&j.stops.length
+        ? j.stops.map((s,i)=>`<div style="font-size:9px;color:#555;padding:2px 0 2px 22px;border-bottom:1px solid #f5f5f5;">Stop ${i+1}: ${escapeHtml(s.address)}</div>`).join("")
+        : "";
+
+      offscreen.innerHTML =
+        `<div style="background:#fff;font-family:'Helvetica Neue',Arial,sans-serif;box-sizing:border-box;width:${CAPTURE_W}px;">` +
+        // Header
+        `<div style="padding:10px 16px 8px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #111;">` +
+          `<div style="display:flex;align-items:center;gap:10px;">` +
+            `<img src="${getEl("logoImg")?.src||""}" alt="OJO" style="width:44px;height:44px;object-fit:contain;border-radius:3px;" onerror="this.style.display='none'">` +
+            `<div><div style="font-size:14px;font-weight:800;color:#111;">OJO Luxe LLC</div>` +
+            `<div style="font-size:9px;color:#777;line-height:1.5;">147 W Route 66 Ste 757, Glendora CA 91740 &nbsp;|&nbsp; TCP: PSG0049661</div></div>` +
+          `</div>` +
+          `<div style="text-align:right;">` +
+            `<div style="font-size:8px;color:#bbb;letter-spacing:.14em;">WAYBILL</div>` +
+            `<div style="font-size:11px;font-weight:800;color:#111;font-family:monospace;">${escapeHtml(String(j.reference_code||j.id||"-"))}</div>` +
+          `</div>` +
+        `</div>` +
+        // Title bar
+        `<div style="background:#111;padding:5px 16px;"><div style="font-size:9px;font-weight:700;color:#fff;letter-spacing:.2em;text-align:center;">PASSENGER TRANSPORTATION WAYBILL</div></div>` +
+        // 2-col body
+        `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:10px 16px 10px;">` +
+          // LEFT col
+          `<div style="padding-right:14px;border-right:1px solid #e8e8e8;">` +
+            lsec("Client") +
+            lrow("Name", j.client, true) +
+            lrow("Phone", j.client_phone) +
+            lrow("Email", j.client_email) +
+            `<div style="margin-top:8px;">` +
+            lsec("Trip Details") +
+            lrow("Date", dateFormatted, true) +
+            lrow("Pickup Time", j.pickup_time) +
+            lrow("Service", j.job_type) +
+            lrow("Payment", j.payment_type) +
+            lrow("Status", j.status||"Offer") +
+            `</div>` +
+            `<div style="margin-top:8px;">` +
+            lsec("Fare") +
+            lrow("Total Fare", money(totalFare), true) +
+            (pricing.otTotal>0 ? lrow("Overtime", "+"+money(pricing.otTotal)) : "") +
+            `</div>` +
+          `</div>` +
+          // RIGHT col
+          `<div style="padding-left:14px;">` +
+            lsec("Route") +
+            `<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;">` +
+              `<div style="width:18px;height:18px;border-radius:50%;background:#c9a84c;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#000;flex-shrink:0;">P</div>` +
+              `<div><div style="font-size:7.5px;font-weight:700;color:#bbb;letter-spacing:.12em;">PICK-UP</div><div style="font-size:10px;font-weight:700;color:#111;line-height:1.3;">${escapeHtml(j.from_loc||dash)}</div></div>` +
+            `</div>` +
+            stopsLS +
+            `<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;">` +
+              `<div style="width:18px;height:18px;border-radius:50%;background:#111;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#fff;flex-shrink:0;">D</div>` +
+              `<div><div style="font-size:7.5px;font-weight:700;color:#bbb;letter-spacing:.12em;">DROP-OFF</div><div style="font-size:10px;font-weight:700;color:#111;line-height:1.3;">${escapeHtml(j.to_loc||dash)}</div></div>` +
+            `</div>` +
+            lsec("Driver & Vehicle") +
+            lrow("Driver", j.assigned_driver, true) +
+            lrow("Driver Phone", driverPhone!=="---"?driverPhone:"") +
+            lrow("Vehicle", vDesc) +
+            lrow("Plate", vPlate!=="---"?vPlate:"") +
+            lrow("TCP Permit","PSG0049661") +
+            (j.waybill_notes ? `<div style="margin-top:8px;">${lsec("Notes")}<div style="font-size:9px;color:#333;line-height:1.5;">${escapeHtml(j.waybill_notes)}</div></div>` : "") +
+          `</div>` +
+        `</div>` +
+        // Footer
+        `<div style="padding:6px 16px 8px;border-top:1.5px solid #111;display:flex;justify-content:space-between;align-items:center;">` +
+          `<div style="font-size:8.5px;font-weight:700;color:#111;">OJO Luxe LLC &nbsp;|&nbsp; TCP: PSG0049661 &nbsp;|&nbsp; Ojoluxe.cs@gmail.com &nbsp;|&nbsp; ojoluxe.com</div>` +
+          `<div style="font-size:8px;color:#aaa;">Generated: ${new Date().toLocaleString("en-US")}</div>` +
+        `</div>` +
+        `</div>`;
+    } else {
+      // Fallback: clone original card
+      offscreen.innerHTML = origCard ? origCard.outerHTML : content.innerHTML;
+    }
+
+    await new Promise(r => setTimeout(r, 120));
+    const canvas = await html2canvas(offscreen.firstChild || offscreen, {
+      scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false,
+      width: CAPTURE_W, windowWidth: CAPTURE_W
     });
     canvas.toBlob(async(blob)=>{
       if(!blob){alert("Could not capture image.");return;}
@@ -3951,7 +4078,10 @@ async function shareWaybillImage(){
   } catch(e){
     console.error("[OJO] shareWaybillImage:",e);
     alert("Image capture failed — try Share Text instead.");
-  } finally { btn.disabled=false; btn.textContent="📸 Share Image"; }
+  } finally {
+    if(offscreen && offscreen.parentNode) offscreen.parentNode.removeChild(offscreen);
+    btn.disabled=false; btn.textContent="📸 Share Image";
+  }
 }
 
 // ── Contribution: screenshot grid → share or download ────────────────────────
