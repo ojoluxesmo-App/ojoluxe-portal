@@ -3113,59 +3113,38 @@ async function updateJobStatus(jobId, newStatus) {
   try {
     const prevStatus = j.status;
 
-    // Build extras with status_log, then send ONE combined PATCH ─
-    try {
-      const now = new Date().toISOString();
-      const rawExtras = j.extras;
-      const existingExtras = (typeof rawExtras === "string")
-        ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
-        : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
-      const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
-      existingLog.push({ status: newStatus, prev: prevStatus || "Offer", ts: now });
-      const mergedExtras = { ...existingExtras, status_log: existingLog };
-      // Send one PATCH with both status fields + extras (avoids RLS double-write issue)
-      const combinedPatch = { ...patch, extras: mergedExtras };
-      const r2 = await fetch(SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(jobId), {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": SUPABASE_KEY,
-          "Authorization": "Bearer " + (SERVICE_KEY || SUPABASE_KEY),
-          "Prefer": "return=minimal"
-        },
-        body: JSON.stringify(combinedPatch)
-      });
-      if (r2.ok || r2.status === 204) {
-        j.extras = mergedExtras;
-        console.log("[OJO] ✅ Status + log saved in one PATCH (" + existingLog.length + " entries)");
-      } else {
-        // Fallback: status was already saved in STEP 1, just log the warning
-        const e2 = await r2.json().catch(() => ({}));
-        console.warn("[OJO] ⚠ Combined PATCH failed, status was saved but log skipped:", e2.message || r2.status);
-        // Still update local cache for status even if extras failed
-        j.status = newStatus;
-        if (patch.time_start) j.time_start = patch.time_start;
-        if (patch.time_end)   j.time_end   = patch.time_end;
-      }
-    } catch(e2) {
-      console.warn("[OJO] Status log write failed (non-fatal):", e2.message);
+    // Build merged extras with new status_log entry
+    const rawExtras = j.extras;
+    const existingExtras = (typeof rawExtras === "string")
+      ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
+      : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+    const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
+    existingLog.push({ status: newStatus, prev: prevStatus || "Offer", ts: new Date().toISOString() });
+    const mergedExtras = { ...existingExtras, status_log: existingLog };
+
+    // One combined PATCH via db.update() — status + extras together
+    const combinedPatch = { ...patch, extras: mergedExtras };
+    const { error } = await db.from("jobs").update(combinedPatch).eq("id", jobId);
+    if (error) {
+      alert("Status update failed: " + (error.message || JSON.stringify(error)));
+      return;
     }
 
-    // Ensure local cache is updated (may already be set above)
-    if (j.status !== newStatus) {
-      j.status = newStatus;
-      if (patch.time_start) j.time_start = patch.time_start;
-      if (patch.time_end)   j.time_end   = patch.time_end;
-    }
+    // Update local cache immediately
+    j.status  = newStatus;
+    j.extras  = mergedExtras;
+    if (patch.time_start) j.time_start = patch.time_start;
+    if (patch.time_end)   j.time_end   = patch.time_end;
+    console.log("[OJO] ✅ Status + log saved (" + existingLog.length + " entries)");
 
-    // Re-fetch this job from Supabase so extras.status_log is always current
+    // Re-fetch to confirm Supabase state (db client returns array, not single)
     try {
-      const fresh = await db.from("jobs").select("*").eq("id", jobId).single();
-      if (fresh.data) {
+      const { data: freshArr } = await db.from("jobs").select("*").eq("id", jobId);
+      if (Array.isArray(freshArr) && freshArr[0]) {
         const idx = allJobs.findIndex(x => String(x.id) === String(jobId));
-        if (idx !== -1) allJobs[idx] = fresh.data;
+        if (idx !== -1) allJobs[idx] = freshArr[0];
       }
-    } catch(e3) { /* non-fatal — in-memory cache is already updated */ }
+    } catch(e3) { /* non-fatal */ }
 
     updateStats();
     renderJobs(allJobs);
