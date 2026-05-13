@@ -3158,6 +3158,15 @@ async function updateJobStatus(jobId, newStatus) {
       if (patch.time_end)   j.time_end   = patch.time_end;
     }
 
+    // Re-fetch this job from Supabase so extras.status_log is always current
+    try {
+      const fresh = await db.from("jobs").select("*").eq("id", jobId).single();
+      if (fresh.data) {
+        const idx = allJobs.findIndex(x => String(x.id) === String(jobId));
+        if (idx !== -1) allJobs[idx] = fresh.data;
+      }
+    } catch(e3) { /* non-fatal — in-memory cache is already updated */ }
+
     updateStats();
     renderJobs(allJobs);
   } catch(e) {
@@ -3581,12 +3590,21 @@ async function showWaybill(jobId) {
     ? vehicles.find(v => String(v.assigned_member_id) === String(driverMember.id))
     : null;
   const driverPhone = driverMember && driverMember.phone ? driverMember.phone : "---";
+  // Pull check-in fields from extras (saved by driver via share link)
+  const extrasObj = (typeof j.extras === "string")
+    ? (() => { try { return JSON.parse(j.extras); } catch(e) { return {}; } })()
+    : (j.extras && typeof j.extras === "object" ? j.extras : {});
+
   const vMake  = driverVehicle && driverVehicle.make  ? driverVehicle.make  : "";
   const vModel = driverVehicle && driverVehicle.model ? driverVehicle.model : "";
   const vYear  = driverVehicle && driverVehicle.year  ? driverVehicle.year  : "";
-  const vColor = driverVehicle && driverVehicle.color ? driverVehicle.color : "";
-  const vPlate = driverVehicle && driverVehicle.plate ? driverVehicle.plate : "---";
-  const vDesc  = [vYear, vColor, vMake, vModel].filter(Boolean).join(" ") || (j.vehicle_type || "---");
+  const vColor = driverVehicle && driverVehicle.color ? driverVehicle.color : (extrasObj.driver_color || "");
+  const vPlate = driverVehicle && driverVehicle.plate ? driverVehicle.plate
+                 : (extrasObj.driver_plate || "---");
+  // vDesc: prefer team vehicle record, fall back to check-in vehicle, then job vehicle_type
+  const vDesc  = [vYear, vColor, vMake, vModel].filter(Boolean).join(" ")
+                 || extrasObj.driver_vehicle
+                 || (j.vehicle_type || "---");
 
   const dash = "---";
   const dateObj = j.date ? new Date(j.date + "T00:00") : null;
