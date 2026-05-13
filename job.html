@@ -197,6 +197,58 @@
     white-space: nowrap;
   }
   .toast.show { opacity: 1; }
+
+  /* ── Driver Check-in Modal ── */
+  .checkin-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.8);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 200; padding: 0;
+  }
+  .checkin-sheet {
+    background: #111; border: 1px solid #222;
+    border-radius: 18px 18px 0 0; width: 100%; max-width: 480px;
+    padding: 24px 20px 32px; animation: slideUp .25s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .checkin-title {
+    font-size: 15px; font-weight: 800; color: var(--gold);
+    margin-bottom: 4px; letter-spacing: .04em;
+  }
+  .checkin-sub {
+    font-size: 11px; color: var(--muted); margin-bottom: 18px;
+  }
+  .checkin-field { margin-bottom: 14px; }
+  .checkin-label {
+    font-size: 9px; font-weight: 700; letter-spacing: .14em;
+    color: var(--muted); text-transform: uppercase; margin-bottom: 5px;
+  }
+  .checkin-input {
+    width: 100%; background: #0a0a0a; border: 1px solid #333;
+    border-radius: 10px; padding: 11px 13px; font-size: 14px;
+    font-weight: 700; color: var(--text); outline: none;
+    transition: border-color .15s;
+  }
+  .checkin-input:focus { border-color: var(--gold); }
+  .checkin-input::placeholder { color: #444; font-weight: 400; }
+  .checkin-confirm {
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    background: var(--gold); color: #000; font-size: 15px;
+    font-weight: 800; cursor: pointer; margin-top: 6px;
+    transition: opacity .15s;
+  }
+  .checkin-confirm:active { opacity: .8; }
+  .checkin-note {
+    background: #0a130a; border: 1px solid #1a3a1a;
+    border-radius: 10px; padding: 11px 14px; margin-bottom: 16px;
+  }
+  .checkin-note-label {
+    font-size: 9px; font-weight: 700; letter-spacing: .14em;
+    color: #4a7a4a; margin-bottom: 5px;
+  }
+  .checkin-note-text { font-size: 12px; color: #b8d4b8; line-height: 1.6; }
+
+  /* ── Contact buttons (tap-only, no number shown) ── */
+  .contact-btn.text { background: #0a1a2a; color: var(--blue); border: 1px solid #1a2a4a; }
 </style>
 </head>
 <body>
@@ -211,6 +263,35 @@
 
 <div id="app"></div>
 <div class="toast" id="toast"></div>
+
+<!-- Driver Check-in Sheet -->
+<div id="checkinOverlay" class="checkin-overlay" style="display:none;">
+  <div class="checkin-sheet">
+    <div class="checkin-title">🚗 Driver Check-In</div>
+    <div class="checkin-sub">Please confirm your details before accepting this job.</div>
+    <div id="checkinAdminNote" style="display:none;" class="checkin-note">
+      <div class="checkin-note-label">📋 Dispatcher Note</div>
+      <div class="checkin-note-text" id="checkinNoteText"></div>
+    </div>
+    <div class="checkin-field">
+      <div class="checkin-label">Your Full Name</div>
+      <input class="checkin-input" id="ci_name" type="text" placeholder="e.g. John Smith" autocomplete="off">
+    </div>
+    <div class="checkin-field">
+      <div class="checkin-label">Vehicle Type</div>
+      <input class="checkin-input" id="ci_vehicle" type="text" placeholder="e.g. Black Cadillac Escalade" autocomplete="off">
+    </div>
+    <div class="checkin-field">
+      <div class="checkin-label">Vehicle Color</div>
+      <input class="checkin-input" id="ci_color" type="text" placeholder="e.g. Black" autocomplete="off">
+    </div>
+    <div class="checkin-field">
+      <div class="checkin-label">License Plate</div>
+      <input class="checkin-input" id="ci_plate" type="text" placeholder="e.g. 7ABC123" autocomplete="off" style="text-transform:uppercase;">
+    </div>
+    <button class="checkin-confirm" onclick="confirmCheckin()">✅ Confirm & Accept Job</button>
+  </div>
+</div>
 
 <script>
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
@@ -393,16 +474,17 @@ function render(job) {
     ? job.stops.map(s => `<div class="route-stop"><div class="route-stop-label">STOP</div><div class="route-stop-addr">📍 ${escapeHtml(s.address||"")}</div></div>`).join("")
     : "";
 
-  // Status buttons
+  // Status buttons — label keyed by CURRENT status, not next
   let statusHtml = "";
   if (status === "Completed") {
     statusHtml = `<div class="status-done-badge">✅ Job Completed</div>`;
   } else if (status === "Cancelled") {
     statusHtml = `<div class="status-cancelled-badge">✕ Job Cancelled</div>`;
   } else if (next) {
+    const btnLabel = NEXT_LABEL[status] || ("→ " + next);
     statusHtml = `
       <button class="status-next ${isComplete?"complete":""}" onclick="doStatus('${next}')">
-        ${NEXT_LABEL[next] || ("→ " + next)}
+        ${btnLabel}
       </button>
       <button class="status-cancel" onclick="doStatus('Cancelled')">✕ Cancel Job</button>`;
   }
@@ -461,15 +543,25 @@ function render(job) {
             <div class="dbox-val" style="font-size:12px;">${escapeHtml(job.vehicle_type||"—")}</div>
           </div>
         </div>
+        ${(()=>{
+          const ex = (typeof job.extras === "object" && job.extras) ? job.extras : {};
+          const dv = ex.driver_vehicle||""; const dc = ex.driver_color||""; const dp = ex.driver_plate||"";
+          if (!dv && !dp) return "";
+          return `<div style="margin-top:10px;background:#0a0a0a;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted);">
+            ${dv?`<div><span style="color:#555;font-size:9px;letter-spacing:.1em;font-weight:700;">DRIVER VEHICLE</span><div style="color:var(--text);font-weight:700;margin-top:2px;">${escapeHtml(dc?dc+" ":"")}${escapeHtml(dv)}</div></div>`:""}
+            ${dp?`<div style="margin-top:6px;"><span style="color:#555;font-size:9px;letter-spacing:.1em;font-weight:700;">LICENSE PLATE</span><div style="color:var(--gold);font-weight:800;letter-spacing:.08em;margin-top:2px;">${escapeHtml(dp)}</div></div>`:""}
+          </div>`;
+        })()}
       </div>
 
-      <!-- Client contact -->
+      <!-- Client contact — tap only, number hidden -->
       ${(job.client_phone||job.client_email) ? `
       <div class="section">
         <div class="section-label">Client Contact</div>
         <div class="contact-row">
-          ${job.client_phone ? `<a href="tel:${escapeHtml(job.client_phone)}" class="contact-btn call">📞 ${escapeHtml(job.client_phone)}</a>` : ""}
-          ${job.client_email ? `<a href="mailto:${escapeHtml(job.client_email)}" class="contact-btn email">✉️ ${escapeHtml(job.client_email)}</a>` : ""}
+          ${job.client_phone ? `<a href="tel:${escapeHtml(job.client_phone)}" class="contact-btn call">📞 Call Client</a>` : ""}
+          ${job.client_phone ? `<a href="sms:${escapeHtml(job.client_phone)}" class="contact-btn text">💬 Text Client</a>` : ""}
+          ${job.client_email ? `<a href="mailto:${escapeHtml(job.client_email)}" class="contact-btn email">✉️ Email Client</a>` : ""}
         </div>
       </div>` : ""}
 
@@ -538,20 +630,74 @@ function showToast(msg, ms=2500) {
 }
 
 // ── Status update ─────────────────────────────────────────────────────────────
-async function doStatus(newStatus) {
+// If driver is accepting (Assigned → Accepted or Offer → Accepted), show check-in modal first
+let _pendingStatus = null;
+
+function doStatus(newStatus) {
   if (!currentJob) return;
+  if (newStatus === "Accepted") {
+    _pendingStatus = newStatus;
+    openCheckin();
+    return;
+  }
   const label = newStatus === "Cancelled" ? `Cancel this job?` : `Move to "${newStatus}"?`;
   if (!confirm(label)) return;
+  applyStatus(newStatus, {});
+}
 
-  const patch = { status: newStatus };
+function openCheckin() {
+  const overlay = document.getElementById("checkinOverlay");
+  // Pre-fill if driver already accepted before (driver name on the job)
+  const nameEl = document.getElementById("ci_name");
+  if (currentJob.assigned_driver && currentJob.assigned_driver !== "Unassigned") {
+    nameEl.value = currentJob.assigned_driver;
+  }
+  // Show dispatcher note if waybill_notes present
+  const note = (currentJob.waybill_notes||"").trim();
+  const noteBox = document.getElementById("checkinAdminNote");
+  if (note) {
+    document.getElementById("checkinNoteText").textContent = note;
+    noteBox.style.display = "block";
+  } else {
+    noteBox.style.display = "none";
+  }
+  overlay.style.display = "flex";
+  setTimeout(() => nameEl.focus(), 300);
+}
+
+async function confirmCheckin() {
+  const name    = document.getElementById("ci_name").value.trim();
+  const vehicle = document.getElementById("ci_vehicle").value.trim();
+  const color   = document.getElementById("ci_color").value.trim();
+  const plate   = document.getElementById("ci_plate").value.trim().toUpperCase();
+
+  if (!name)    { alert("Please enter your name."); document.getElementById("ci_name").focus(); return; }
+  if (!vehicle) { alert("Please enter your vehicle type."); document.getElementById("ci_vehicle").focus(); return; }
+  if (!color)   { alert("Please enter your vehicle color."); document.getElementById("ci_color").focus(); return; }
+  if (!plate)   { alert("Please enter your license plate."); document.getElementById("ci_plate").focus(); return; }
+
+  document.getElementById("checkinOverlay").style.display = "none";
+
+  const extras = Object.assign({}, currentJob.extras || {}, {
+    driver_vehicle: vehicle,
+    driver_color:   color,
+    driver_plate:   plate
+  });
+  await applyStatus(_pendingStatus || "Accepted", {
+    assigned_driver: name,
+    extras: extras
+  });
+  _pendingStatus = null;
+}
+
+async function applyStatus(newStatus, extraPatch) {
+  const patch = Object.assign({ status: newStatus }, extraPatch);
   if (newStatus === "In Progress") patch.time_start = new Date().toTimeString().slice(0,5);
   if (newStatus === "Completed")   patch.time_end   = new Date().toTimeString().slice(0,5);
 
   try {
     await patchJob(currentJob.id, patch);
-    currentJob.status = newStatus;
-    if (patch.time_start) currentJob.time_start = patch.time_start;
-    if (patch.time_end)   currentJob.time_end   = patch.time_end;
+    Object.assign(currentJob, patch);
     render(currentJob);
     showToast(newStatus === "Cancelled" ? "Job cancelled" : `Status: ${newStatus} ✓`);
   } catch(e) {
