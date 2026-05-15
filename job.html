@@ -695,9 +695,22 @@ async function applyStatus(newStatus, extraPatch) {
   if (newStatus === "In Progress") patch.time_start = new Date().toTimeString().slice(0,5);
   if (newStatus === "Completed")   patch.time_end   = new Date().toTimeString().slice(0,5);
 
+  // Build status_log entry and merge into extras
+  const prevStatus = currentJob.status || "Offer";
+  const rawExtras = currentJob.extras;
+  const existingExtras = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
+  existingLog.push({ status: newStatus, prev: prevStatus, ts: new Date().toISOString() });
+  // Merge with any extraPatch.extras (e.g. driver check-in fields)
+  const mergedExtras = Object.assign({}, existingExtras, patch.extras || {}, { status_log: existingLog });
+  patch.extras = mergedExtras;
+
   try {
     await patchJob(currentJob.id, patch);
     Object.assign(currentJob, patch);
+    currentJob.extras = mergedExtras;
     render(currentJob);
     showToast(newStatus === "Cancelled" ? "Job cancelled" : `Status: ${newStatus} ✓`);
   } catch(e) {
