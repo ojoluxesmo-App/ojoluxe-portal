@@ -843,7 +843,11 @@ function showWaybill() {
     : '<span style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;border-radius:4px;font-size:10px;font-weight:700;padding:1px 6px;">AUTO</span>';
 
   // Driver vehicle details — prefer check-in extras, fall back to job fields
-  const ex = (typeof j.extras === "string") ? JSON.parse(j.extras||"{}") : (j.extras||{});
+  let ex = {};
+  try {
+    ex = (typeof j.extras === "string") ? JSON.parse(j.extras||"{}") : (j.extras||{});
+    if (typeof ex !== "object" || ex === null) ex = {};
+  } catch(e) { console.warn("extras parse failed in showWaybill:", e, j.extras); ex = {}; }
   const driverVehicleDesc = [ex.driver_color, ex.driver_vehicle].filter(Boolean).join(" ") || j.vehicle_type || "—";
   const driverPlate       = ex.driver_plate || "—";
 
@@ -939,14 +943,49 @@ function showWaybill() {
 
 function closeWaybill() {
   document.getElementById("waybillOverlay").classList.remove("open");
+  // also close GPS menu if open
+  const gm = document.getElementById("gpsMenu");
+  if (gm) gm.style.display = "none";
 }
+
+function toggleGpsMenu() {
+  const menu = document.getElementById("gpsMenu");
+  if (!menu) return;
+  menu.style.display = menu.style.display === "none" ? "block" : "none";
+}
+
+function openGps(provider) {
+  const j = currentJob;
+  if (!j) return;
+  const addr = encodeURIComponent(j.from_loc || "");
+  let url = "";
+  if (provider === "apple")  url = `maps://maps.apple.com/?daddr=${addr}`;
+  if (provider === "google") url = `https://www.google.com/maps/dir/?api=1&destination=${addr}`;
+  if (provider === "waze")   url = `https://waze.com/ul?q=${addr}&navigate=yes`;
+  if (url) window.open(url, "_blank");
+  document.getElementById("gpsMenu").style.display = "none";
+}
+
+// Close GPS menu when tapping outside
+document.addEventListener("click", function(e) {
+  const menu = document.getElementById("gpsMenu");
+  const btn  = document.getElementById("navigateBtn");
+  if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+    menu.style.display = "none";
+  }
+});
 
 function shareWaybillText() {
   const j = currentJob; if (!j) return;
   const ex = (typeof j.extras === "string") ? JSON.parse(j.extras||"{}") : (j.extras||{});
   const pricing = calculateDriverNet(j);
-  const vehicle = [ex.driver_color, ex.driver_vehicle].filter(Boolean).join(" ") || j.vehicle_type || "—";
-  const plate   = ex.driver_plate || "—";
+  let _exShare = {};
+  try {
+    _exShare = (typeof j.extras === "string") ? JSON.parse(j.extras||"{}") : (j.extras||{});
+    if (typeof _exShare !== "object" || _exShare === null) _exShare = {};
+  } catch(e) { _exShare = {}; }
+  const vehicle = [_exShare.driver_color, _exShare.driver_vehicle].filter(Boolean).join(" ") || j.vehicle_type || "—";
+  const plate   = _exShare.driver_plate || "—";
   const text = [
     `🚘 OJO LUXE — JOB WAYBILL`,
     `Ref: ${j.reference_code || j.id}`,

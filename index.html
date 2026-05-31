@@ -2196,15 +2196,15 @@ function exportCompletedJobs() {
   rows.push([""]);
 
   // Row 3-4: Header info block
-  rows.push(["DRIVER / GUIDE", "", "", "START DATE", "", "REGULAR HRS", "", "DAILY RATE"]);
-  rows.push([driverName, "", "", startDate, "", regularHrs, "", dailyRate > 0 ? `$${dailyRate.toFixed(2)}` : "—"]);
+  rows.push(["DRIVER / GUIDE", "", "", "DATE RANGE", "", "REGULAR HRS", "", "BASE FARE / DAY"]);
+  rows.push([driverName, "", "", dateRange, "", regularHrs, "", dailyRate > 0 ? `$${dailyRate.toFixed(2)}` : "—"]);
   rows.push([""]);
   rows.push(["", "", "", "", "", "", "", "OVERTIME RATE"]);
   rows.push(["", "", "", "", "", "", "", otRate > 0 ? `$${otRate.toFixed(2)}/hr` : "—"]);
   rows.push([""]);
 
   // Column headers row
-  rows.push(["DATE", "CLIENT", "TASK", "START TIME", "FINISH TIME", "REGULAR HRS", "OVERTIME", "OTHER HRS", "TOTAL HRS", "BILLABLE"]);
+  rows.push(["DATE", "CLIENT", "TASK/NOTES", "START TIME", "FINISH TIME", "REGULAR HRS", "OVERTIME HRS", "TOTAL HRS", "BILLABLE"]);
 
   const headerRowIndex = rows.length; // 1-based for SheetJS
 
@@ -2236,15 +2236,15 @@ function exportCompletedJobs() {
     totalHrs      += totalHrsRow;
     totalBillable += fare;
 
+    const jobNotes = (j.notes||j.waybill_notes||"").slice(0,40);
     rows.push([
       dateStr,
       j.client||"",
-      j.job_type||"Guide",
+      (j.job_type||"Guide") + (jobNotes ? " — "+jobNotes : ""),
       fmt12(j.time_start),
       fmt12(j.time_end),
       +regHrs.toFixed(2),
       otHrs > 0 ? +otHrs.toFixed(2) : "",
-      "",
       +totalHrsRow.toFixed(2),
       +fare.toFixed(2)
     ]);
@@ -2255,32 +2255,28 @@ function exportCompletedJobs() {
     "TOTAL HOURS", "", "", "---", "---",
     +totalReg.toFixed(2),
     +totalOT.toFixed(2),
-    +totalOther.toFixed(2),
     +totalHrs.toFixed(2),
     +totalBillable.toFixed(2)
   ]);
 
   rows.push([""]);
 
-  // Signature block
+  // Signature block — labels first, then values
   const today = new Date().toLocaleDateString("en-US",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
-  rows.push(["", "", "", "", today, "", "", "", +totalHrs.toFixed(2)]);
-  rows.push(["SUPERVISOR SIGNATURE", "", "", "", "DATE", "", "", "", "TOTAL HOURS"]);
-  rows.push([""]);
-  rows.push(["", "", "", "", "", "", "", "", `$${totalBillable.toFixed(2)}`]);
-  rows.push(["", "", "", "", "", "", "", "", "TOTAL BILLABLE"]);
+  rows.push(["SUPERVISOR SIGNATURE", "", "", "", "DATE", "", "", "TOTAL HOURS", "TOTAL BILLABLE"]);
+  rows.push(["", "", "", "", today, "", "", +totalHrs.toFixed(2), `$${totalBillable.toFixed(2)}`]);
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
   // Styling via cell references
-  const colCount = 10;
+  const colCount = 9;
   const dataStartRow = headerRowIndex + 1; // 1-based
   const totalRow     = dataStartRow + jobs.length;
 
-  // Column widths
+  // Column widths (9 cols: Date, Client, Task/Notes, Start, Finish, Reg Hrs, OT Hrs, Total Hrs, Billable)
   ws["!cols"] = [
-    {wch:16},{wch:20},{wch:14},{wch:12},{wch:12},
-    {wch:12},{wch:10},{wch:10},{wch:10},{wch:12}
+    {wch:16},{wch:22},{wch:28},{wch:12},{wch:12},
+    {wch:12},{wch:10},{wch:10},{wch:13}
   ];
 
   // Apply cell styles using SheetJS cell objects
