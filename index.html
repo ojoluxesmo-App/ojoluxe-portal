@@ -869,20 +869,11 @@ window.addEventListener("unhandledrejection", function(e) {
           <div class="field">
             <label>Payment Type</label>
             <select id="paymentType">
-              <!-- Standard payments always visible -->
               <option>Cash</option>
               <option>Zelle</option>
               <option>Venmo</option>
               <option>Apple Cash</option>
               <option>Credit Card</option>
-              <!-- Agent/Corporate payments — shown only in agent mode -->
-              <option value="Invoice – Net 7" class="agent-only-option" style="display:none;">Invoice – Net 7</option>
-              <option value="Invoice – Net 15" class="agent-only-option" style="display:none;">Invoice – Net 15</option>
-              <option value="Invoice – Net 30" class="agent-only-option" style="display:none;">Invoice – Net 30</option>
-              <option value="Tour Package (Prepaid)" class="agent-only-option" style="display:none;">Tour Package (Prepaid)</option>
-              <option value="Corporate Account (Monthly)" class="agent-only-option" style="display:none;">Corporate Account (Monthly)</option>
-              <option value="Commission Only" class="agent-only-option" style="display:none;">Commission Only</option>
-              <option value="Deposit &amp; Balance" class="agent-only-option" style="display:none;">Deposit &amp; Balance</option>
             </select>
           </div>
           <div class="field">
@@ -2501,7 +2492,7 @@ function renderJobs() {
         <div class="jc-avatar">${icon}</div>
         <div class="jc-main">
           <div class="jc-client">${escapeHtml(j.client||"-")}</div>
-          <div class="jc-meta">${agentBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${escapeHtml(j.assigned_driver||"Unassigned")}</div>
+          <div class="jc-meta">${agentBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${(()=>{const _mx=(typeof j.extras==='string')?JSON.parse(j.extras||'{}'): (j.extras||{});return escapeHtml(j.assigned_driver||_mx.driver_checkin_name||'Unassigned');})()}</div>
         </div>
         <div class="jc-right">
           <div class="jc-price">${money(pricing.grandTotal||pricing.totalPrice)}</div>
@@ -2536,7 +2527,7 @@ function renderJobs() {
           </div>
           <div class="driver-row">
             <span class="driver-lbl">DRIVER</span>
-            <span class="driver-val" style="color:${j.assigned_driver?"var(--green)":"#444"}">${escapeHtml(j.assigned_driver||"Unassigned")}</span>
+            <span class="driver-val" style="color:${(j.assigned_driver||(typeof j.extras==='object'&&j.extras?.driver_checkin_name))?"var(--green)":"#444"}">${(()=>{const _dex=(typeof j.extras==='string')?JSON.parse(j.extras||'{}'): (j.extras||{});return escapeHtml(j.assigned_driver||_dex.driver_checkin_name||'Unassigned');})()}</span>
           </div>
           ${(j.client_phone||j.client_email)?`
           <div class="driver-row" style="margin-bottom:12px;">
@@ -5321,17 +5312,26 @@ function setBookingMode(mode) {
     }
   }
 
-  // Show/hide agent-only payment options
+  // Add/remove agent-only payment options from DOM (display:none ignored on mobile)
   const paySel = getEl("paymentType");
   if (paySel) {
-    const agentPayments = ["Invoice – Net 7","Invoice – Net 15","Invoice – Net 30","Tour Package (Prepaid)","Corporate Account (Monthly)","Commission Only","Deposit & Balance"];
-    Array.from(paySel.options).forEach(opt => {
-      if (opt.classList.contains("agent-only-option")) {
-        opt.style.display = isAgent ? "" : "none";
-        opt.hidden = !isAgent;
-      }
+    const standardPayments = ["Cash","Zelle","Venmo","Apple Cash","Credit Card"];
+    const agentOnlyPayments = ["Invoice – Net 7","Invoice – Net 15","Invoice – Net 30","Tour Package (Prepaid)","Corporate Account (Monthly)","Commission Only","Deposit & Balance"];
+    const currentVal = paySel.value;
+    // Remove all options then rebuild
+    paySel.innerHTML = "";
+    standardPayments.forEach(p => {
+      const o = document.createElement("option"); o.value = p; o.textContent = p; paySel.appendChild(o);
     });
-    if (!isAgent && agentPayments.includes(paySel.value)) {
+    if (isAgent) {
+      agentOnlyPayments.forEach(p => {
+        const o = document.createElement("option"); o.value = p; o.textContent = p; paySel.appendChild(o);
+      });
+    }
+    // Restore previous value if still valid, else default to Cash
+    if ([...paySel.options].some(o => o.value === currentVal)) {
+      paySel.value = currentVal;
+    } else {
       paySel.value = "Cash";
     }
   }

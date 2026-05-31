@@ -988,13 +988,22 @@ function toggleGpsMenu() {
   menu.style.display = menu.style.display === "none" ? "block" : "none";
 }
 
+function _buildGpsUrl(provider, addr) {
+  const enc = encodeURIComponent(addr);
+  // Google Maps: use comgooglemaps:// deep link on mobile, falls back to web
+  if (provider === "google") return "https://www.google.com/maps/search/?api=1&query=" + enc;
+  // Waze: waze:// deep link — if app not installed, falls back to waze.com
+  if (provider === "waze")   return "https://waze.com/ul?q=" + enc + "&navigate=yes";
+  // Apple Maps: maps:// for iOS
+  if (provider === "apple")  return "maps://maps.apple.com/?daddr=" + enc;
+  return "";
+}
+
 function openGps(provider) {
   const j = currentJob; if (!j) return;
-  const addr = encodeURIComponent(j.from_loc || "");
-  let url = "";
-  if (provider === "apple")  url = "maps://maps.apple.com/?daddr=" + addr;
-  if (provider === "google") url = "https://www.google.com/maps/dir/?api=1&destination=" + addr;
-  if (provider === "waze")   url = "https://waze.com/ul?q=" + addr + "&navigate=yes";
+  const addr = (j.from_loc || "").trim();
+  if (!addr || addr === "—") { alert("No pickup address on this job."); return; }
+  const url = _buildGpsUrl(provider, addr);
   if (url) window.open(url, "_blank");
   const m = document.getElementById("gpsMenu"); if (m) m.style.display = "none";
 }
@@ -1007,11 +1016,9 @@ function toggleGpsMenuMain() {
 
 function openGpsMain(provider) {
   const j = currentJob; if (!j) return;
-  const addr = encodeURIComponent(j.from_loc || "");
-  let url = "";
-  if (provider === "apple")  url = "maps://maps.apple.com/?daddr=" + addr;
-  if (provider === "google") url = "https://www.google.com/maps/dir/?api=1&destination=" + addr;
-  if (provider === "waze")   url = "https://waze.com/ul?q=" + addr + "&navigate=yes";
+  const addr = (j.from_loc || "").trim();
+  if (!addr || addr === "—") { alert("No pickup address on this job."); return; }
+  const url = _buildGpsUrl(provider, addr);
   if (url) window.open(url, "_blank");
   const m = document.getElementById("gpsMenuMain"); if (m) m.style.display = "none";
 }
