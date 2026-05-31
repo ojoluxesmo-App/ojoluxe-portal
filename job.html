@@ -573,7 +573,7 @@ function render(job) {
         <div class="driver-box">
           <div class="dbox">
             <div class="dbox-label">DRIVER</div>
-            <div class="dbox-val">${escapeHtml(job.assigned_driver||"Unassigned")}</div>
+            <div class="dbox-val">${(()=>{ const _ex=(typeof job.extras==="string")?JSON.parse(job.extras||"{}"):( job.extras||{}); return escapeHtml(job.assigned_driver || _ex.driver_checkin_name || "Unassigned"); })()}</div>
           </div>
           <div class="dbox">
             <div class="dbox-label">VEHICLE</div>
@@ -622,9 +622,17 @@ function render(job) {
         </div>
       </div>
 
-      <!-- Waybill button -->
-      <div class="section">
-        <button onclick="showWaybill()" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;">📋 View Waybill</button>
+      <!-- Waybill + Navigate buttons -->
+      <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="showWaybill()" style="padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;">View Waybill</button>
+        <div style="position:relative;">
+          <button onclick="toggleGpsMenuMain()" id="navigateBtnMain" style="width:100%;padding:11px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Navigate</button>
+          <div id="gpsMenuMain" style="display:none;position:absolute;bottom:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:9999;">
+            <button onclick="openGpsMain('apple')" style="width:100%;padding:13px 16px;border:none;border-bottom:1px solid #f0f0f0;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Apple Maps</button>
+            <button onclick="openGpsMain('google')" style="width:100%;padding:13px 16px;border:none;border-bottom:1px solid #f0f0f0;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Google Maps</button>
+            <button onclick="openGpsMain('waze')" style="width:100%;padding:13px 16px;border:none;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Waze</button>
+          </div>
+        </div>
       </div>
 
       <!-- Status actions -->
@@ -729,9 +737,15 @@ async function uploadPhotoToSupabase(file, jobId, photoType) {
                  "Content-Type": file.type || "image/jpeg", "x-upsert": "true" },
       body: file
     });
-    if (!res.ok) { console.warn("[OJO] Photo upload failed:", photoType, res.status); return null; }
-    return `${SUPABASE_URL}/storage/v1/object/public/driver-photos/${path}`;
-  } catch(e) { console.warn("[OJO] Photo upload error:", e.message); return null; }
+    if (!res.ok) {
+      const errText = await res.text().catch(()=>"");
+      console.warn("[OJO] Photo upload failed:", photoType, res.status, errText);
+      return null;
+    }
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/driver-photos/${path}`;
+    console.log("[OJO] Photo uploaded OK:", photoType, publicUrl);
+    return publicUrl;
+  } catch(e) { console.warn("[OJO] Photo upload error:", photoType, e.message); return null; }
 }
 
 async function confirmCheckin() {
@@ -746,13 +760,16 @@ async function confirmCheckin() {
   if (!plate)   { alert("Please enter your license plate."); document.getElementById("ci_plate").focus(); return; }
 
   const btn = document.querySelector(".checkin-confirm");
-  btn.textContent = "⏳ Saving..."; btn.disabled = true;
-  document.getElementById("checkinOverlay").style.display = "none";
+  btn.textContent = "⏳ Uploading photos..."; btn.disabled = true;
+  // Keep overlay open while uploading so file inputs stay accessible
 
   const jobId = currentJob.id;
   const photoVehicle  = document.getElementById("photo_vehicle_front")?.files[0];
   const photoInterior = document.getElementById("photo_car_interior")?.files[0];
   const photoSelfie   = document.getElementById("photo_selfie")?.files[0];
+
+  const hasPhotos = photoVehicle || photoInterior || photoSelfie;
+  if (hasPhotos) btn.textContent = "⏳ Uploading " + [photoVehicle,photoInterior,photoSelfie].filter(Boolean).length + " photo(s)...";
 
   const [urlVehicle, urlInterior, urlSelfie] = await Promise.all([
     uploadPhotoToSupabase(photoVehicle,  jobId, "vehicle_front"),
@@ -760,12 +777,20 @@ async function confirmCheckin() {
     uploadPhotoToSupabase(photoSelfie,   jobId, "selfie")
   ]);
 
+  console.log("[OJO] Photo URLs:", { urlVehicle, urlInterior, urlSelfie });
+  if (hasPhotos && !urlVehicle && !urlInterior && !urlSelfie) {
+    console.warn("[OJO] All photo uploads failed — check storage bucket policy");
+  }
+
+  // Now close overlay and reset button
+  document.getElementById("checkinOverlay").style.display = "none";
   btn.textContent = "✅ Confirm & Accept Job"; btn.disabled = false;
 
   const extras = Object.assign({}, currentJob.extras || {}, {
     driver_vehicle:      vehicle,
     driver_color:        color,
     driver_plate:        plate,
+    driver_checkin_name: name,
     photo_vehicle_front: urlVehicle  || null,
     photo_car_interior:  urlInterior || null,
     photo_selfie:        urlSelfie   || null
@@ -900,7 +925,7 @@ function showWaybill() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
         <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;">
           <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:3px;">DRIVER</div>
-          <div style="font-size:13px;font-weight:800;color:#111;">${escapeHtml(j.assigned_driver||"—")}</div>
+          <div style="font-size:13px;font-weight:800;color:#111;">${(()=>{ const _wex=(typeof j.extras==="string")?JSON.parse(j.extras||"{}"):( j.extras||{}); return escapeHtml(j.assigned_driver || _wex.driver_checkin_name || "—"); })()}</div>
           <div style="font-size:11px;color:#555;margin-top:3px;">${escapeHtml(driverVehicleDesc)}</div>
           ${driverPlate !== "—" ? `<div style="font-size:11px;color:#888;font-weight:700;margin-top:2px;letter-spacing:.06em;">🪪 ${escapeHtml(driverPlate)}</div>` : ""}
         </div>
@@ -930,11 +955,20 @@ function showWaybill() {
         <div style="font-size:9px;color:#ccc;">147 W Route 66 Suite 757, Glendora CA 91740</div>
         <div style="font-size:9px;color:#ccc;">(310) 406-6692 · info@ojoluxe.com · ojoluxe.com · TCP49661-P</div>
       </div>
+      <!-- Navigate button -->
+      <div style="position:relative;margin-top:14px;">
+        <button onclick="toggleGpsMenu()" id="navigateBtn" style="width:100%;padding:11px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Navigate to Pickup</button>
+        <div id="gpsMenu" style="display:none;position:absolute;bottom:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:9999;">
+          <button onclick="openGps('apple')" style="width:100%;padding:13px 16px;border:none;border-bottom:1px solid #f0f0f0;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Apple Maps</button>
+          <button onclick="openGps('google')" style="width:100%;padding:13px 16px;border:none;border-bottom:1px solid #f0f0f0;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Google Maps</button>
+          <button onclick="openGps('waze')" style="width:100%;padding:13px 16px;border:none;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Waze</button>
+        </div>
+      </div>
       <!-- Close -->
-      <button onclick="closeWaybill()" style="width:100%;margin-top:14px;padding:11px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#555;font-size:13px;font-weight:700;cursor:pointer;">Close</button>
+      <button onclick="closeWaybill()" style="width:100%;margin-top:8px;padding:11px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#555;font-size:13px;font-weight:700;cursor:pointer;">Close</button>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
-        <button onclick="shareWaybillText()" style="padding:11px;border:1px solid #0c0b09;border-radius:10px;background:#0c0b09;color:#c9a84c;font-size:13px;font-weight:700;cursor:pointer;">📤 Share Text</button>
-        <button onclick="shareWaybillImage()" style="padding:11px;border:1px solid #c9a84c;border-radius:10px;background:#c9a84c;color:#000;font-size:13px;font-weight:700;cursor:pointer;">📸 Share Image</button>
+        <button onclick="shareWaybillText()" style="padding:11px;border:1px solid #0c0b09;border-radius:10px;background:#0c0b09;color:#c9a84c;font-size:13px;font-weight:700;cursor:pointer;">Share Text</button>
+        <button onclick="shareWaybillImage()" style="padding:11px;border:1px solid #c9a84c;border-radius:10px;background:#c9a84c;color:#000;font-size:13px;font-weight:700;cursor:pointer;">Share Image</button>
       </div>
     </div>
   </div>`;
@@ -955,24 +989,42 @@ function toggleGpsMenu() {
 }
 
 function openGps(provider) {
-  const j = currentJob;
-  if (!j) return;
+  const j = currentJob; if (!j) return;
   const addr = encodeURIComponent(j.from_loc || "");
   let url = "";
-  if (provider === "apple")  url = `maps://maps.apple.com/?daddr=${addr}`;
-  if (provider === "google") url = `https://www.google.com/maps/dir/?api=1&destination=${addr}`;
-  if (provider === "waze")   url = `https://waze.com/ul?q=${addr}&navigate=yes`;
+  if (provider === "apple")  url = "maps://maps.apple.com/?daddr=" + addr;
+  if (provider === "google") url = "https://www.google.com/maps/dir/?api=1&destination=" + addr;
+  if (provider === "waze")   url = "https://waze.com/ul?q=" + addr + "&navigate=yes";
   if (url) window.open(url, "_blank");
-  document.getElementById("gpsMenu").style.display = "none";
+  const m = document.getElementById("gpsMenu"); if (m) m.style.display = "none";
 }
 
-// Close GPS menu when tapping outside
+function toggleGpsMenuMain() {
+  const menu = document.getElementById("gpsMenuMain");
+  if (!menu) return;
+  menu.style.display = menu.style.display === "none" ? "block" : "none";
+}
+
+function openGpsMain(provider) {
+  const j = currentJob; if (!j) return;
+  const addr = encodeURIComponent(j.from_loc || "");
+  let url = "";
+  if (provider === "apple")  url = "maps://maps.apple.com/?daddr=" + addr;
+  if (provider === "google") url = "https://www.google.com/maps/dir/?api=1&destination=" + addr;
+  if (provider === "waze")   url = "https://waze.com/ul?q=" + addr + "&navigate=yes";
+  if (url) window.open(url, "_blank");
+  const m = document.getElementById("gpsMenuMain"); if (m) m.style.display = "none";
+}
+
+// Close all GPS menus when tapping outside
 document.addEventListener("click", function(e) {
-  const menu = document.getElementById("gpsMenu");
-  const btn  = document.getElementById("navigateBtn");
-  if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
-    menu.style.display = "none";
-  }
+  ["gpsMenu","gpsMenuMain"].forEach(id => {
+    const menu = document.getElementById(id);
+    const btn  = document.getElementById(id === "gpsMenu" ? "navigateBtn" : "navigateBtnMain");
+    if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
+      menu.style.display = "none";
+    }
+  });
 });
 
 function shareWaybillText() {
