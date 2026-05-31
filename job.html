@@ -622,15 +622,18 @@ function render(job) {
         </div>
       </div>
 
-      <!-- Waybill + Navigate buttons -->
+      <!-- Waybill + Smart Navigate buttons -->
       <div class="section" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <button onclick="showWaybill()" style="padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;">View Waybill</button>
         <div style="position:relative;">
-          <button onclick="toggleGpsMenuMain()" id="navigateBtnMain" style="width:100%;padding:11px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Navigate</button>
+          <button onclick="toggleGpsMenuMain()" id="navigateBtnMain" style="width:100%;padding:11px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">
+            Navigate ${getNavLabel(job)}
+          </button>
           <div id="gpsMenuMain" style="display:none;position:absolute;bottom:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:9999;">
-            <button onclick="openGpsMain('apple')" style="width:100%;padding:13px 16px;border:none;border-bottom:1px solid #f0f0f0;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Apple Maps</button>
-            <button onclick="openGpsMain('google')" style="width:100%;padding:13px 16px;border:none;border-bottom:1px solid #f0f0f0;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Google Maps</button>
-            <button onclick="openGpsMain('waze')" style="width:100%;padding:13px 16px;border:none;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Waze</button>
+            <div style="padding:8px 14px 4px;font-size:10px;font-weight:700;color:#999;letter-spacing:.08em;">${getNavDestLabel(job).toUpperCase()}</div>
+            <button onclick="openGpsMain('apple')" style="width:100%;padding:11px 16px;border:none;border-bottom:1px solid #f0f0f0;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Apple Maps</button>
+            <button onclick="openGpsMain('google')" style="width:100%;padding:11px 16px;border:none;border-bottom:1px solid #f0f0f0;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Google Maps</button>
+            <button onclick="openGpsMain('waze')" style="width:100%;padding:11px 16px;border:none;background:#fff;text-align:left;font-size:13px;font-weight:600;cursor:pointer;color:#111;">Waze</button>
           </div>
         </div>
       </div>
@@ -990,13 +993,39 @@ function toggleGpsMenu() {
 
 function _buildGpsUrl(provider, addr) {
   const enc = encodeURIComponent(addr);
-  // Google Maps: use comgooglemaps:// deep link on mobile, falls back to web
   if (provider === "google") return "https://www.google.com/maps/search/?api=1&query=" + enc;
-  // Waze: waze:// deep link — if app not installed, falls back to waze.com
   if (provider === "waze")   return "https://waze.com/ul?q=" + enc + "&navigate=yes";
-  // Apple Maps: maps:// for iOS
   if (provider === "apple")  return "maps://maps.apple.com/?daddr=" + enc;
   return "";
+}
+
+// Smart destination based on job status + stops
+function getNavDestination(job) {
+  const status = job.status || "";
+  const stops  = Array.isArray(job.stops) ? job.stops.filter(s => s.address) : [];
+
+  // Before/during heading to pickup → go to pickup
+  if (["Offer","Assigned","Accepted","Heading to Pickup"].includes(status)) {
+    return { addr: job.from_loc || "", label: "to Pickup" };
+  }
+  // Arrived or In Progress → navigate through stops then dropoff
+  if (["Arrived","In Progress"].includes(status)) {
+    // Find first stop not yet visited (no completed flag)
+    const nextStop = stops.find(s => !s.completed);
+    if (nextStop) return { addr: nextStop.address, label: "to Next Stop" };
+    return { addr: job.to_loc || "", label: "to Dropoff" };
+  }
+  // Fallback — always show pickup
+  return { addr: job.from_loc || "", label: "to Pickup" };
+}
+
+function getNavLabel(job) {
+  return getNavDestination(job).label;
+}
+
+function getNavDestLabel(job) {
+  const dest = getNavDestination(job);
+  return dest.addr || "No address set";
 }
 
 function openGps(provider) {
@@ -1016,8 +1045,9 @@ function toggleGpsMenuMain() {
 
 function openGpsMain(provider) {
   const j = currentJob; if (!j) return;
-  const addr = (j.from_loc || "").trim();
-  if (!addr || addr === "—") { alert("No pickup address on this job."); return; }
+  const dest = getNavDestination(j);
+  const addr = dest.addr.trim();
+  if (!addr || addr === "—") { alert("No address set for this stage of the job."); return; }
   const url = _buildGpsUrl(provider, addr);
   if (url) window.open(url, "_blank");
   const m = document.getElementById("gpsMenuMain"); if (m) m.style.display = "none";
