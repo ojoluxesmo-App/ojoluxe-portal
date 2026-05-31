@@ -248,6 +248,19 @@
   .checkin-note-text { font-size: 12px; color: #b8d4b8; line-height: 1.6; }
 
   /* ── Contact buttons (tap-only, no number shown) ── */
+  /* ── Photo upload slots ── */
+  .photo-slots { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px; }
+  .photo-slot { background:#0a0a0a;border:1.5px dashed #333;border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;transition:border-color .15s;position:relative;overflow:hidden; }
+  .photo-slot:hover { border-color:var(--gold); }
+  .photo-slot input[type=file] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
+  .photo-slot-icon { font-size:22px;margin-bottom:4px; }
+  .photo-slot-label { font-size:9px;font-weight:700;letter-spacing:.1em;color:#555;text-transform:uppercase; }
+  .photo-slot-preview { width:100%;height:80px;object-fit:cover;border-radius:6px;display:none; }
+  .photo-slot.has-photo { border-color:#2a4a2a;border-style:solid; }
+  .photo-slot.has-photo .photo-slot-icon { display:none; }
+  .photo-slot.has-photo .photo-slot-label { color:#4a9a4a; }
+  .photo-slot-full { grid-column:1 / -1; }
+
   .contact-btn.text { background: #0a1a2a; color: var(--blue); border: 1px solid #1a2a4a; }
 </style>
 </head>
@@ -289,7 +302,31 @@
       <div class="checkin-label">License Plate</div>
       <input class="checkin-input" id="ci_plate" type="text" placeholder="e.g. 7ABC123" autocomplete="off" style="text-transform:uppercase;">
     </div>
+    <div class="checkin-field">
+      <div class="checkin-label">📸 Photos (Optional)</div>
+      <div class="photo-slots">
+        <div class="photo-slot" id="slot_vehicle_front">
+          <input type="file" id="photo_vehicle_front" accept="image/*" capture="environment" onchange="previewPhoto(this,'slot_vehicle_front','lbl_vehicle_front')">
+          <div class="photo-slot-icon">🚗</div>
+          <img class="photo-slot-preview" id="prev_vehicle_front">
+          <div class="photo-slot-label" id="lbl_vehicle_front">Vehicle Front<br>+ Plate</div>
+        </div>
+        <div class="photo-slot" id="slot_car_interior">
+          <input type="file" id="photo_car_interior" accept="image/*" capture="environment" onchange="previewPhoto(this,'slot_car_interior','lbl_car_interior')">
+          <div class="photo-slot-icon">🪑</div>
+          <img class="photo-slot-preview" id="prev_car_interior">
+          <div class="photo-slot-label" id="lbl_car_interior">Car Interior<br>Cleanliness</div>
+        </div>
+        <div class="photo-slot photo-slot-full" id="slot_selfie">
+          <input type="file" id="photo_selfie" accept="image/*" capture="user" onchange="previewPhoto(this,'slot_selfie','lbl_selfie')">
+          <div class="photo-slot-icon">🤳</div>
+          <img class="photo-slot-preview" id="prev_selfie">
+          <div class="photo-slot-label" id="lbl_selfie">Driver Selfie (Verification)</div>
+        </div>
+      </div>
+    </div>
     <button class="checkin-confirm" onclick="confirmCheckin()">✅ Confirm & Accept Job</button>
+    <div style="font-size:10px;color:#444;text-align:center;margin-top:8px;">Photos optional but encouraged.</div>
   </div>
 </div>
 
@@ -665,6 +702,38 @@ function openCheckin() {
   setTimeout(() => nameEl.focus(), 300);
 }
 
+// ── Photo uploads ─────────────────────────────────────────────────────────────
+function previewPhoto(input, slotId, lblId) {
+  const file = input.files[0]; if (!file) return;
+  const slot = document.getElementById(slotId);
+  const prev = slot.querySelector(".photo-slot-preview");
+  const lbl  = document.getElementById(lblId);
+  const reader = new FileReader();
+  reader.onload = e => {
+    prev.src = e.target.result;
+    prev.style.display = "block";
+    slot.classList.add("has-photo");
+    lbl.textContent = "✓ Photo added";
+  };
+  reader.readAsDataURL(file);
+}
+
+async function uploadPhotoToSupabase(file, jobId, photoType) {
+  if (!file) return null;
+  try {
+    const ext  = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `checkin/${jobId}/${photoType}_${Date.now()}.${ext}`;
+    const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-photos/${path}`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY,
+                 "Content-Type": file.type || "image/jpeg", "x-upsert": "true" },
+      body: file
+    });
+    if (!res.ok) { console.warn("[OJO] Photo upload failed:", photoType, res.status); return null; }
+    return `${SUPABASE_URL}/storage/v1/object/public/driver-photos/${path}`;
+  } catch(e) { console.warn("[OJO] Photo upload error:", e.message); return null; }
+}
+
 async function confirmCheckin() {
   const name    = document.getElementById("ci_name").value.trim();
   const vehicle = document.getElementById("ci_vehicle").value.trim();
@@ -676,17 +745,32 @@ async function confirmCheckin() {
   if (!color)   { alert("Please enter your vehicle color."); document.getElementById("ci_color").focus(); return; }
   if (!plate)   { alert("Please enter your license plate."); document.getElementById("ci_plate").focus(); return; }
 
+  const btn = document.querySelector(".checkin-confirm");
+  btn.textContent = "⏳ Saving..."; btn.disabled = true;
   document.getElementById("checkinOverlay").style.display = "none";
 
+  const jobId = currentJob.id;
+  const photoVehicle  = document.getElementById("photo_vehicle_front")?.files[0];
+  const photoInterior = document.getElementById("photo_car_interior")?.files[0];
+  const photoSelfie   = document.getElementById("photo_selfie")?.files[0];
+
+  const [urlVehicle, urlInterior, urlSelfie] = await Promise.all([
+    uploadPhotoToSupabase(photoVehicle,  jobId, "vehicle_front"),
+    uploadPhotoToSupabase(photoInterior, jobId, "car_interior"),
+    uploadPhotoToSupabase(photoSelfie,   jobId, "selfie")
+  ]);
+
+  btn.textContent = "✅ Confirm & Accept Job"; btn.disabled = false;
+
   const extras = Object.assign({}, currentJob.extras || {}, {
-    driver_vehicle: vehicle,
-    driver_color:   color,
-    driver_plate:   plate
+    driver_vehicle:      vehicle,
+    driver_color:        color,
+    driver_plate:        plate,
+    photo_vehicle_front: urlVehicle  || null,
+    photo_car_interior:  urlInterior || null,
+    photo_selfie:        urlSelfie   || null
   });
-  await applyStatus(_pendingStatus || "Accepted", {
-    assigned_driver: name,
-    extras: extras
-  });
+  await applyStatus(_pendingStatus || "Accepted", { assigned_driver: name, extras });
   _pendingStatus = null;
 }
 
@@ -844,6 +928,10 @@ function showWaybill() {
       </div>
       <!-- Close -->
       <button onclick="closeWaybill()" style="width:100%;margin-top:14px;padding:11px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#555;font-size:13px;font-weight:700;cursor:pointer;">Close</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <button onclick="shareWaybillText()" style="padding:11px;border:1px solid #0c0b09;border-radius:10px;background:#0c0b09;color:#c9a84c;font-size:13px;font-weight:700;cursor:pointer;">📤 Share Text</button>
+        <button onclick="shareWaybillImage()" style="padding:11px;border:1px solid #c9a84c;border-radius:10px;background:#c9a84c;color:#000;font-size:13px;font-weight:700;cursor:pointer;">📸 Share Image</button>
+      </div>
     </div>
   </div>`;
   document.getElementById("waybillOverlay").classList.add("open");
@@ -851,6 +939,76 @@ function showWaybill() {
 
 function closeWaybill() {
   document.getElementById("waybillOverlay").classList.remove("open");
+}
+
+function shareWaybillText() {
+  const j = currentJob; if (!j) return;
+  const ex = (typeof j.extras === "string") ? JSON.parse(j.extras||"{}") : (j.extras||{});
+  const pricing = calculateDriverNet(j);
+  const vehicle = [ex.driver_color, ex.driver_vehicle].filter(Boolean).join(" ") || j.vehicle_type || "—";
+  const plate   = ex.driver_plate || "—";
+  const text = [
+    `🚘 OJO LUXE — JOB WAYBILL`,
+    `Ref: ${j.reference_code || j.id}`,
+    ``,
+    `CLIENT: ${j.client || "—"}`,
+    `DATE: ${j.date || "—"} ${j.pickup_time || ""}`,
+    `SERVICE: ${j.job_type || "—"}`,
+    ``,
+    `PICKUP: ${j.from_loc || "—"}`,
+    j.to_loc ? `DROP-OFF: ${j.to_loc}` : "",
+    ``,
+    `DRIVER: ${j.assigned_driver || "—"}`,
+    `VEHICLE: ${vehicle}`,
+    plate !== "—" ? `PLATE: ${plate}` : "",
+    ``,
+    `FARE: ${pricing ? ("$" + pricing.totalFare.toFixed(2)) : ("$" + (j.total_price || "0"))}`,
+    `PAYMENT: ${j.payment_type || "—"}`,
+    `STATUS: ${j.status || "—"}`,
+    ``,
+    `OJO Luxe LLC | TCP: PSG0049661`,
+    `ojoluxe.com`
+  ].filter(l => l !== null && l !== undefined).join("\n");
+
+  if (navigator.share) {
+    navigator.share({ title: "OJO Luxe Waybill", text }).catch(()=>{});
+  } else {
+    navigator.clipboard.writeText(text).then(() => alert("✅ Waybill text copied!")).catch(() => prompt("Copy:", text));
+  }
+}
+
+async function shareWaybillImage() {
+  const content = document.getElementById("waybillContent");
+  if (!content) return;
+  const btn = event.currentTarget;
+  btn.disabled = true; btn.textContent = "⏳ Capturing...";
+  try {
+    if (!window.html2canvas) {
+      await new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const canvas = await html2canvas(content, { scale: 2, useCORS: true, backgroundColor: "#fff" });
+    canvas.toBlob(async blob => {
+      if (!blob) { alert("Could not capture image."); return; }
+      const file = new File([blob], "ojoluxe-waybill.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "OJO Luxe Waybill" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "ojoluxe-waybill.png"; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+      }
+    }, "image/png");
+  } catch(e) {
+    alert("Image capture failed: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "📸 Share Image";
+  }
 }
 </script>
 </body>
