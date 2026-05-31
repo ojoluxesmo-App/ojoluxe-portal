@@ -1662,9 +1662,18 @@ window.addEventListener("unhandledrejection", function(e) {
       <div style="font-size:16px;font-weight:800;color:var(--gold);margin-bottom:12px;">Dispatch Driver</div>
       <div class="field">
         <label>Assign Driver</label>
-        <input id="dispatchDriverInput" list="driverSuggestions2" placeholder="Type driver name">
+        <input id="dispatchDriverInput" list="driverSuggestions2" placeholder="Type driver name" oninput="autoFillDriverPhone()">
         <datalist id="driverSuggestions2"></datalist>
       </div>
+      <div class="field" style="margin-top:10px;">
+        <label>Driver Phone (for notification)</label>
+        <input id="dispatchDriverPhone" type="tel" placeholder="e.g. 6265551234" style="letter-spacing:.04em;">
+      </div>
+      <div id="dispatchNotifyRow" style="display:flex;gap:8px;margin-top:10px;">
+        <button type="button" onclick="sendDispatchWhatsApp()" style="flex:1;padding:9px;background:#1a2a1a;border:1px solid #2a4a2a;border-radius:8px;color:#4a9a4a;font-size:12px;font-weight:700;cursor:pointer;">📱 WhatsApp</button>
+        <button type="button" onclick="sendDispatchSMS()" style="flex:1;padding:9px;background:#1a1a2a;border:1px solid #2a2a4a;border-radius:8px;color:#4a7ad4;font-size:12px;font-weight:700;cursor:pointer;">💬 SMS</button>
+      </div>
+      <div style="font-size:10px;color:#555;margin-top:6px;">Tap WhatsApp or SMS after confirming to notify the driver.</div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-sec" onclick="closeDispatch()">Cancel</button>
@@ -2878,12 +2887,12 @@ async function saveJob() {
   // ── Status auto-rule ──────────────────────────────────────────────────────
   // If a driver is assigned and status is still Offer → auto-bump to Assigned
   // If driver is cleared → revert to Offer
-  // STATUS FLOW (for driver app reference):
-  // Offer → Assigned → Accepted → Heading to Pickup → Arrived → In Progress → Completed / Cancelled
+  // STATUS FLOW (for driver app reference):\n  // Offer → Assigned → Accepted → Heading to Pickup → Arrived → In Progress → Completed / Cancelled
   let autoStatus = getValue("status");
   const assignedDriver = getValue("assignedDriver");
+  const activeStatuses = ["Assigned","Accepted","Heading to Pickup","Arrived","In Progress"];
   if (assignedDriver && autoStatus === "Offer") autoStatus = "Assigned";
-  if (!assignedDriver && autoStatus === "Assigned") autoStatus = "Offer";
+  if (!assignedDriver && activeStatuses.includes(autoStatus)) autoStatus = "Offer";
 
   // ── Booking mode + agent fields ───────────────────────────────────────────
   const bookingMode = (typeof currentBookingMode !== "undefined") ? currentBookingMode : "standard";
@@ -3527,11 +3536,66 @@ function dispatchJob(id){
   getEl("dispatchModal").style.display="flex";
 }
 function closeDispatch(){getEl("dispatchModal").style.display="none";_dispatchJobId=null;}
+
+function autoFillDriverPhone() {
+  const name = getValue("dispatchDriverInput").trim().toLowerCase();
+  if (!name) return;
+  const allMembers = getStoredMembers();
+  const match = allMembers.find(m => (m.full_name||"").toLowerCase().includes(name));
+  if (match && match.phone) {
+    getEl("dispatchDriverPhone").value = match.phone.replace(/\D/g,"");
+  }
+}
+
+function buildDispatchMessage() {
+  const j = allJobs.find(x => String(x.id) === String(_dispatchJobId));
+  if (!j) return "";
+  const driver = getValue("dispatchDriverInput");
+  const token  = j.share_token || "";
+  const url    = token ? (window.location.origin + "/job.html?token=" + token) : "(generate share link first)";
+  return `Hi ${driver}! OJO Luxe has dispatched a job to you.\n\nRef: ${j.reference_code||""}\nClient: ${j.client||""}\nDate: ${j.date||""} ${j.pickup_time||""}\nPickup: ${j.from_loc||""}\n\nYour job card:\n${url}\n\nPlease open the link to accept and check in. – OJO Luxe Dispatch`;
+}
+
+function sendDispatchWhatsApp() {
+  const phone = getValue("dispatchDriverPhone").replace(/\D/g,"");
+  const msg   = buildDispatchMessage();
+  if (!phone) { alert("Please enter the driver's phone number first."); return; }
+  const waUrl = "https://wa.me/" + (phone.startsWith("1")?phone:"1"+phone) + "?text=" + encodeURIComponent(msg);
+  window.open(waUrl, "_blank");
+}
+
+function sendDispatchSMS() {
+  const phone = getValue("dispatchDriverPhone").replace(/\D/g,"");
+  const msg   = buildDispatchMessage();
+  if (!phone) { alert("Please enter the driver's phone number first."); return; }
+  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.open("sms:+" + (phone.startsWith("1")?phone:"1"+phone) + "&body=" + encodeURIComponent(msg), "_blank");
+  } else {
+    navigator.clipboard.writeText(msg).then(() => {
+      alert("✅ Message copied!\n\nPaste it into your SMS app to send to the driver.");
+    }).catch(() => {
+      prompt("Copy this message:", msg);
+    });
+  }
+}
+
 async function confirmDispatch(){
   const driver=getValue("dispatchDriverInput");
   if(!driver||!_dispatchJobId) return;
   const{error}=await db.from("jobs").update({assigned_driver:driver,status:"Assigned"}).eq("id",_dispatchJobId);
   if(error){alert("Dispatch failed: "+error.message);return;}
+  // Generate share token if not already set, so notification link works
+  const j = allJobs.find(x => String(x.id) === String(_dispatchJobId));
+  if (j && !j.share_token) {
+    const token = generateShareToken();
+    await fetch(SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(_dispatchJobId), {
+      method:"PATCH",
+      headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Prefer":"return=minimal"},
+      body: JSON.stringify({ share_token: token })
+    });
+    if (j) j.share_token = token;
+  }
   closeDispatch();await loadJobs();renderJobs();
 }
 
@@ -3820,14 +3884,71 @@ async function shareJobLink(jobId) {
   if (navigator.share) {
     try { await navigator.share({ title: "OJO Luxe Job", text: msg }); return; } catch(e) {}
   }
-  // Fallback: copy to clipboard
-  try {
-    await navigator.clipboard.writeText(msg);
-    alert("✅ Job link copied to clipboard!\n\nPaste and send to driver via SMS.");
-  } catch(e) {
-    // Last resort: prompt
-    prompt("Copy this link to send to your driver:", url);
+  // Desktop: show share options modal
+  showShareOptions(url, msg);
+}
+
+function showShareOptions(url, msg) {
+  const existing = document.getElementById("shareOptionsModal");
+  if (existing) existing.remove();
+  const encodedMsg = encodeURIComponent(msg);
+  const phone = ""; // blank — user fills in
+  const modal = document.createElement("div");
+  modal.id = "shareOptionsModal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999;";
+  modal.innerHTML = `
+    <div style="background:#111;border:1px solid #222;border-radius:14px;padding:22px 20px;width:320px;max-width:92vw;">
+      <div style="font-size:14px;font-weight:800;color:#C9A84C;margin-bottom:4px;">📤 Share Job Link</div>
+      <div style="font-size:11px;color:#555;margin-bottom:14px;">Send the job card link to the driver</div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.14em;color:#555;margin-bottom:5px;">DRIVER PHONE (optional)</div>
+        <input id="sharePhoneInput" type="tel" placeholder="e.g. 6265551234" style="width:100%;background:#0a0a0a;border:1px solid #333;border-radius:8px;padding:9px 12px;font-size:13px;color:#F0E8D5;outline:none;">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button onclick="openShareWhatsApp('${encodeURIComponent(msg)}')" style="flex:1;padding:10px;background:#1a2a1a;border:1px solid #2a4a2a;border-radius:8px;color:#4a9a4a;font-size:13px;font-weight:700;cursor:pointer;">📱 WhatsApp</button>
+        <button onclick="openShareSMS('${encodeURIComponent(msg)}')" style="flex:1;padding:10px;background:#1a1a2a;border:1px solid #2a2a4a;border-radius:8px;color:#4a7ad4;font-size:13px;font-weight:700;cursor:pointer;">💬 Copy for SMS</button>
+      </div>
+      <button onclick="copyShareLink('${encodeURIComponent(url)}')" style="width:100%;padding:9px;background:#1a1508;border:1px solid #C9A84C44;border-radius:8px;color:#C9A84C;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:10px;">📋 Copy Link</button>
+      <button onclick="document.getElementById('shareOptionsModal').remove()" style="width:100%;padding:9px;background:#0a0a0a;border:1px solid #222;border-radius:8px;color:#555;font-size:12px;font-weight:700;cursor:pointer;">Close</button>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+}
+
+function openShareWhatsApp(encodedMsg) {
+  const phone = (document.getElementById("sharePhoneInput")||{}).value||"";
+  const clean = phone.replace(/\D/g,"");
+  const num   = clean ? (clean.startsWith("1")?clean:"1"+clean) : "";
+  const waUrl = num ? `https://wa.me/${num}?text=${encodedMsg}` : `https://wa.me/?text=${encodedMsg}`;
+  window.open(waUrl, "_blank");
+}
+
+function openShareSMS(encodedMsg) {
+  const msg   = decodeURIComponent(encodedMsg);
+  const phone = (document.getElementById("sharePhoneInput")||{}).value||"";
+  const clean = phone.replace(/\D/g,"");
+  const num   = clean ? "+" + (clean.startsWith("1")?clean:"1"+clean) : "";
+  // Try sms: scheme (works on mobile/Mac), fall back to clipboard copy on Windows
+  const smsUrl = `sms:${num}&body=${encodedMsg}`;
+  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.open(smsUrl, "_blank");
+  } else {
+    navigator.clipboard.writeText(msg).then(() => {
+      alert("✅ Message copied!\n\nPaste it into your SMS app to send to the driver.");
+    }).catch(() => {
+      prompt("Copy this message and send via SMS:", msg);
+    });
   }
+}
+
+function copyShareLink(encodedUrl) {
+  const url = decodeURIComponent(encodedUrl);
+  navigator.clipboard.writeText(url).then(() => {
+    alert("✅ Link copied to clipboard!");
+  }).catch(() => {
+    prompt("Copy this link:", url);
+  });
 }
 
 function addExpenseRow() {
@@ -5311,13 +5432,23 @@ function renderTeamAlerts() {
   members.forEach(m => {
     const name = m.full_name || "Member";
 
-    // Birthday alert
+    // Birthday alert — parse as local date to avoid UTC timezone offset bug
     if (m.dob) {
-      const bday = new Date(m.dob);
-      const thisYear = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
-      const diff = Math.ceil((thisYear - today) / 86400000);
-      if (diff === 0)       alerts.push({ type:"info",    text: "🎂 Today is " + name + "'s birthday!" });
-      else if (diff > 0 && diff <= 7) alerts.push({ type:"info", text: "🎂 " + name + "'s birthday in " + diff + " day" + (diff===1?"":"s") });
+      const parts = m.dob.split("-");
+      const bdayMonth = parseInt(parts[1], 10) - 1; // 0-indexed
+      const bdayDay   = parseInt(parts[2], 10);
+      const now = new Date();
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Birthday this year
+      let thisYearBday = new Date(now.getFullYear(), bdayMonth, bdayDay);
+      let diff = Math.round((thisYearBday - todayMidnight) / 86400000);
+      // If already passed this year, check next year
+      if (diff < 0) {
+        thisYearBday = new Date(now.getFullYear() + 1, bdayMonth, bdayDay);
+        diff = Math.round((thisYearBday - todayMidnight) / 86400000);
+      }
+      if (diff === 0)        alerts.push({ type:"info", text: "🎂 Today is " + name + "'s birthday! 🎉" });
+      else if (diff <= 7)    alerts.push({ type:"info", text: "🎂 " + name + "'s birthday in " + diff + " day" + (diff===1?"":"s") });
     }
 
     // DL expiry
