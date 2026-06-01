@@ -869,11 +869,20 @@ window.addEventListener("unhandledrejection", function(e) {
           <div class="field">
             <label>Payment Type</label>
             <select id="paymentType">
+              <!-- Standard payments always visible -->
               <option>Cash</option>
               <option>Zelle</option>
               <option>Venmo</option>
               <option>Apple Cash</option>
               <option>Credit Card</option>
+              <!-- Agent/Corporate payments — shown only in agent mode -->
+              <option value="Invoice – Net 7" class="agent-only-option" style="display:none;">Invoice – Net 7</option>
+              <option value="Invoice – Net 15" class="agent-only-option" style="display:none;">Invoice – Net 15</option>
+              <option value="Invoice – Net 30" class="agent-only-option" style="display:none;">Invoice – Net 30</option>
+              <option value="Tour Package (Prepaid)" class="agent-only-option" style="display:none;">Tour Package (Prepaid)</option>
+              <option value="Corporate Account (Monthly)" class="agent-only-option" style="display:none;">Corporate Account (Monthly)</option>
+              <option value="Commission Only" class="agent-only-option" style="display:none;">Commission Only</option>
+              <option value="Deposit &amp; Balance" class="agent-only-option" style="display:none;">Deposit &amp; Balance</option>
             </select>
           </div>
           <div class="field">
@@ -1264,6 +1273,42 @@ window.addEventListener("unhandledrejection", function(e) {
               <input type="hidden" id="teamWpFileUrl">
             </div>
           </div>
+          <div class="form-section">PAYOUT / PAYMENT METHOD</div>
+          <div class="field-row">
+            <div class="field"><label>Preferred Payout</label>
+              <select id="teamPayoutMethod">
+                <option value="">— Select —</option>
+                <option value="Zelle">Zelle</option>
+                <option value="Venmo">Venmo</option>
+                <option value="Cash App">Cash App</option>
+                <option value="Bank Transfer (ACH)">Bank Transfer (ACH)</option>
+                <option value="Check">Check</option>
+              </select>
+            </div>
+            <div class="field"><label>Zelle / Venmo / Cash App Handle</label>
+              <input id="teamPayoutHandle" placeholder="Phone or @username">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Bank Name</label>
+              <input id="teamBankName" placeholder="e.g. Chase, Bank of America">
+            </div>
+            <div class="field"><label>Account Type</label>
+              <select id="teamBankAccountType">
+                <option value="">— Select —</option>
+                <option value="Checking">Checking</option>
+                <option value="Savings">Savings</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Routing Number</label>
+              <input id="teamRoutingNumber" placeholder="9-digit routing number">
+            </div>
+            <div class="field"><label>Account Number (last 4)</label>
+              <input id="teamAccountLast4" placeholder="Last 4 digits only" maxlength="4">
+            </div>
+          </div>
           <div class="field"><label>Notes</label><textarea id="teamNotes" placeholder="Internal notes..."></textarea></div>
           <input id="editingTeamMemberId" type="hidden">
           <div class="action-row">
@@ -1347,6 +1392,24 @@ window.addEventListener("unhandledrejection", function(e) {
               </div>
               <input type="file" id="vBackFile" accept="image/*" style="display:none" onchange="handleFileUpload(this,'vBack','vBackPreview','vBackPlaceholder','vehicleBackPhoto')">
               <input type="hidden" id="vehicleBackPhoto">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Left Side Photo</label>
+              <div class="upload-box" onclick="document.getElementById('vLeftFile').click()">
+                <img id="vLeftPreview" src="" style="display:none;width:100%;height:60px;object-fit:cover;border-radius:6px;">
+                <div id="vLeftPlaceholder" style="font-size:12px;color:var(--muted);">🚗 Left Side</div>
+              </div>
+              <input type="file" id="vLeftFile" accept="image/*" style="display:none" onchange="handleFileUpload(this,'vLeft','vLeftPreview','vLeftPlaceholder','vehicleLeftPhoto')">
+              <input type="hidden" id="vehicleLeftPhoto">
+            </div>
+            <div class="field"><label>Right Side Photo</label>
+              <div class="upload-box" onclick="document.getElementById('vRightFile').click()">
+                <img id="vRightPreview" src="" style="display:none;width:100%;height:60px;object-fit:cover;border-radius:6px;">
+                <div id="vRightPlaceholder" style="font-size:12px;color:var(--muted);">🚗 Right Side</div>
+              </div>
+              <input type="file" id="vRightFile" accept="image/*" style="display:none" onchange="handleFileUpload(this,'vRight','vRightPreview','vRightPlaceholder','vehicleRightPhoto')">
+              <input type="hidden" id="vehicleRightPhoto">
             </div>
           </div>
           <div class="field"><label>Notes</label><textarea id="vehicleNotes" placeholder="Internal notes..."></textarea></div>
@@ -2187,15 +2250,15 @@ function exportCompletedJobs() {
   rows.push([""]);
 
   // Row 3-4: Header info block
-  rows.push(["DRIVER / GUIDE", "", "", "DATE RANGE", "", "REGULAR HRS", "", "BASE FARE / DAY"]);
-  rows.push([driverName, "", "", dateRange, "", regularHrs, "", dailyRate > 0 ? `$${dailyRate.toFixed(2)}` : "—"]);
+  rows.push(["DRIVER / GUIDE", "", "", "START DATE", "", "REGULAR HRS", "", "DAILY RATE"]);
+  rows.push([driverName, "", "", startDate, "", regularHrs, "", dailyRate > 0 ? `$${dailyRate.toFixed(2)}` : "—"]);
   rows.push([""]);
   rows.push(["", "", "", "", "", "", "", "OVERTIME RATE"]);
   rows.push(["", "", "", "", "", "", "", otRate > 0 ? `$${otRate.toFixed(2)}/hr` : "—"]);
   rows.push([""]);
 
   // Column headers row
-  rows.push(["DATE", "CLIENT", "TASK/NOTES", "START TIME", "FINISH TIME", "REGULAR HRS", "OVERTIME HRS", "TOTAL HRS", "BILLABLE"]);
+  rows.push(["DATE", "CLIENT", "TASK", "START TIME", "FINISH TIME", "REGULAR HRS", "OVERTIME", "OTHER HRS", "TOTAL HRS", "BILLABLE"]);
 
   const headerRowIndex = rows.length; // 1-based for SheetJS
 
@@ -2227,15 +2290,15 @@ function exportCompletedJobs() {
     totalHrs      += totalHrsRow;
     totalBillable += fare;
 
-    const jobNotes = (j.notes||j.waybill_notes||"").slice(0,40);
     rows.push([
       dateStr,
       j.client||"",
-      (j.job_type||"Guide") + (jobNotes ? " — "+jobNotes : ""),
+      j.job_type||"Guide",
       fmt12(j.time_start),
       fmt12(j.time_end),
       +regHrs.toFixed(2),
       otHrs > 0 ? +otHrs.toFixed(2) : "",
+      "",
       +totalHrsRow.toFixed(2),
       +fare.toFixed(2)
     ]);
@@ -2246,28 +2309,32 @@ function exportCompletedJobs() {
     "TOTAL HOURS", "", "", "---", "---",
     +totalReg.toFixed(2),
     +totalOT.toFixed(2),
+    +totalOther.toFixed(2),
     +totalHrs.toFixed(2),
     +totalBillable.toFixed(2)
   ]);
 
   rows.push([""]);
 
-  // Signature block — labels first, then values
+  // Signature block
   const today = new Date().toLocaleDateString("en-US",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
-  rows.push(["SUPERVISOR SIGNATURE", "", "", "", "DATE", "", "", "TOTAL HOURS", "TOTAL BILLABLE"]);
-  rows.push(["", "", "", "", today, "", "", +totalHrs.toFixed(2), `$${totalBillable.toFixed(2)}`]);
+  rows.push(["", "", "", "", today, "", "", "", +totalHrs.toFixed(2)]);
+  rows.push(["SUPERVISOR SIGNATURE", "", "", "", "DATE", "", "", "", "TOTAL HOURS"]);
+  rows.push([""]);
+  rows.push(["", "", "", "", "", "", "", "", `$${totalBillable.toFixed(2)}`]);
+  rows.push(["", "", "", "", "", "", "", "", "TOTAL BILLABLE"]);
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
   // Styling via cell references
-  const colCount = 9;
+  const colCount = 10;
   const dataStartRow = headerRowIndex + 1; // 1-based
   const totalRow     = dataStartRow + jobs.length;
 
-  // Column widths (9 cols: Date, Client, Task/Notes, Start, Finish, Reg Hrs, OT Hrs, Total Hrs, Billable)
+  // Column widths
   ws["!cols"] = [
-    {wch:16},{wch:22},{wch:28},{wch:12},{wch:12},
-    {wch:12},{wch:10},{wch:10},{wch:13}
+    {wch:16},{wch:20},{wch:14},{wch:12},{wch:12},
+    {wch:12},{wch:10},{wch:10},{wch:10},{wch:12}
   ];
 
   // Apply cell styles using SheetJS cell objects
@@ -2492,7 +2559,7 @@ function renderJobs() {
         <div class="jc-avatar">${icon}</div>
         <div class="jc-main">
           <div class="jc-client">${escapeHtml(j.client||"-")}</div>
-          <div class="jc-meta">${agentBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${(()=>{const _mx=(typeof j.extras==='string')?JSON.parse(j.extras||'{}'): (j.extras||{});return escapeHtml(j.assigned_driver||_mx.driver_checkin_name||'Unassigned');})()}</div>
+          <div class="jc-meta">${agentBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${escapeHtml(j.assigned_driver||"Unassigned")}</div>
         </div>
         <div class="jc-right">
           <div class="jc-price">${money(pricing.grandTotal||pricing.totalPrice)}</div>
@@ -2527,7 +2594,7 @@ function renderJobs() {
           </div>
           <div class="driver-row">
             <span class="driver-lbl">DRIVER</span>
-            <span class="driver-val" style="color:${(j.assigned_driver||(typeof j.extras==='object'&&j.extras?.driver_checkin_name))?"var(--green)":"#444"}">${(()=>{const _dex=(typeof j.extras==='string')?JSON.parse(j.extras||'{}'): (j.extras||{});return escapeHtml(j.assigned_driver||_dex.driver_checkin_name||'Unassigned');})()}</span>
+            <span class="driver-val" style="color:${j.assigned_driver?"var(--green)":"#444"}">${escapeHtml(j.assigned_driver||"Unassigned")}</span>
           </div>
           ${(j.client_phone||j.client_email)?`
           <div class="driver-row" style="margin-bottom:12px;">
@@ -5312,26 +5379,17 @@ function setBookingMode(mode) {
     }
   }
 
-  // Add/remove agent-only payment options from DOM (display:none ignored on mobile)
+  // Show/hide agent-only payment options
   const paySel = getEl("paymentType");
   if (paySel) {
-    const standardPayments = ["Cash","Zelle","Venmo","Apple Cash","Credit Card"];
-    const agentOnlyPayments = ["Invoice – Net 7","Invoice – Net 15","Invoice – Net 30","Tour Package (Prepaid)","Corporate Account (Monthly)","Commission Only","Deposit & Balance"];
-    const currentVal = paySel.value;
-    // Remove all options then rebuild
-    paySel.innerHTML = "";
-    standardPayments.forEach(p => {
-      const o = document.createElement("option"); o.value = p; o.textContent = p; paySel.appendChild(o);
+    const agentPayments = ["Invoice – Net 7","Invoice – Net 15","Invoice – Net 30","Tour Package (Prepaid)","Corporate Account (Monthly)","Commission Only","Deposit & Balance"];
+    Array.from(paySel.options).forEach(opt => {
+      if (opt.classList.contains("agent-only-option")) {
+        opt.style.display = isAgent ? "" : "none";
+        opt.hidden = !isAgent;
+      }
     });
-    if (isAgent) {
-      agentOnlyPayments.forEach(p => {
-        const o = document.createElement("option"); o.value = p; o.textContent = p; paySel.appendChild(o);
-      });
-    }
-    // Restore previous value if still valid, else default to Cash
-    if ([...paySel.options].some(o => o.value === currentVal)) {
-      paySel.value = currentVal;
-    } else {
+    if (!isAgent && agentPayments.includes(paySel.value)) {
       paySel.value = "Cash";
     }
   }
@@ -5770,7 +5828,13 @@ function getMemberFormData() {
     professional_photo_url:      getValue("teamProfessionalPhoto"),
     dl_file_url:                 getValue("teamDlFileUrl"),
     wp_file_url:                 getValue("teamWpFileUrl"),
-    notes:                       getValue("teamNotes")
+    notes:                       getValue("teamNotes"),
+    payout_method:               getValue("teamPayoutMethod"),
+    payout_handle:               getValue("teamPayoutHandle"),
+    bank_name:                   getValue("teamBankName"),
+    bank_account_type:           getValue("teamBankAccountType"),
+    routing_number:              getValue("teamRoutingNumber"),
+    account_last4:               getValue("teamAccountLast4")
   };
 }
 
@@ -5791,9 +5855,11 @@ function getVehicleFormData() {
     registration_photo_url:  getValue("vehicleRegistrationPhoto"),
     insurance_photo_url:     getValue("vehicleInsurancePhoto"),
     vehicle_front_photo_url: getValue("vehicleFrontPhoto"),
-    vehicle_back_photo_url:  getValue("vehicleBackPhoto"),
-    plate_photo_url:         getValue("vehiclePlatePhoto"),
-    notes:                   getValue("vehicleNotes")
+    vehicle_back_photo_url:   getValue("vehicleBackPhoto"),
+    vehicle_left_photo_url:   getValue("vehicleLeftPhoto"),
+    vehicle_right_photo_url:  getValue("vehicleRightPhoto"),
+    plate_photo_url:          getValue("vehiclePlatePhoto"),
+    notes:                    getValue("vehicleNotes")
   };
 }
 
@@ -5802,7 +5868,8 @@ function clearMemberForm() {
   ["teamFullName","teamRole","teamPhone","teamEmail","teamDob","teamEmergencyContact",
    "teamAddress","teamSSNLast4","teamDlNumber","teamWorkPermitId","teamDriverLicenseExpiry",
    "teamWorkPermitExpiry","teamIdPhoto","teamProfessionalPhoto","teamDlFileUrl",
-   "teamWpFileUrl","teamNotes","editingTeamMemberId"].forEach(id => setValue(id,""));
+   "teamWpFileUrl","teamNotes","teamPayoutMethod","teamPayoutHandle","teamBankName",
+   "teamBankAccountType","teamRoutingNumber","teamAccountLast4","editingTeamMemberId"].forEach(id => setValue(id,""));
   setValue("teamRole","driver");
   const ipEl = getEl("teamIsPartner"); if(ipEl) ipEl.checked = false;
   // Reset date picker dropdowns
@@ -5826,10 +5893,10 @@ function clearVehicleForm() {
   ["vehicleAssignedMemberId","vehicleCode","teamVehicleType","vehicleMake","vehicleModel",
    "vehicleYear","vehicleColor","vehiclePlate","vehicleSeats","vehicleNotes",
    "vehicleRegistrationExpiry","vehicleInsuranceExpiry","vehicleRegistrationPhoto",
-   "vehicleInsurancePhoto","vehicleFrontPhoto","vehicleBackPhoto","vehiclePlatePhoto",
+   "vehicleInsurancePhoto","vehicleFrontPhoto","vehicleBackPhoto","vehicleLeftPhoto","vehicleRightPhoto","vehiclePlatePhoto",
    "editingVehicleId"].forEach(id => setValue(id,""));
   setValue("teamVehicleType","Mini Van");
-  ["vFrontPreview","vBackPreview"].forEach(id => { const el=getEl(id); if(el){el.style.display="none";el.src="";} });
+  ["vFrontPreview","vBackPreview","vLeftPreview","vRightPreview"].forEach(id => { const el=getEl(id); if(el){el.style.display="none";el.src="";} });
   ["vRegPlaceholder","vInsPlaceholder","vFrontPlaceholder","vBackPlaceholder","vPlatePlaceholder"].forEach(id => {
     const el=getEl(id);
     if(el) el.style.display="";
@@ -5922,7 +5989,14 @@ function editMember(id) {
     teamIdPhoto: item.id_photo_url,
     teamProfessionalPhoto: item.professional_photo_url,
     teamDlFileUrl: item.dl_file_url,
-    teamWpFileUrl: item.wp_file_url,    teamNotes: item.notes
+    teamWpFileUrl:          item.wp_file_url,
+    teamNotes:              item.notes,
+    teamPayoutMethod:       item.payout_method      || "",
+    teamPayoutHandle:       item.payout_handle      || "",
+    teamBankName:           item.bank_name          || "",
+    teamBankAccountType:    item.bank_account_type  || "",
+    teamRoutingNumber:      item.routing_number     || "",
+    teamAccountLast4:       item.account_last4      || ""
   }).forEach(([k,v]) => setValue(k, v));
 
   // Restore is_partner checkbox
@@ -5961,7 +6035,9 @@ function editVehicle(id) {
     vehicleRegistrationPhoto: item.registration_photo_url,
     vehicleInsurancePhoto: item.insurance_photo_url,
     vehicleFrontPhoto: item.vehicle_front_photo_url,
-    vehicleBackPhoto: item.vehicle_back_photo_url,
+    vehicleBackPhoto:  item.vehicle_back_photo_url,
+    vehicleLeftPhoto:  item.vehicle_left_photo_url,
+    vehicleRightPhoto: item.vehicle_right_photo_url,
     vehiclePlatePhoto: item.plate_photo_url,
     vehicleNotes: item.notes
   }).forEach(([k,v]) => setValue(k, v));
@@ -6065,6 +6141,13 @@ function renderMembers() {
         ${m.wp_file_url  ? `<a href="${escapeHtml(m.wp_file_url)}" target="_blank" style="font-size:11px;color:var(--gold);padding:3px 9px;border:1px solid #333;border-radius:999px;text-decoration:none;">📋 Permit</a>` : ""}
       </div>` : "";
 
+    const payoutHtml = m.payout_method ? `
+      <div style="margin-top:8px;padding:7px 10px;background:#0a0f0a;border:1px solid #1a2a1a;border-radius:7px;">
+        <div style="font-size:9px;font-weight:700;color:#444;letter-spacing:.12em;margin-bottom:4px;">PAYOUT</div>
+        <div style="font-size:12px;color:#87e18b;">💳 ${escapeHtml(m.payout_method)}${m.payout_handle ? " · " + escapeHtml(m.payout_handle) : ""}</div>
+        ${m.bank_name ? `<div style="font-size:11px;color:#555;margin-top:2px;">🏦 ${escapeHtml(m.bank_name)}${m.bank_account_type ? " · " + escapeHtml(m.bank_account_type) : ""}${m.account_last4 ? " ····" + escapeHtml(m.account_last4) : ""}</div>` : ""}
+      </div>` : "";
+
     const safeId = escapeHtml(m.id);
     return `
       <div style="margin-bottom:6px;">
@@ -6092,6 +6175,7 @@ function renderMembers() {
               ${m.address ? `<div style="font-size:11px;color:#555;grid-column:1/-1;">📍 ${escapeHtml(m.address)}</div>` : ""}
             </div>
             ${docsHtml}
+            ${payoutHtml}
             ${vehiclesHtml}
             ${m.notes ? `<div style="margin-top:8px;font-size:11px;color:#555;padding:6px 8px;background:#0a0a0a;border-radius:7px;border:1px solid #1a1a1a;">${escapeHtml(m.notes)}</div>` : ""}
             <div style="display:flex;gap:6px;margin-top:10px;">
