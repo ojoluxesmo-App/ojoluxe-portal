@@ -815,8 +815,19 @@ window.addEventListener("unhandledrejection", function(e) {
           <label>From (Pickup)</label>
           <div class="ac-wrap">
             <input id="pickup_from" placeholder="e.g. LAX Terminal 4" autocomplete="off"
-              oninput="formAcInput(this,'pickup_from')" onblur="formAcBlur('pickup_from')" onfocus="formAcFocus('pickup_from')">
+              oninput="formAcInput(this,'pickup_from');checkAirportFields()" onblur="formAcBlur('pickup_from')" onfocus="formAcFocus('pickup_from')">
             <div class="ac-list" id="ac-pickup_from"></div>
+          </div>
+        </div>
+        <!-- Airport terminal/airline detail — pickup -->
+        <div class="field-row" id="pickup-airport-detail" style="display:none;">
+          <div class="field">
+            <label>Terminal / Gate</label>
+            <input id="pickup_terminal" placeholder="e.g. Terminal 4, Tom Bradley" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Airline / Flight #</label>
+            <input id="pickup_airline" placeholder="e.g. Singapore Air SQ38">
           </div>
         </div>
 
@@ -824,8 +835,19 @@ window.addEventListener("unhandledrejection", function(e) {
           <label>To (Dropoff)</label>
           <div class="ac-wrap">
             <input id="to" placeholder="e.g. Beverly Hills Hotel" autocomplete="off"
-              oninput="formAcInput(this,'to')" onblur="formAcBlur('to')" onfocus="formAcFocus('to')">
+              oninput="formAcInput(this,'to');checkAirportFields()" onblur="formAcBlur('to')" onfocus="formAcFocus('to')">
             <div class="ac-list" id="ac-to"></div>
+          </div>
+        </div>
+        <!-- Airport terminal/airline detail — dropoff -->
+        <div class="field-row" id="dropoff-airport-detail" style="display:none;">
+          <div class="field">
+            <label>Terminal / Gate</label>
+            <input id="dropoff_terminal" placeholder="e.g. Terminal B, Gate 22" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Airline / Flight #</label>
+            <input id="dropoff_airline" placeholder="e.g. United UA123">
           </div>
         </div>
 
@@ -859,6 +881,7 @@ window.addEventListener("unhandledrejection", function(e) {
               <option>Mini Van</option>
               <option>Premium Sedan</option>
               <option selected>Premium SUV</option>
+              <option>Cadillac Escalade</option>
               <option>Sprinter</option>
               <option>Special Request</option>
             </select>
@@ -3178,6 +3201,22 @@ async function saveJob() {
     agent_num_days: bookingMode==="agent" ? (num(getValue("agentNumDays"))||null) : null,
     agent_deposit_amt: bookingMode==="agent" ? (num(getValue("agentDepositAmt"))||null) : null
   };
+  // Merge airport terminal/airline into extras JSONB
+  const pickupTerminal  = getValue("pickup_terminal")||"";
+  const pickupAirline   = getValue("pickup_airline")||"";
+  const dropoffTerminal = getValue("dropoff_terminal")||"";
+  const dropoffAirline  = getValue("dropoff_airline")||"";
+  if (pickupTerminal || pickupAirline || dropoffTerminal || dropoffAirline) {
+    const existingExtras = editingId
+      ? (() => { const j2 = allJobs.find(x=>String(x.id)===String(editingId)); const e = j2?.extras; return (typeof e === "string") ? (() => { try { return JSON.parse(e); } catch(er) { return {}; } })() : (e&&typeof e==="object" ? e : {}); })()
+      : {};
+    payload.extras = Object.assign({}, existingExtras, {
+      pickup_terminal: pickupTerminal||null,
+      pickup_airline:  pickupAirline||null,
+      dropoff_terminal: dropoffTerminal||null,
+      dropoff_airline:  dropoffAirline||null
+    });
+  }
   console.log("[S7] payload=",JSON.stringify(payload).slice(0,200));
   console.log("[OJO] Saving job payload:", JSON.stringify(payload).slice(0,300));
   let error;
@@ -3713,10 +3752,27 @@ function clearDriverNotes() {
   setValue("driverNotes","");
 }
 
+// ── Airport terminal/airline field visibility ─────────────────────────────────
+const AIRPORT_KEYWORDS = ["airport","terminal","lax","lga","jfk","ewr","ord","sfo","sea","bur","ont","sna","lgb","smf","las","mco","iah","dfw","atl","bos","mia","phx","den","pdx"];
+function _isAirportAddress(val) {
+  if (!val) return false;
+  const lc = val.toLowerCase();
+  return AIRPORT_KEYWORDS.some(k => lc.includes(k));
+}
+function checkAirportFields() {
+  const pickup  = getValue("pickup_from") || "";
+  const dropoff = getValue("to") || "";
+  const pu = getEl("pickup-airport-detail");
+  const du = getEl("dropoff-airport-detail");
+  if (pu) pu.style.display = _isAirportAddress(pickup)  ? "grid" : "none";
+  if (du) du.style.display = _isAirportAddress(dropoff) ? "grid" : "none";
+}
+
 function clearForm(){
   ["name","pickup_from","to","driverNotes","internalNotes","assignedDriver","postedBy","miles","hours","manualPrice",
    "clientPhone","clientEmail",
-   "agentName","agentRefNum","agentInvoiceDue","agentNumDays","agentDepositAmt","tourTotalAmount"
+   "agentName","agentRefNum","agentInvoiceDue","agentNumDays","agentDepositAmt","tourTotalAmount",
+   "pickup_terminal","pickup_airline","dropoff_terminal","dropoff_airline"
   ].forEach(id=>setValue(id,""));
   clearDriverNotes();
   // Reset OT rule to defaults
@@ -3728,6 +3784,7 @@ function clearForm(){
   if(typeof clearStops==="function")clearStops();
   setBookingMode("standard");
   togglePricingMode();
+  checkAirportFields();
 }
 
 function fillFormById(id) {
@@ -3751,6 +3808,13 @@ function fillFormById(id) {
   };
   Object.entries(map).forEach(([k,v])=>setValue(k,v));
   parseDriverNotes(j.waybill_notes||"");
+  // Restore airport detail fields if present
+  const ex2 = (typeof j.extras === "string") ? (() => { try { return JSON.parse(j.extras); } catch(e) { return {}; } })() : (j.extras||{});
+  setValue("pickup_terminal",  ex2.pickup_terminal||"");
+  setValue("pickup_airline",   ex2.pickup_airline||"");
+  setValue("dropoff_terminal", ex2.dropoff_terminal||"");
+  setValue("dropoff_airline",  ex2.dropoff_airline||"");
+  checkAirportFields();
   // Restore booking mode
   setBookingMode(j.booking_mode==="agent" ? "agent" : "standard");
   if(typeof clearStops==="function") clearStops();
@@ -4008,13 +4072,19 @@ async function showWaybill(jobId) {
     `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">` +
       `<div style="width:20px;height:20px;border-radius:50%;background:#c9a84c;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;flex-shrink:0;margin-top:1px;">P</div>` +
       `<div><div style="font-size:8px;font-weight:700;color:#bbb;letter-spacing:.14em;margin-bottom:1px;">PICK-UP</div>` +
-      `<div style="font-size:11px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.from_loc||dash)}</div></div>` +
+      `<div style="font-size:11px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.from_loc||dash)}</div>` +
+      (extrasObj.pickup_terminal ? `<div style="font-size:10px;color:#555;margin-top:2px;">🛫 ${escapeHtml(extrasObj.pickup_terminal)}</div>` : "") +
+      (extrasObj.pickup_airline  ? `<div style="font-size:10px;color:#555;">✈ ${escapeHtml(extrasObj.pickup_airline)}</div>` : "") +
+      `</div>` +
     `</div>` +
     stopsHTML +
     `<div style="display:flex;gap:10px;align-items:flex-start;">` +
       `<div style="width:20px;height:20px;border-radius:50%;background:#111;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0;margin-top:1px;">D</div>` +
       `<div><div style="font-size:8px;font-weight:700;color:#bbb;letter-spacing:.14em;margin-bottom:1px;">DROP-OFF</div>` +
-      `<div style="font-size:11px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.to_loc||dash)}</div></div>` +
+      `<div style="font-size:11px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.to_loc||dash)}</div>` +
+      (extrasObj.dropoff_terminal ? `<div style="font-size:10px;color:#555;margin-top:2px;">🛫 ${escapeHtml(extrasObj.dropoff_terminal)}</div>` : "") +
+      (extrasObj.dropoff_airline  ? `<div style="font-size:10px;color:#555;">✈ ${escapeHtml(extrasObj.dropoff_airline)}</div>` : "") +
+      `</div>` +
     `</div>` +
   `</div>` +
   `<div style="border-top:1px solid #f2f2f2;"></div>` +
@@ -5198,25 +5268,27 @@ const PRICING_CONFIG = {
   pointToPoint: {
     baseMiles: 10, // base rate covers first 10 miles
     vehicles: {
-      "Mini Van":      { base: 80,  perMile: 3.50 },
-      "Premium Sedan": { base: 100, perMile: 4.00 },
-      "Black Sedan":   { base: 100, perMile: 4.00 }, // alias
-      "Premium SUV":   { base: 125, perMile: 5.00 },
-      "SUV":           { base: 125, perMile: 5.00 }, // alias
-      "Sprinter":      { base: 500, perMile: 8.00 }
+      "Mini Van":      { base: 80,  perMile: 3.00 },
+      "Premium Sedan": { base: 125, perMile: 3.50 },
+      "Black Sedan":   { base: 125, perMile: 3.50 }, // alias
+      "Premium SUV":   { base: 125, perMile: 3.50 },
+      "SUV":           { base: 125, perMile: 3.50 }, // alias
+      "Cadillac Escalade": { base: 150, perMile: 4.00 },
+      "Sprinter":      { base: 500, perMile: 6.00 }
     }
   },
   hourly: {
     minHours: 2,
-    overtimeMultiplier: 1.5,
-    // bracket determines $/hr; full bracket always billed; OT at 1.5x beyond bracket
+    overtimeRate: 75,
+    // bracket determines $/hr; full bracket always billed; OT at flat $75/hr beyond bracket
     vehicles: {
       "Mini Van":      { h2: 75,  h4: 65,  h10: 55  },
-      "Premium Sedan": { h2: 100, h4: 90,  h10: 65  },
-      "Black Sedan":   { h2: 100, h4: 90,  h10: 65  }, // alias
-      "Premium SUV":   { h2: 125, h4: 100, h10: 80  },
-      "SUV":           { h2: 125, h4: 100, h10: 80  }, // alias
-      "Sprinter":      { h2: 250, h4: 200, h10: 150 }
+      "Premium Sedan": { h2: 125, h4: 100, h10: 85  },
+      "Black Sedan":   { h2: 125, h4: 100, h10: 85  }, // alias
+      "Premium SUV":   { h2: 125, h4: 100, h10: 85  },
+      "SUV":           { h2: 125, h4: 100, h10: 85  }, // alias
+      "Cadillac Escalade": { h2: 150, h4: 125, h10: 100 },
+      "Sprinter":      { h2: 180, h4: 150, h10: 120 }
     }
   }
 };
@@ -5266,7 +5338,7 @@ function calculatePointToPoint(job) {
   };
 }
 
-// ── Hourly: bracket sets rate, full bracket always billed, OT at 1.5x beyond bracket ──
+// ── Hourly: bracket sets rate, full bracket always billed, OT at flat $75/hr beyond bracket ──
 function calculateHourly(job) {
   const vehicleType = job.vehicle_type || "Premium SUV";
   const config      = getHourlyVehicleConfig(vehicleType);
@@ -5280,7 +5352,7 @@ function calculateHourly(job) {
 
   const bracketCost  = bracket * ratePerHr;
   const overtimeHrs  = Math.max(0, actual - bracket);
-  const otRate       = ratePerHr * PRICING_CONFIG.hourly.overtimeMultiplier;
+  const otRate       = PRICING_CONFIG.hourly.overtimeRate || 75; // flat $75/hr OT
   const otCost       = overtimeHrs * otRate;
   const total        = bracketCost + otCost;
 

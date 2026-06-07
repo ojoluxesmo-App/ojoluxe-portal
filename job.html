@@ -262,6 +262,37 @@
   .photo-slot-full { grid-column:1 / -1; }
 
   .contact-btn.text { background: #0a1a2a; color: var(--blue); border: 1px solid #1a2a4a; }
+
+  /* ── Camera capture overlays ── */
+  .photo-capture-wrap {
+    position: relative; width: 100%; overflow: hidden; border-radius: 10px;
+    background: #000; display: flex; align-items: center; justify-content: center;
+    min-height: 120px;
+  }
+  .photo-capture-wrap video {
+    width: 100%; border-radius: 10px; display: block;
+  }
+  /* Oval guide for selfie */
+  .guide-oval {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 72%; padding-bottom: 90%;
+    border: 2.5px solid rgba(201,168,76,.85);
+    border-radius: 50%; pointer-events: none; z-index: 5;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
+  }
+  /* Rectangle guide for documents */
+  .guide-rect {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 88%; height: 62%;
+    border: 2.5px solid rgba(201,168,76,.85);
+    border-radius: 6px; pointer-events: none; z-index: 5;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
+  }
+  .guide-label {
+    position: absolute; bottom: 10px; left: 0; right: 0;
+    text-align: center; font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,.8); letter-spacing: .08em; pointer-events: none; z-index: 6;
+  }
 </style>
 </head>
 <body>
@@ -305,21 +336,27 @@
     <div class="checkin-field">
       <div class="checkin-label">📸 Photos (Optional)</div>
       <div class="photo-slots">
-        <div class="photo-slot" id="slot_vehicle_front">
+        <div class="photo-slot" id="slot_vehicle_front" onclick="showPhotoGuide('slot_vehicle_front')">
           <input type="file" id="photo_vehicle_front" accept="image/*" capture="environment" onchange="previewPhoto(this,'slot_vehicle_front','lbl_vehicle_front')">
           <div class="photo-slot-icon">🚗</div>
+          <div class="guide-rect" id="guide_vehicle_front" style="display:none;"></div>
+          <div class="guide-label" id="guidetxt_vehicle_front" style="display:none;">Center vehicle + plate inside frame</div>
           <img class="photo-slot-preview" id="prev_vehicle_front">
           <div class="photo-slot-label" id="lbl_vehicle_front">Vehicle Front<br>+ Plate</div>
         </div>
-        <div class="photo-slot" id="slot_car_interior">
+        <div class="photo-slot" id="slot_car_interior" onclick="showPhotoGuide('slot_car_interior')">
           <input type="file" id="photo_car_interior" accept="image/*" capture="environment" onchange="previewPhoto(this,'slot_car_interior','lbl_car_interior')">
           <div class="photo-slot-icon">🪑</div>
+          <div class="guide-rect" id="guide_car_interior" style="display:none;"></div>
+          <div class="guide-label" id="guidetxt_car_interior" style="display:none;">Frame the interior clearly</div>
           <img class="photo-slot-preview" id="prev_car_interior">
           <div class="photo-slot-label" id="lbl_car_interior">Car Interior<br>Cleanliness</div>
         </div>
-        <div class="photo-slot photo-slot-full" id="slot_selfie">
+        <div class="photo-slot photo-slot-full" id="slot_selfie" onclick="showPhotoGuide('slot_selfie')">
           <input type="file" id="photo_selfie" accept="image/*" capture="user" onchange="previewPhoto(this,'slot_selfie','lbl_selfie')">
           <div class="photo-slot-icon">🤳</div>
+          <div class="guide-oval" id="guide_selfie" style="display:none;"></div>
+          <div class="guide-label" id="guidetxt_selfie" style="display:none;">Center your face inside the oval</div>
           <img class="photo-slot-preview" id="prev_selfie">
           <div class="photo-slot-label" id="lbl_selfie">Driver Selfie (Verification)</div>
         </div>
@@ -339,24 +376,26 @@ const PRICING_CONFIG = {
   pointToPoint: {
     baseMiles: 10,
     vehicles: {
-      "Mini Van":      { base: 80,  perMile: 3.50 },
-      "Premium Sedan": { base: 100, perMile: 4.00 },
-      "Black Sedan":   { base: 100, perMile: 4.00 },
-      "Premium SUV":   { base: 125, perMile: 5.00 },
-      "SUV":           { base: 125, perMile: 5.00 },
-      "Sprinter":      { base: 500, perMile: 8.00 }
+      "Mini Van":      { base: 80,  perMile: 3.00 },
+      "Premium Sedan": { base: 125, perMile: 3.50 },
+      "Black Sedan":   { base: 125, perMile: 3.50 },
+      "Premium SUV":   { base: 125, perMile: 3.50 },
+      "SUV":           { base: 125, perMile: 3.50 },
+      "Cadillac Escalade": { base: 150, perMile: 4.00 },
+      "Sprinter":      { base: 500, perMile: 6.00 }
     }
   },
   hourly: {
     minHours: 2,
-    overtimeMultiplier: 1.5,
+    overtimeRate: 75,
     vehicles: {
       "Mini Van":      { h2: 75,  h4: 65,  h10: 55  },
-      "Premium Sedan": { h2: 100, h4: 90,  h10: 65  },
-      "Black Sedan":   { h2: 100, h4: 90,  h10: 65  },
-      "Premium SUV":   { h2: 125, h4: 100, h10: 80  },
-      "SUV":           { h2: 125, h4: 100, h10: 80  },
-      "Sprinter":      { h2: 250, h4: 200, h10: 150 }
+      "Premium Sedan": { h2: 125, h4: 100, h10: 85  },
+      "Black Sedan":   { h2: 125, h4: 100, h10: 85  },
+      "Premium SUV":   { h2: 125, h4: 100, h10: 85  },
+      "SUV":           { h2: 125, h4: 100, h10: 85  },
+      "Cadillac Escalade": { h2: 150, h4: 125, h10: 100 },
+      "Sprinter":      { h2: 180, h4: 150, h10: 120 }
     }
   }
 };
@@ -714,8 +753,40 @@ function openCheckin() {
 }
 
 // ── Photo uploads ─────────────────────────────────────────────────────────────
+function showPhotoGuide(slotId) {
+  // Show guide overlay when the slot is clicked (before camera opens)
+  const guideMap = {
+    "slot_selfie":        { guide: "guide_selfie",        txt: "guidetxt_selfie"        },
+    "slot_vehicle_front": { guide: "guide_vehicle_front", txt: "guidetxt_vehicle_front" },
+    "slot_car_interior":  { guide: "guide_car_interior",  txt: "guidetxt_car_interior"  }
+  };
+  const g = guideMap[slotId]; if (!g) return;
+  const slot = document.getElementById(slotId); if (!slot) return;
+  // Only show guide if no preview yet
+  if (!slot.classList.contains("has-photo")) {
+    const guide = document.getElementById(g.guide);
+    const txt   = document.getElementById(g.txt);
+    if (guide) guide.style.display = "block";
+    if (txt)   txt.style.display   = "block";
+  }
+}
+
 function previewPhoto(input, slotId, lblId) {
-  const file = input.files[0]; if (!file) return;
+  const file = input.files[0];
+  // Hide guide overlay
+  const guideMap = {
+    "slot_selfie":        { guide: "guide_selfie",        txt: "guidetxt_selfie"        },
+    "slot_vehicle_front": { guide: "guide_vehicle_front", txt: "guidetxt_vehicle_front" },
+    "slot_car_interior":  { guide: "guide_car_interior",  txt: "guidetxt_car_interior"  }
+  };
+  const g = guideMap[slotId];
+  if (g) {
+    const guide = document.getElementById(g.guide);
+    const txt   = document.getElementById(g.txt);
+    if (guide) guide.style.display = "none";
+    if (txt)   txt.style.display   = "none";
+  }
+  if (!file) return;
   const slot = document.getElementById(slotId);
   const prev = slot.querySelector(".photo-slot-preview");
   const lbl  = document.getElementById(lblId);
@@ -1066,7 +1137,6 @@ document.addEventListener("click", function(e) {
 
 function shareWaybillText() {
   const j = currentJob; if (!j) return;
-  const ex = (typeof j.extras === "string") ? JSON.parse(j.extras||"{}") : (j.extras||{});
   const pricing = calculateDriverNet(j);
   let _exShare = {};
   try {
@@ -1075,6 +1145,9 @@ function shareWaybillText() {
   } catch(e) { _exShare = {}; }
   const vehicle = [_exShare.driver_color, _exShare.driver_vehicle].filter(Boolean).join(" ") || j.vehicle_type || "—";
   const plate   = _exShare.driver_plate || "—";
+  // Build airport detail lines
+  const pickupDetail  = [_exShare.pickup_terminal, _exShare.pickup_airline].filter(Boolean).join(" · ");
+  const dropoffDetail = [_exShare.dropoff_terminal, _exShare.dropoff_airline].filter(Boolean).join(" · ");
   const text = [
     `🚘 OJO LUXE — JOB WAYBILL`,
     `Ref: ${j.reference_code || j.id}`,
@@ -1084,24 +1157,35 @@ function shareWaybillText() {
     `SERVICE: ${j.job_type || "—"}`,
     ``,
     `PICKUP: ${j.from_loc || "—"}`,
+    pickupDetail  ? `  ✈ ${pickupDetail}`  : "",
     j.to_loc ? `DROP-OFF: ${j.to_loc}` : "",
+    dropoffDetail ? `  ✈ ${dropoffDetail}` : "",
     ``,
     `DRIVER: ${j.assigned_driver || "—"}`,
     `VEHICLE: ${vehicle}`,
     plate !== "—" ? `PLATE: ${plate}` : "",
     ``,
-    `FARE: ${pricing ? ("$" + pricing.totalFare.toFixed(2)) : ("$" + (j.total_price || "0"))}`,
+    `YOUR PAY: $${pricing.netPay.toFixed(2)}`,
     `PAYMENT: ${j.payment_type || "—"}`,
     `STATUS: ${j.status || "—"}`,
     ``,
     `OJO Luxe LLC | TCP: PSG0049661`,
     `ojoluxe.com`
-  ].filter(l => l !== null && l !== undefined).join("\n");
+  ].filter(l => l !== null && l !== undefined && l !== "").join("\n");
 
   if (navigator.share) {
-    navigator.share({ title: "OJO Luxe Waybill", text }).catch(()=>{});
-  } else {
+    navigator.share({ title: "OJO Luxe Waybill", text }).catch(()=>{
+      // Fallback if share fails
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => alert("✅ Waybill text copied!")).catch(() => prompt("Copy:", text));
+      } else {
+        prompt("Copy:", text);
+      }
+    });
+  } else if (navigator.clipboard) {
     navigator.clipboard.writeText(text).then(() => alert("✅ Waybill text copied!")).catch(() => prompt("Copy:", text));
+  } else {
+    prompt("Copy:", text);
   }
 }
 
