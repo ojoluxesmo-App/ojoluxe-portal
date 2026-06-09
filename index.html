@@ -2587,8 +2587,6 @@ function renderJobs() {
         <div class="jc-right">
           <div class="jc-price">${money(pricing.grandTotal||pricing.totalPrice)}</div>
           ${pricing.otTotal>0?`<div style="font-size:10px;color:var(--red);font-weight:700;text-align:right;">+${money(pricing.otTotal)} OT</div>`:""}
-          ${pricing.meetGreetCharge>0?`<div style="font-size:10px;color:var(--green);font-weight:700;text-align:right;">+$50 M&G</div>`:""}
-          ${pricing.carSeatCharge>0?`<div style="font-size:10px;color:var(--green);font-weight:700;text-align:right;">+$15 Car Seat</div>`:""}
           ${pricing.approvedAddons>0?`<div style="font-size:10px;color:#7ec8e3;font-weight:700;text-align:right;">+${money(pricing.approvedAddons)} exp</div>`:""}
           <div class="jc-status" style="color:${status==="Completed"?"var(--green)":status==="Offer"?"var(--muted)":"var(--gold)"}">${escapeHtml(status)}</div>
         </div>
@@ -6141,7 +6139,15 @@ async function deleteMember(id) {
   const ok = await deleteMemberFromSupabase(id);
   console.log("[OJO] deleteMemberFromSupabase result:", ok);
   if (ok) {
-    alert("Member deleted.");
+    // Re-fetch from Supabase to confirm delete actually persisted (RLS check)
+    await loadMembersFromSupabase();
+    const stillExists = teamMembersCache.some(m => m.id === id);
+    if (stillExists) {
+      alert("⚠️ Delete appeared to succeed but the member still exists.\n\nThis is a Supabase RLS (Row Level Security) issue — the anon key lacks DELETE permission on team_members.\n\nFix: In Supabase → Table Editor → team_members → RLS Policies, add a DELETE policy. Or paste your service_role key into SERVICE_KEY at the top of index.html.");
+    } else {
+      renderMembers(); renderTeamAlerts(); populateAssignedMemberDropdown();
+      showToast("✅ Member deleted");
+    }
   }
 }
 async function deleteVehicle(id) {

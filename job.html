@@ -518,7 +518,7 @@
 
   <!-- Step 2: Camera -->
   <div class="sv-camera" id="svCamera">
-    <div class="sv-cam-wrap">
+    <div class="sv-cam-wrap" id="svCamWrap">
       <video id="svVideo" autoplay playsinline muted></video>
       <div class="sv-oval-guide" id="svOval"></div>
       <button class="sv-close-btn" onclick="closeSelfieVerify()">✕</button>
@@ -813,7 +813,7 @@ function render(job) {
         </div>
         ${(()=>{
           const ex = (typeof job.extras === "object" && job.extras) ? job.extras : {};
-          const dv = ex.driver_vehicle||""; const dc = ex.driver_color||""; const dp = ex.driver_plate||"";
+          const dv = ex.driver_vehicle||""; const dc = ex.driver_color||""; const dp = ex.driver_checkin_plate||ex.driver_plate||"";
           if (!dv && !dp) return "";
           return `<div style="margin-top:10px;background:#0a0a0a;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted);">
             ${dv?`<div><span style="color:#555;font-size:9px;letter-spacing:.1em;font-weight:700;">DRIVER VEHICLE</span><div style="color:var(--text);font-weight:700;margin-top:2px;">${escapeHtml(dc?dc+" ":"")}${escapeHtml(dv)}</div></div>`:""}
@@ -1089,6 +1089,24 @@ function captureCurrentStep() {
   document.getElementById("svOval").classList.remove("good");
   const video = document.getElementById("svVideo");
   if (!video.srcObject) return;
+
+  // Shutter flash effect
+  const flash = document.createElement("div");
+  flash.style.cssText = "position:absolute;inset:0;background:#fff;z-index:20;opacity:0.85;pointer-events:none;transition:opacity .25s;border-radius:0;";
+  document.getElementById("svCamWrap").appendChild(flash);
+  setTimeout(() => { flash.style.opacity = "0"; setTimeout(() => flash.remove(), 300); }, 80);
+
+  // Shutter sound (short beep via AudioContext)
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 1200; gain.gain.value = 0.18;
+    osc.start(); osc.stop(ctx.currentTime + 0.07);
+    setTimeout(() => ctx.close(), 300);
+  } catch(e) {}
+
   const canvas = document.createElement("canvas");
   canvas.width  = video.videoWidth  || 640;
   canvas.height = video.videoHeight || 480;
@@ -1101,8 +1119,13 @@ function captureCurrentStep() {
     _svBlobs[_svStep] = blob;
     _svStep++;
     if (_svStep < SELFIE_STEPS.length) {
-      _updateSelfieStep();
-      _scheduleAutoCapture();
+      // Brief "captured" pause before next step
+      document.getElementById("svPrompt").textContent = "✓ Got it!";
+      document.getElementById("svFooterTitle").textContent = "✓ Photo captured";
+      setTimeout(() => {
+        _updateSelfieStep();
+        _scheduleAutoCapture();
+      }, 900);
     } else {
       _finishSelfieCapture();
     }
@@ -1187,7 +1210,7 @@ async function confirmCheckin() {
   const extras = Object.assign({}, currentJob.extras || {}, {
     driver_vehicle:      vehicle,
     driver_color:        color,
-    driver_plate:        plate,
+    driver_checkin_plate: plate,
     driver_checkin_name: name,
     photo_vehicle_front: urlVehicle  || null,
     photo_car_interior:  urlInterior || null,
@@ -1468,7 +1491,7 @@ function shareWaybillText() {
     if (typeof _exShare !== "object" || _exShare === null) _exShare = {};
   } catch(e) { _exShare = {}; }
   const vehicle = [_exShare.driver_color, _exShare.driver_vehicle].filter(Boolean).join(" ") || j.vehicle_type || "—";
-  const plate   = _exShare.driver_plate || "—";
+  const plate   = _exShare.driver_checkin_plate || _exShare.driver_plate || "—";
   // Build airport detail lines
   const pickupDetail  = [_exShare.pickup_terminal, _exShare.pickup_airline].filter(Boolean).join(" · ");
   const dropoffDetail = [_exShare.dropoff_terminal, _exShare.dropoff_airline].filter(Boolean).join(" · ");
