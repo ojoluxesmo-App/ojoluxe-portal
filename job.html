@@ -247,6 +247,133 @@
   }
   .checkin-note-text { font-size: 12px; color: #b8d4b8; line-height: 1.6; }
 
+  /* ── Selfie Verification Modal ── */
+  .selfie-overlay {
+    position: fixed; inset: 0; background: #000;
+    z-index: 300; display: none; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+  }
+  .selfie-overlay.open { display: flex; }
+
+  /* Step: intro */
+  .sv-intro {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 100%; padding: 32px 24px;
+    text-align: center; background: #fff;
+  }
+  .sv-intro-icon {
+    width: 120px; height: 120px; margin-bottom: 24px;
+  }
+  .sv-intro-title {
+    font-size: 22px; font-weight: 800; color: #111; margin-bottom: 12px;
+  }
+  .sv-intro-body {
+    font-size: 14px; color: #555; line-height: 1.7; margin-bottom: 32px;
+  }
+  .sv-intro-btn {
+    width: 100%; padding: 16px; border: none; border-radius: 12px;
+    background: var(--gold); color: #000; font-size: 16px;
+    font-weight: 800; cursor: pointer;
+  }
+  .sv-intro-skip {
+    margin-top: 14px; font-size: 13px; color: #aaa; cursor: pointer;
+    text-decoration: underline;
+  }
+
+  /* Step: camera */
+  .sv-camera {
+    display: none; flex-direction: column; width: 100%; height: 100%;
+    background: #000;
+  }
+  .sv-camera.active { display: flex; }
+  .sv-cam-wrap {
+    position: relative; width: 100%; flex: 1; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sv-cam-wrap video {
+    width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);
+  }
+  .sv-oval-guide {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 65%; padding-bottom: 82%;
+    border: 3px solid rgba(201,168,76,1);
+    border-radius: 50%; pointer-events: none; z-index: 5;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.55);
+    transition: border-color .3s;
+  }
+  .sv-oval-guide.good { border-color: #4caf7d; box-shadow: 0 0 0 9999px rgba(0,0,0,.55), 0 0 0 3px #4caf7d; }
+  .sv-cam-prompt {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.72); border-radius: 20px;
+    padding: 8px 20px; font-size: 14px; font-weight: 700;
+    color: #fff; white-space: nowrap; z-index: 6; letter-spacing: .02em;
+  }
+  .sv-cam-step-badge {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.6); border-radius: 20px;
+    padding: 5px 14px; font-size: 11px; font-weight: 700;
+    color: var(--gold); letter-spacing: .08em; z-index: 6;
+  }
+  .sv-close-btn {
+    position: absolute; top: 14px; left: 16px;
+    background: none; border: none; color: #fff;
+    font-size: 22px; cursor: pointer; z-index: 7; line-height: 1;
+    padding: 4px 8px;
+  }
+  /* Arc progress indicator */
+  .sv-arc {
+    position: absolute; top: 50%; right: 10%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 5px; z-index: 6;
+  }
+  .sv-arc-tick {
+    width: 3px; height: 12px; background: rgba(255,255,255,.3);
+    border-radius: 2px;
+  }
+  .sv-arc-tick.done { background: var(--gold); }
+  .sv-cam-footer {
+    padding: 16px 24px 28px; background: #111;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .sv-cam-footer-title {
+    font-size: 18px; font-weight: 800; color: #fff;
+  }
+  .sv-cam-footer-sub {
+    font-size: 13px; color: #888; text-align: center; line-height: 1.5;
+  }
+  .sv-capture-ring {
+    width: 58px; height: 58px; border-radius: 50%;
+    border: 3px solid #555; background: #222;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 8px; cursor: pointer; transition: border-color .2s;
+  }
+  .sv-capture-ring:active { border-color: var(--gold); }
+  .sv-capture-inner {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #555;
+  }
+  .sv-auto-label {
+    font-size: 11px; color: #555; letter-spacing: .06em;
+  }
+
+  /* Step: processing */
+  .sv-processing {
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; height: 100%; gap: 16px;
+    background: #fff; padding: 32px;
+  }
+  .sv-processing.active { display: flex; }
+  .sv-processing-icon {
+    width: 120px; height: 120px; margin-bottom: 8px;
+  }
+  .sv-processing-title {
+    font-size: 18px; font-weight: 800; color: #111;
+  }
+  .sv-processing-sub {
+    font-size: 13px; color: #888;
+  }
+
   /* ── Contact buttons (tap-only, no number shown) ── */
   /* ── Photo upload slots ── */
   .photo-slots { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px; }
@@ -352,12 +479,10 @@
           <img class="photo-slot-preview" id="prev_car_interior">
           <div class="photo-slot-label" id="lbl_car_interior">Car Interior<br>Cleanliness</div>
         </div>
-        <div class="photo-slot photo-slot-full" id="slot_selfie" onclick="showPhotoGuide('slot_selfie')">
-          <input type="file" id="photo_selfie" accept="image/*" capture="user" onchange="previewPhoto(this,'slot_selfie','lbl_selfie')">
-          <div class="photo-slot-icon">🤳</div>
-          <div class="guide-oval" id="guide_selfie" style="display:none;"></div>
-          <div class="guide-label" id="guidetxt_selfie" style="display:none;">Center your face inside the oval</div>
-          <img class="photo-slot-preview" id="prev_selfie">
+        <!-- Selfie verification slot — triggers camera modal -->
+        <div class="photo-slot photo-slot-full" id="slot_selfie" onclick="openSelfieVerify()">
+          <div class="photo-slot-icon" id="selfie_icon">🤳</div>
+          <img class="photo-slot-preview" id="prev_selfie" style="display:none;">
           <div class="photo-slot-label" id="lbl_selfie">Driver Selfie (Verification)</div>
         </div>
       </div>
@@ -365,6 +490,73 @@
     <button class="checkin-confirm" onclick="confirmCheckin()">✅ Confirm & Accept Job</button>
     <div style="font-size:10px;color:#444;text-align:center;margin-top:8px;">Photos optional but encouraged.</div>
   </div>
+</div>
+
+<!-- ══ Selfie Verification Modal ══ -->
+<div id="selfieOverlay" class="selfie-overlay">
+
+  <!-- Step 1: Intro -->
+  <div class="sv-intro" id="svIntro">
+    <!-- Illustrated face SVG -->
+    <svg class="sv-intro-icon" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="60" cy="45" r="28" fill="#c9a84c" opacity=".15"/>
+      <circle cx="60" cy="43" r="22" fill="#c9a84c" opacity=".3"/>
+      <ellipse cx="60" cy="44" rx="16" ry="18" fill="#c9a84c"/>
+      <ellipse cx="54" cy="41" rx="2.5" ry="3" fill="#000" opacity=".6"/>
+      <ellipse cx="66" cy="41" rx="2.5" ry="3" fill="#000" opacity=".6"/>
+      <path d="M54 51 Q60 56 66 51" stroke="#000" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".6"/>
+      <rect x="28" y="76" width="64" height="30" rx="12" fill="#c9a84c" opacity=".25"/>
+      <circle cx="60" cy="63" r="10" fill="#c9a84c" opacity=".4"/>
+    </svg>
+    <div class="sv-intro-title">Verify it's you</div>
+    <div class="sv-intro-body">
+      Position yourself in the center of the camera and follow the on-screen prompts. We'll take 3 photos automatically — center, left, and right.
+    </div>
+    <button class="sv-intro-btn" onclick="startSelfieCamera()">📷 Take Photo</button>
+    <div class="sv-intro-skip" onclick="closeSelfieVerify()">Skip for now</div>
+  </div>
+
+  <!-- Step 2: Camera -->
+  <div class="sv-camera" id="svCamera">
+    <div class="sv-cam-wrap">
+      <video id="svVideo" autoplay playsinline muted></video>
+      <div class="sv-oval-guide" id="svOval"></div>
+      <button class="sv-close-btn" onclick="closeSelfieVerify()">✕</button>
+      <div class="sv-cam-step-badge" id="svStepBadge">Step 1 of 3</div>
+      <div class="sv-cam-prompt" id="svPrompt">Center your face in the oval</div>
+      <!-- Arc progress ticks -->
+      <div class="sv-arc" id="svArc"></div>
+    </div>
+    <div class="sv-cam-footer">
+      <div class="sv-cam-footer-title" id="svFooterTitle">Look straight ahead</div>
+      <div class="sv-cam-footer-sub" id="svFooterSub">Hold still until the photo is taken automatically.</div>
+      <div class="sv-capture-ring" onclick="captureCurrentStep()">
+        <div class="sv-capture-inner"></div>
+      </div>
+      <div class="sv-auto-label">📷 Tap to capture</div>
+    </div>
+  </div>
+
+  <!-- Step 3: Processing -->
+  <div class="sv-processing" id="svProcessing">
+    <!-- ID card processing SVG -->
+    <svg class="sv-processing-icon" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="10" y="35" width="100" height="65" rx="8" fill="#f0f0f0" stroke="#ccc" stroke-width="2"/>
+      <circle cx="35" cy="62" r="14" fill="#ddd"/>
+      <circle cx="35" cy="58" r="7" fill="#bbb"/>
+      <ellipse cx="35" cy="73" rx="10" ry="5" fill="#bbb"/>
+      <rect x="57" y="52" width="36" height="5" rx="2.5" fill="#ccc"/>
+      <rect x="57" y="62" width="28" height="4" rx="2" fill="#ccc"/>
+      <rect x="57" y="72" width="20" height="3.5" rx="1.7" fill="#ccc"/>
+      <rect x="10" y="82" width="100" height="16" rx="0 0 8 8" fill="#c9a84c" opacity=".25"/>
+      <rect x="20" y="86" width="18" height="5" rx="2.5" fill="#c9a84c" opacity=".5"/>
+      <rect x="44" y="86" width="14" height="5" rx="2.5" fill="#c9a84c" opacity=".5"/>
+    </svg>
+    <div class="sv-processing-title">Processing selfie</div>
+    <div class="sv-processing-sub">This may take a few seconds</div>
+    <div class="spinner" style="margin-top:16px;border-top-color:#c9a84c;border-color:#eee;"></div>
+  </div>
+
 </div>
 
 <script>
@@ -822,6 +1014,136 @@ async function uploadPhotoToSupabase(file, jobId, photoType) {
   } catch(e) { console.warn("[OJO] Photo upload error:", photoType, e.message); return null; }
 }
 
+// ── Selfie Verification ──────────────────────────────────────────────────────
+const SELFIE_STEPS = [
+  { badge: "Step 1 of 3", prompt: "Center your face in the oval", footerTitle: "Look straight ahead",   footerSub: "Hold still until the photo is taken automatically." },
+  { badge: "Step 2 of 3", prompt: "Look slightly left",           footerTitle: "Look slightly left",    footerSub: "Turn your head slightly to the left until capture is confirmed." },
+  { badge: "Step 3 of 3", prompt: "Look slightly right",          footerTitle: "Look slightly right",   footerSub: "Turn your head slightly to the right until capture is confirmed." }
+];
+
+let _svStream    = null;
+let _svStep      = 0;        // 0=center, 1=left, 2=right
+let _svBlobs     = [];       // captured blobs per step
+let _svAutoTimer = null;
+
+function openSelfieVerify() {
+  const overlay = document.getElementById("selfieOverlay");
+  overlay.classList.add("open");
+  // Show intro
+  document.getElementById("svIntro").style.display = "flex";
+  document.getElementById("svCamera").classList.remove("active");
+  document.getElementById("svProcessing").classList.remove("active");
+  // Build arc ticks
+  const arc = document.getElementById("svArc");
+  arc.innerHTML = SELFIE_STEPS.map((_,i)=>`<div class="sv-arc-tick" id="svTick${i}"></div>`).join("");
+}
+
+function closeSelfieVerify() {
+  _stopSelfieStream();
+  clearTimeout(_svAutoTimer);
+  document.getElementById("selfieOverlay").classList.remove("open");
+  _svStep = 0; _svBlobs = [];
+}
+
+async function startSelfieCamera() {
+  document.getElementById("svIntro").style.display = "none";
+  document.getElementById("svCamera").classList.add("active");
+  _svStep = 0; _svBlobs = [];
+  _updateSelfieStep();
+  try {
+    _svStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } } });
+    document.getElementById("svVideo").srcObject = _svStream;
+    // Auto-capture after delay on each step
+    _scheduleAutoCapture();
+  } catch(e) {
+    alert("Could not access camera: " + e.message);
+    closeSelfieVerify();
+  }
+}
+
+function _scheduleAutoCapture() {
+  clearTimeout(_svAutoTimer);
+  // Gold ring = ready indicator
+  const oval = document.getElementById("svOval");
+  oval.classList.remove("good");
+  setTimeout(() => oval.classList.add("good"), 1400);
+  _svAutoTimer = setTimeout(() => captureCurrentStep(), 2400);
+}
+
+function _updateSelfieStep() {
+  const s = SELFIE_STEPS[_svStep];
+  if (!s) return;
+  document.getElementById("svStepBadge").textContent  = s.badge;
+  document.getElementById("svPrompt").textContent      = s.prompt;
+  document.getElementById("svFooterTitle").textContent = s.footerTitle;
+  document.getElementById("svFooterSub").textContent   = s.footerSub;
+  // Update arc ticks
+  SELFIE_STEPS.forEach((_,i) => {
+    const t = document.getElementById("svTick"+i);
+    if (t) t.className = "sv-arc-tick" + (i < _svStep ? " done" : "");
+  });
+}
+
+function captureCurrentStep() {
+  clearTimeout(_svAutoTimer);
+  document.getElementById("svOval").classList.remove("good");
+  const video = document.getElementById("svVideo");
+  if (!video.srcObject) return;
+  const canvas = document.createElement("canvas");
+  canvas.width  = video.videoWidth  || 640;
+  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext("2d");
+  // Mirror flip to match preview
+  ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob(blob => {
+    if (!blob) return;
+    _svBlobs[_svStep] = blob;
+    _svStep++;
+    if (_svStep < SELFIE_STEPS.length) {
+      _updateSelfieStep();
+      _scheduleAutoCapture();
+    } else {
+      _finishSelfieCapture();
+    }
+  }, "image/jpeg", 0.88);
+}
+
+async function _finishSelfieCapture() {
+  _stopSelfieStream();
+  // Show processing
+  document.getElementById("svCamera").classList.remove("active");
+  document.getElementById("svProcessing").classList.add("active");
+  // Brief artificial delay for UX
+  await new Promise(r => setTimeout(r, 1200));
+  // Use center shot (index 0) as the selfie blob
+  const centerBlob = _svBlobs[0];
+  if (centerBlob) {
+    const slot = document.getElementById("slot_selfie");
+    const prev = document.getElementById("prev_selfie");
+    const lbl  = document.getElementById("lbl_selfie");
+    const icon = document.getElementById("selfie_icon");
+    // Show preview
+    const url = URL.createObjectURL(centerBlob);
+    prev.src = url;
+    prev.style.display = "block";
+    slot.classList.add("has-photo");
+    if (icon) icon.style.display = "none";
+    lbl.textContent = "✓ Selfie captured";
+    // Store blob on element for upload
+    slot._selfieBlob = centerBlob;
+    // Also store all 3 for later multi-photo use
+    slot._selfieBlobs = _svBlobs.slice();
+  }
+  closeSelfieVerify();
+}
+
+function _stopSelfieStream() {
+  if (_svStream) { _svStream.getTracks().forEach(t => t.stop()); _svStream = null; }
+  const v = document.getElementById("svVideo");
+  if (v) v.srcObject = null;
+}
+
 async function confirmCheckin() {
   const name    = document.getElementById("ci_name").value.trim();
   const vehicle = document.getElementById("ci_vehicle").value.trim();
@@ -840,7 +1162,9 @@ async function confirmCheckin() {
   const jobId = currentJob.id;
   const photoVehicle  = document.getElementById("photo_vehicle_front")?.files[0];
   const photoInterior = document.getElementById("photo_car_interior")?.files[0];
-  const photoSelfie   = document.getElementById("photo_selfie")?.files[0];
+  // Selfie now comes from the camera modal blob, not a file input
+  const selfieSlot    = document.getElementById("slot_selfie");
+  const photoSelfie   = selfieSlot?._selfieBlob ? new File([selfieSlot._selfieBlob], "selfie.jpg", { type: "image/jpeg" }) : null;
 
   const hasPhotos = photoVehicle || photoInterior || photoSelfie;
   if (hasPhotos) btn.textContent = "⏳ Uploading " + [photoVehicle,photoInterior,photoSelfie].filter(Boolean).length + " photo(s)...";
