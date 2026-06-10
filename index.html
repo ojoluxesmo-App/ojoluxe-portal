@@ -237,9 +237,12 @@ input,select,textarea,button{font-family:var(--font-ui);}
 .badge.status-assigned,.badge.status-active{border-color:#2e7d32;color:var(--green);}
 .badge.status-completed,.badge.status-done{border-color:#1a3a1a;color:#4caf72;}
 .badge.status-cancelled{border-color:#5c1a1a;color:var(--red);}
-.badge.urgency-critical{border-color:#7a2020;color:var(--red);}
+.badge.urgency-overdue{border-color:#7a2020;color:var(--red);background:#1a0808;animation:urgency-pulse 1s ease-in-out infinite;}
+.badge.urgency-critical{border-color:#a03010;color:#ff6b35;background:#1a0e08;animation:urgency-pulse 1.4s ease-in-out infinite;}
+.badge.urgency-high{border-color:#7a6010;color:#f0b429;background:#120f00;}
 .badge.urgency-today{border-color:#7a5f12;color:var(--gold);}
 .badge.urgency-upcoming,.badge.urgency-normal{border-color:#333;color:#888;}
+@keyframes urgency-pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
 
 /* Driver row */
 .driver-row{
@@ -2507,11 +2510,13 @@ function getUrgencyLevel(date, time) {
   if(!date) return "Normal";
   const now = new Date();
   const d = new Date(date + (time ? "T"+time : "T00:00"));
-  const diff = (d - now) / 60000;
-  if(diff < 0)   return "Overdue";
-  if(diff < 60)  return "Critical";
-  if(diff < 240) return "Today";
-  if(diff < 1440)return "Upcoming";
+  const diff = (d - now) / 60000; // minutes
+  if(diff < 0)    return "Overdue";
+  if(diff < 60)   return "Critical";  // under 1 hour — red + blink
+  if(diff < 120)  return "Critical";  // under 2 hours — red + blink
+  if(diff < 240)  return "High";      // under 4 hours — orange
+  if(diff < 1440) return "Today";     // same day
+  if(diff < 2880) return "Upcoming";  // tomorrow
   return "Normal";
 }
 
@@ -3997,8 +4002,9 @@ async function showWaybill(jobId) {
   const vModel = driverVehicle && driverVehicle.model ? driverVehicle.model : "";
   const vYear  = driverVehicle && driverVehicle.year  ? driverVehicle.year  : "";
   const vColor = driverVehicle && driverVehicle.color ? driverVehicle.color : (extrasObj.driver_color || "");
-  const vPlate = driverVehicle && driverVehicle.plate ? driverVehicle.plate
-                 : (extrasObj.driver_checkin_plate || extrasObj.driver_plate || "---");
+  // Check-in plate takes priority — driver may be in a different vehicle that day
+  const vPlate = extrasObj.driver_checkin_plate || extrasObj.driver_plate
+                 || (driverVehicle && driverVehicle.plate ? driverVehicle.plate : "---");
   // vDesc: prefer team vehicle record, fall back to check-in vehicle, then job vehicle_type
   const vDesc  = [vYear, vColor, vMake, vModel].filter(Boolean).join(" ")
                  || extrasObj.driver_vehicle
@@ -4486,7 +4492,7 @@ async function shareWaybillImage(){
       const vModel = driverVehicle?.model || "";
       const vYear  = driverVehicle?.year  || "";
       const vColor = driverVehicle?.color || (exObj.driver_color || "");
-      const vPlate = driverVehicle?.plate || exObj.driver_checkin_plate || exObj.driver_plate || "---";
+      const vPlate = exObj.driver_checkin_plate || exObj.driver_plate || driverVehicle?.plate || "---";
       const vDesc  = [vYear,vColor,vMake,vModel].filter(Boolean).join(" ") || exObj.driver_vehicle || (j.vehicle_type||"---");
       const dash = "---";
       const dateObj = j.date ? new Date(j.date+"T00:00") : null;
