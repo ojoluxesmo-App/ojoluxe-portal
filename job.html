@@ -729,8 +729,7 @@ function render(job) {
 
   // Addons line
   const addonParts = [];
-  if (pricing.meetGreet > 0) addonParts.push("+$50 Meet & Greet");
-  if (pricing.carSeat   > 0) addonParts.push("+$15 Car Seat");
+  // M&G and Car Seat are silently included in netPay — not shown as line items to driver
   if (pricing.otTotal   > 0) addonParts.push("+" + money(pricing.otTotal) + " OT");
   if (pricing.approvedAddons > 0) addonParts.push("+" + money(pricing.approvedAddons) + " expenses");
 

@@ -3998,7 +3998,7 @@ async function showWaybill(jobId) {
   const vYear  = driverVehicle && driverVehicle.year  ? driverVehicle.year  : "";
   const vColor = driverVehicle && driverVehicle.color ? driverVehicle.color : (extrasObj.driver_color || "");
   const vPlate = driverVehicle && driverVehicle.plate ? driverVehicle.plate
-                 : (extrasObj.driver_plate || "---");
+                 : (extrasObj.driver_checkin_plate || extrasObj.driver_plate || "---");
   // vDesc: prefer team vehicle record, fall back to check-in vehicle, then job vehicle_type
   const vDesc  = [vYear, vColor, vMake, vModel].filter(Boolean).join(" ")
                  || extrasObj.driver_vehicle
@@ -4480,12 +4480,14 @@ async function shareWaybillImage(){
         ? vehicles.find(v => String(v.assigned_member_id) === String(driverMember.id))
         : null;
       const driverPhone = driverMember?.phone || "---";
+      const exObj = j.extras && typeof j.extras === "object" ? j.extras
+                  : (typeof j.extras === "string" ? (() => { try { return JSON.parse(j.extras); } catch(e) { return {}; } })() : {});
       const vMake  = driverVehicle?.make  || "";
       const vModel = driverVehicle?.model || "";
       const vYear  = driverVehicle?.year  || "";
-      const vColor = driverVehicle?.color || "";
-      const vPlate = driverVehicle?.plate || "---";
-      const vDesc  = [vYear,vColor,vMake,vModel].filter(Boolean).join(" ") || (j.vehicle_type||"---");
+      const vColor = driverVehicle?.color || (exObj.driver_color || "");
+      const vPlate = driverVehicle?.plate || exObj.driver_checkin_plate || exObj.driver_plate || "---";
+      const vDesc  = [vYear,vColor,vMake,vModel].filter(Boolean).join(" ") || exObj.driver_vehicle || (j.vehicle_type||"---");
       const dash = "---";
       const dateObj = j.date ? new Date(j.date+"T00:00") : null;
       const dateFormatted = dateObj
