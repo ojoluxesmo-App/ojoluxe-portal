@@ -1295,7 +1295,7 @@ function showWaybill() {
     if (typeof ex !== "object" || ex === null) ex = {};
   } catch(e) { console.warn("extras parse failed in showWaybill:", e, j.extras); ex = {}; }
   const driverVehicleDesc = [ex.driver_color, ex.driver_vehicle].filter(Boolean).join(" ") || j.vehicle_type || "—";
-  const driverPlate       = ex.driver_plate || "—";
+  const driverPlate       = ex.driver_checkin_plate || ex.driver_plate || "—";
 
   const stops = Array.isArray(j.stops)&&j.stops.length
     ? j.stops.map(s=>`<div style="padding:8px 12px;border-bottom:1px solid #eee;"><div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.12em;margin-bottom:2px;">STOP</div><div style="font-size:12px;font-weight:700;color:#111;">📍 ${escapeHtml(s.address||"")}</div></div>`).join("")

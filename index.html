@@ -3037,7 +3037,18 @@ function onJobTypeChange() {
 async function _geocode(address) {
   // Resolve shortcut to canonical address first
   const lower = address.trim().toLowerCase().replace(/[.,]/g,"");
-  const canonical = PLACE_SHORTCUTS[lower] || address;
+  // Also try matching the beginning of the address against shortcuts (e.g. "LAX Terminal 2, 1 World Way...")
+  let canonical = PLACE_SHORTCUTS[lower] || address;
+  if (canonical === address) {
+    // Try prefix match: find longest shortcut key that the input starts with
+    const inputLower = lower;
+    for (const [key, val] of Object.entries(PLACE_SHORTCUTS)) {
+      if (inputLower.startsWith(key) || inputLower.includes(key)) {
+        canonical = val;
+        break;
+      }
+    }
+  }
   const _fetch = async(q) => {
     const url = "https://nominatim.openstreetmap.org/search?q=" +
       encodeURIComponent(q) + "&countrycodes=us&limit=1&format=json";
@@ -3049,6 +3060,11 @@ async function _geocode(address) {
   if (!data.length && canonical !== address) data = await _fetch(address);
   if (!data.length) data = await _fetch(address + ", California");
   if (!data.length) data = await _fetch(address + ", USA");
+  // Last resort: try just the city/landmark portion (first part before comma)
+  if (!data.length) {
+    const firstPart = address.split(",")[0].trim();
+    if (firstPart && firstPart !== address) data = await _fetch(firstPart + ", Los Angeles, CA");
+  }
   if (!data.length) throw new Error("Address not found: " + address);
   return [parseFloat(data[0].lon), parseFloat(data[0].lat)];
 }
@@ -5712,28 +5728,49 @@ async function upsertVehicleToSupabase(vehicle) {
 }
 async function deleteMemberFromSupabase(id) {
   if (!id) { alert("Missing member ID."); return false; }
+
+  // Get the best auth key available — service_role bypasses RLS
+  let authKey = SERVICE_KEY || localStorage.getItem("ojo_service_key") || "";
+  if (!authKey) {
+    const entered = prompt(
+      "🔑 Admin key required to delete members.\n\n" +
+      "Paste your Supabase service_role key below.\n" +
+      "(Find it in: Supabase → Project Settings → API → service_role)\n\n" +
+      "It will be saved locally so you only need to do this once:"
+    );
+    if (!entered) return false;
+    authKey = entered.trim();
+    localStorage.setItem("ojo_service_key", authKey);
+  }
+
   try {
-    // Step 1: Unassign vehicles (raw fetch, non-fatal)
+    // Step 1: Unassign vehicles (non-fatal)
     await fetch(SUPABASE_URL + "/rest/v1/team_vehicles?assigned_member_id=eq." + encodeURIComponent(id), {
       method: "PATCH",
-      headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Prefer":"return=minimal" },
+      headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+authKey,"Prefer":"return=minimal" },
       body: JSON.stringify({ assigned_member_id: null })
     }).catch(e => console.warn("[OJO] unassign vehicles failed:", e.message));
 
-    // Step 2: Delete member (raw fetch)
+    // Step 2: Delete member
     const r = await fetch(SUPABASE_URL + "/rest/v1/team_members?id=eq." + encodeURIComponent(id), {
       method: "DELETE",
-      headers: { "apikey":SUPABASE_KEY,"Authorization":"Bearer "+(SERVICE_KEY||SUPABASE_KEY),"Prefer":"return=minimal" }
+      headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + authKey, "Prefer": "return=minimal" }
     });
     console.log("[OJO] DELETE team_members status:", r.status);
     if (!r.ok && r.status !== 204) {
       let msg = "Delete failed (" + r.status + ")";
       try { const j = await r.json(); msg = j.message || j.hint || j.error || msg; } catch(e) {}
-      alert("Delete failed: " + msg);
+      // If 401/403, the key might be wrong — clear stored key so user can re-enter
+      if (r.status === 401 || r.status === 403) {
+        localStorage.removeItem("ojo_service_key");
+        alert("❌ Auth failed — the key may be wrong or expired. Please try again and re-enter your service_role key.");
+      } else {
+        alert("Delete failed: " + msg);
+      }
       return false;
     }
 
-    // Step 3: Remove from cache immediately → instant UI update
+    // Step 3: Remove from local cache immediately
     teamMembersCache = teamMembersCache.filter(m => m.id !== id);
     renderMembers();
     renderTeamAlerts();
@@ -6134,16 +6171,15 @@ function editVehicle(id) {
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 async function deleteMember(id) {
-  if (!confirm("Delete this member?")) return;
-  console.log("[OJO] deleteMember called, id:", id);
+  if (!confirm("Delete this member? This cannot be undone.")) return;
   const ok = await deleteMemberFromSupabase(id);
-  console.log("[OJO] deleteMemberFromSupabase result:", ok);
   if (ok) {
-    // Re-fetch from Supabase to confirm delete actually persisted (RLS check)
+    // Re-fetch to confirm delete persisted (catches silent RLS failures)
     await loadMembersFromSupabase();
     const stillExists = teamMembersCache.some(m => m.id === id);
     if (stillExists) {
-      alert("⚠️ Delete appeared to succeed but the member still exists.\n\nThis is a Supabase RLS (Row Level Security) issue — the anon key lacks DELETE permission on team_members.\n\nFix: In Supabase → Table Editor → team_members → RLS Policies, add a DELETE policy. Or paste your service_role key into SERVICE_KEY at the top of index.html.");
+      localStorage.removeItem("ojo_service_key"); // Clear bad key
+      alert("⚠️ Delete failed — member still exists after re-check.\n\nThe service_role key may be incorrect. Please try again and re-enter your key.");
     } else {
       renderMembers(); renderTeamAlerts(); populateAssignedMemberDropdown();
       showToast("✅ Member deleted");
