@@ -2233,8 +2233,8 @@ function updateStats() {
   });
   const el_o=getEl("stat-open"),el_r=getEl("stat-revenue"),el_p=getEl("stat-profit");
   if(el_o) el_o.textContent = open;
-  if(el_r) el_r.textContent = revenue>=1000 ? "$"+Math.round(revenue/1000)+"k" : money(revenue);
-  if(el_p) el_p.textContent = profit>=1000  ? "$"+Math.round(profit/1000)+"k"  : money(profit);
+  if(el_r) { el_r.textContent = money(revenue); el_r.title = "All completed jobs total"; }
+  if(el_p) { el_p.textContent = money(profit);  el_p.title = "OJO commission from completed jobs"; }
 }
 
 // ── Finance render ────────────────────────────────────────────────────────────
@@ -4200,6 +4200,10 @@ function showStatusLog(jobId) {
     "Heading to Pickup":"#c9a84c","Arrived":"#c9a84c",
     "In Progress":"#f2cf63","Completed":"#4caf72","Cancelled":"#e05555","Voided":"#888"
   };
+  const getLogColor = (entry) => {
+    if (entry.status && entry.status.includes("Cancelled by")) return "#ff6b35";
+    return statusColors[entry.status] || "#888";
+  };
   if (!log.length) {
     getEl("statusLogBody").innerHTML = `
       <div style="text-align:center;padding:24px 0;">
@@ -4213,8 +4217,9 @@ function showStatusLog(jobId) {
       const d = new Date(entry.ts);
       const dateStr = d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
       const timeStr = d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
-      const color = statusColors[entry.status] || "#888";
+      const color = getLogColor(entry);
       const isLast = i === log.length - 1;
+      const isCancelEntry = entry.status && entry.status.includes("Cancelled by");
       html += `
         <div style="display:flex;gap:12px;align-items:flex-start;">
           <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:18px;">
@@ -4226,6 +4231,7 @@ function showStatusLog(jobId) {
               <div>
                 ${entry.prev?`<div style="font-size:9px;color:#555;margin-bottom:2px;">${escapeHtml(entry.prev)} &#x2192;</div>`:""}
                 <div style="font-size:14px;font-weight:800;color:${color};">${escapeHtml(entry.status)}</div>
+                ${isCancelEntry && entry.cancel_reason ? `<div style="font-size:11px;color:#c87a5a;margin-top:3px;line-height:1.4;">Reason: ${escapeHtml(entry.cancel_reason)}</div>` : ""}
               </div>
               <div style="text-align:right;flex-shrink:0;">
                 <div style="font-size:11px;color:var(--text);font-weight:700;">${timeStr}</div>

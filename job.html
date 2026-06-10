@@ -1044,21 +1044,25 @@ async function confirmCancel() {
   closeCancelModal();
   const now = new Date().toISOString();
   const driverName = currentJob.assigned_driver || "Driver";
-  // Store in extras (for backwards compat display)
+  const cancelNote = `[${new Date(now).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit",hour12:true})}] ⚠️ Cancelled by ${driverName}: ${_selectedCancelReason}`;
+  // Append to existing internal notes (don't overwrite)
+  const existingNotes = (currentJob.internal_notes || "").trim();
+  const updatedNotes  = existingNotes ? existingNotes + "\n" + cancelNote : cancelNote;
+  // Store in extras
   const extras = Object.assign({}, currentJob.extras || {}, {
     cancel_reason:       _selectedCancelReason,
     cancelled_by_driver: driverName,
     cancel_ts:           now
   });
-  // Also patch the new dedicated columns + return to Offer for reassignment
+  // Patch all columns + return to Offer for reassignment
   await applyStatus("Offer", {
     extras,
     assigned_driver: "",
     cancel_reason:   _selectedCancelReason,
     cancelled_by:    driverName,
-    cancelled_at:    now
+    cancelled_at:    now,
+    internal_notes:  updatedNotes
   });
-  showToast("⚠️ Job released back to dispatch");
   _selectedCancelReason = "";
 }
 
@@ -1370,9 +1374,23 @@ async function applyStatus(newStatus, extraPatch) {
     ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
     : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
   const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
-  existingLog.push({ status: newStatus, prev: prevStatus, ts: new Date().toISOString() });
+
+  // Build a descriptive label for this log entry
+  const patchExtras = extraPatch?.extras || {};
+  let logLabel = newStatus;
+  if (newStatus === "Offer" && patchExtras.cancel_reason) {
+    const driver = patchExtras.cancelled_by_driver || currentJob.assigned_driver || "Driver";
+    logLabel = `Cancelled by ${driver} → back to Offer`;
+  }
+  existingLog.push({
+    status:  logLabel,
+    prev:    prevStatus,
+    ts:      new Date().toISOString(),
+    ...(patchExtras.cancel_reason ? { cancel_reason: patchExtras.cancel_reason } : {})
+  });
+
   // Merge with any extraPatch.extras (e.g. driver check-in fields)
-  const mergedExtras = Object.assign({}, existingExtras, patch.extras || {}, { status_log: existingLog });
+  const mergedExtras = Object.assign({}, existingExtras, patchExtras, { status_log: existingLog });
   patch.extras = mergedExtras;
 
   try {
@@ -1380,7 +1398,7 @@ async function applyStatus(newStatus, extraPatch) {
     Object.assign(currentJob, patch);
     currentJob.extras = mergedExtras;
     render(currentJob);
-    showToast(newStatus === "Cancelled" ? "Job cancelled" : `Status: ${newStatus} ✓`);
+    showToast(newStatus === "Cancelled" ? "Job cancelled" : newStatus === "Offer" && patchExtras.cancel_reason ? "⚠️ Job released to dispatch" : `Status: ${newStatus} ✓`);
   } catch(e) {
     alert("Failed to update status: " + e.message);
   }
