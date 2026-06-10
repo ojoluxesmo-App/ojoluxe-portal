@@ -165,6 +165,54 @@
     color: var(--red); font-size: 15px; font-weight: 800;
   }
 
+  /* ── Cancel Reason Modal ── */
+  .cancel-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 300; padding: 0;
+  }
+  .cancel-sheet {
+    background: #111; border: 1px solid #2a0a0a;
+    border-radius: 18px 18px 0 0; width: 100%; max-width: 480px;
+    padding: 24px 20px 36px; animation: slideUp .25s ease;
+  }
+  .cancel-title {
+    font-size: 16px; font-weight: 800; color: var(--red);
+    margin-bottom: 4px;
+  }
+  .cancel-sub {
+    font-size: 11px; color: var(--muted); margin-bottom: 18px;
+  }
+  .cancel-reasons { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .cancel-reason-btn {
+    width: 100%; padding: 12px 14px; border: 1px solid #2a1a1a;
+    border-radius: 10px; background: #0a0a0a; color: var(--text);
+    font-size: 13px; font-weight: 600; cursor: pointer; text-align: left;
+    transition: border-color .15s, background .15s;
+  }
+  .cancel-reason-btn:hover, .cancel-reason-btn.selected {
+    border-color: var(--red); background: #1a0808; color: #fff;
+  }
+  .cancel-other-input {
+    width: 100%; background: #0a0a0a; border: 1px solid #333;
+    border-radius: 10px; padding: 11px 13px; font-size: 13px;
+    color: var(--text); outline: none; margin-bottom: 14px;
+    display: none; transition: border-color .15s;
+  }
+  .cancel-other-input:focus { border-color: var(--red); }
+  .cancel-confirm-btn {
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    background: var(--red); color: #fff; font-size: 15px;
+    font-weight: 800; cursor: pointer; opacity: .5; pointer-events: none;
+    transition: opacity .15s;
+  }
+  .cancel-confirm-btn.ready { opacity: 1; pointer-events: auto; }
+  .cancel-back-btn {
+    width: 100%; padding: 11px; border: 1px solid #222; border-radius: 10px;
+    background: transparent; color: var(--muted); font-size: 13px;
+    font-weight: 700; cursor: pointer; margin-top: 8px;
+  }
+
   /* Fare breakdown */
   .fare-box {
     background: #0a0908; border: 1px solid #2a2a1a;
@@ -489,6 +537,28 @@
     </div>
     <button class="checkin-confirm" onclick="confirmCheckin()">✅ Confirm & Accept Job</button>
     <div style="font-size:10px;color:#444;text-align:center;margin-top:8px;">Photos optional but encouraged.</div>
+  </div>
+</div>
+
+<!-- ══ Cancel Reason Modal ══ -->
+<div id="cancelReasonOverlay" class="cancel-overlay" style="display:none;">
+  <div class="cancel-sheet">
+    <div class="cancel-title">✕ Cancel Job</div>
+    <div class="cancel-sub">Please select a reason. This will be logged for dispatch review.</div>
+    <div class="cancel-reasons" id="cancelReasonList">
+      <button class="cancel-reason-btn" onclick="selectCancelReason(this,'Unable to fulfill — personal emergency')">🚨 Personal emergency / unable to fulfill</button>
+      <button class="cancel-reason-btn" onclick="selectCancelReason(this,'Client cancelled — no longer needs ride')">👤 Client cancelled — no longer needs ride</button>
+      <button class="cancel-reason-btn" onclick="selectCancelReason(this,'Client requested cancellation')">📞 Client directly requested cancellation</button>
+      <button class="cancel-reason-btn" onclick="selectCancelReason(this,'Vehicle issue — breakdown or mechanical problem')">🔧 Vehicle issue / breakdown</button>
+      <button class="cancel-reason-btn" onclick="selectCancelReason(this,'Client no-show — did not arrive at pickup')">⏳ Client no-show at pickup</button>
+      <button class="cancel-reason-btn" onclick="selectCancelReason(this,'Client illness or medical issue')">🤒 Client illness or medical issue</button>
+      <button class="cancel-reason-btn" onclick="selectCancelReason(this,'Conflict or confrontation with client')">⚠️ Conflict / confrontation with client</button>
+      <button class="cancel-reason-btn" onclick="selectCancelReason(this,'Accident or road incident')">💥 Accident or road incident</button>
+      <button class="cancel-reason-btn" id="cancelOtherBtn" onclick="selectCancelReason(this,'other')">✏️ Other (please specify)</button>
+    </div>
+    <input class="cancel-other-input" id="cancelOtherText" placeholder="Describe the reason..." oninput="onCancelOtherInput()">
+    <button class="cancel-confirm-btn" id="cancelConfirmBtn" onclick="confirmCancel()">✕ Confirm Cancellation</button>
+    <button class="cancel-back-btn" onclick="closeCancelModal()">← Go Back</button>
   </div>
 </div>
 
@@ -918,9 +988,78 @@ function doStatus(newStatus) {
     openCheckin();
     return;
   }
-  const label = newStatus === "Cancelled" ? `Cancel this job?` : `Move to "${newStatus}"?`;
+  if (newStatus === "Cancelled") {
+    openCancelModal();
+    return;
+  }
+  const label = `Move to "${newStatus}"?`;
   if (!confirm(label)) return;
   applyStatus(newStatus, {});
+}
+
+// ── Cancel Reason Modal ───────────────────────────────────────────────────────
+let _selectedCancelReason = "";
+
+function openCancelModal() {
+  _selectedCancelReason = "";
+  // Reset UI
+  document.querySelectorAll(".cancel-reason-btn").forEach(b => b.classList.remove("selected"));
+  document.getElementById("cancelOtherText").style.display = "none";
+  document.getElementById("cancelOtherText").value = "";
+  document.getElementById("cancelConfirmBtn").classList.remove("ready");
+  document.getElementById("cancelReasonOverlay").style.display = "flex";
+}
+
+function closeCancelModal() {
+  document.getElementById("cancelReasonOverlay").style.display = "none";
+  _selectedCancelReason = "";
+}
+
+function selectCancelReason(btn, reason) {
+  document.querySelectorAll(".cancel-reason-btn").forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
+  const otherInput = document.getElementById("cancelOtherText");
+  if (reason === "other") {
+    otherInput.style.display = "block";
+    otherInput.focus();
+    _selectedCancelReason = "";
+    document.getElementById("cancelConfirmBtn").classList.remove("ready");
+  } else {
+    otherInput.style.display = "none";
+    _selectedCancelReason = reason;
+    document.getElementById("cancelConfirmBtn").classList.add("ready");
+  }
+}
+
+function onCancelOtherInput() {
+  const val = document.getElementById("cancelOtherText").value.trim();
+  _selectedCancelReason = val ? "Other: " + val : "";
+  const btn = document.getElementById("cancelConfirmBtn");
+  if (val) btn.classList.add("ready");
+  else btn.classList.remove("ready");
+}
+
+async function confirmCancel() {
+  if (!_selectedCancelReason) return;
+  closeCancelModal();
+  const now = new Date().toISOString();
+  const driverName = currentJob.assigned_driver || "Driver";
+  // Store in extras (for backwards compat display)
+  const extras = Object.assign({}, currentJob.extras || {}, {
+    cancel_reason:       _selectedCancelReason,
+    cancelled_by_driver: driverName,
+    cancel_ts:           now
+  });
+  // Also patch the new dedicated columns + return to Offer for reassignment
+  await applyStatus("Offer", {
+    extras,
+    assigned_driver: "",
+    cancel_reason:   _selectedCancelReason,
+    cancelled_by:    driverName,
+    cancelled_at:    now
+  });
+  showToast("⚠️ Job released back to dispatch");
+  _selectedCancelReason = "";
 }
 
 function openCheckin() {
