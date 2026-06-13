@@ -788,7 +788,17 @@ window.addEventListener("unhandledrejection", function(e) {
 
         <div class="field">
           <label>Client Name</label>
-          <input id="name" placeholder="e.g. John Smith" list="clientNameSuggestions" oninput="onClientNameInput()" autocomplete="off">
+          <div style="display:flex;gap:8px;align-items:stretch;">
+            <select id="clientTitle" style="flex:0 0 92px;">
+              <option value="">—</option>
+              <option value="Mr.">Mr.</option>
+              <option value="Mrs.">Mrs.</option>
+              <option value="Ms.">Ms.</option>
+              <option value="Mx.">Mx.</option>
+              <option value="Dr.">Dr.</option>
+            </select>
+            <input id="name" placeholder="e.g. John Smith" list="clientNameSuggestions" oninput="onClientNameInput()" autocomplete="off" style="flex:1;min-width:0;">
+          </div>
           <datalist id="clientNameSuggestions"></datalist>
         </div>
 
@@ -2083,6 +2093,33 @@ function setValue(id,val){
   const el=getEl(id);
   if(el) el.value = (val===null||val===undefined) ? "" : String(val);
 }
+
+// ── Client title (Mr./Mrs./Ms.) helpers ──────────────────────────────────────
+const CLIENT_TITLES = ["Mr.","Mrs.","Ms.","Mx.","Dr."];
+function stripTitle(name){
+  // remove a leading Mr/Mrs/Ms/Mx/Dr (with or without dot) so we don't double up
+  return (name||"").replace(/^\s*(Mr|Mrs|Ms|Mx|Dr)\.?\s+/i, "").trim();
+}
+function getClientName(){
+  // compose dropdown title + typed name into the stored client string
+  const title = getValue("clientTitle") || "";
+  const raw   = stripTitle(getValue("name"));
+  return title ? (title + " " + raw).trim() : raw;
+}
+function setClientName(fullName){
+  // split a stored client string back into title dropdown + name on edit
+  const m = (fullName||"").match(/^\s*(Mr|Mrs|Ms|Mx|Dr)\.?\s+(.*)$/i);
+  if (m){
+    const norm  = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase() + ".";
+    const match = CLIENT_TITLES.find(t => t.toLowerCase() === norm.toLowerCase());
+    setValue("clientTitle", match || "");
+    setValue("name", m[2].trim());
+  } else {
+    setValue("clientTitle", "");
+    setValue("name", fullName||"");
+  }
+}
+
 function isAdminMode(){return portalMode==="admin";}
 
 // ── Main Tab Navigation ───────────────────────────────────────────────────────
@@ -3163,7 +3200,7 @@ async function saveJob() {
   try {
   buildDriverNotes(); // compile tags + gate/flight + special into driverNotes hidden field
   console.log("[S1] saveJob started");
-  const client=getValue("name");
+  const client=getClientName();
   console.log("[S2] client=",client);
   let date = getValue("date");
   console.log("[S3] date=",date);
@@ -3483,7 +3520,7 @@ async function updateJobStatus(jobId, newStatus) {
 // ── Multi-Day Tour: split total evenly, generate N sequential job entries ─────
 async function saveMultiDayTour() {
   try {
-    const client   = getValue("name");
+    const client   = getClientName();
     const dateStr  = getValue("date");
     const days     = parseInt(getValue("agentNumDays")) || 0;
     const totalAmt = num(getValue("tourTotalAmount"));
@@ -3836,6 +3873,7 @@ function fillFormById(id) {
     agentDepositAmt:j.agent_deposit_amt||""
   };
   Object.entries(map).forEach(([k,v])=>setValue(k,v));
+  setClientName(j.client);  // split stored "Mr. John Smith" → title dropdown + name
   parseDriverNotes(j.waybill_notes||"");
   // Restore airport detail fields if present
   const ex2 = (typeof j.extras === "string") ? (() => { try { return JSON.parse(j.extras); } catch(e) { return {}; } })() : (j.extras||{});
@@ -3921,7 +3959,7 @@ function buildDispatchMessage() {
   const driver = getValue("dispatchDriverInput");
   const token  = j.share_token || "";
   const PROD_URL  = "https://ojoluxe-portal.vercel.app";
-  const baseUrl   = window.location.hostname === "127.0.0.1" || window.location.protocol === "file:" ? PROD_URL : window.location.origin;
+  const baseUrl   = PROD_URL;  // always canonical — never inherit a preview/deploy origin
   const url    = token ? (baseUrl + "/job.html?token=" + token) : "(generate share link first)";
   return `Hi ${driver}! OJO Luxe has dispatched a job to you.\n\nRef: ${j.reference_code||""}\nClient: ${j.client||""}\nDate: ${j.date||""} ${j.pickup_time||""}\nPickup: ${j.from_loc||""}\n\nYour job card:\n${url}\n\nPlease open the link to accept and check in. – OJO Luxe Dispatch`;
 }
@@ -4300,7 +4338,7 @@ async function shareJobLink(jobId) {
 
   // Build the URL — always relative to origin root
   const PROD_URL = "https://ojoluxe-portal.vercel.app";
-  const baseUrl  = window.location.hostname === "127.0.0.1" || window.location.protocol === "file:" ? PROD_URL : window.location.origin;
+  const baseUrl  = PROD_URL;  // always canonical — never inherit a preview/deploy origin
   const url  = baseUrl + "/job.html?token=" + token;
   const msg  = `OJO Luxe Job Assignment\n${j.reference_code||""}\nClient: ${j.client||""}\nDate: ${j.date||""} ${j.pickup_time||""}\nPickup: ${j.from_loc||""}\n\nOpen your job card:\n${url}`;
 
