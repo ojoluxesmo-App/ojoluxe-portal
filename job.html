@@ -509,7 +509,7 @@
       <input class="checkin-input" id="ci_plate" type="text" placeholder="e.g. 7ABC123" autocomplete="off" style="text-transform:uppercase;">
     </div>
     <div class="checkin-field">
-      <div class="checkin-label">📸 Photos (Optional)</div>
+      <div class="checkin-label">📸 Photos (Required)</div>
       <div class="photo-slots">
         <div class="photo-slot" id="slot_vehicle_front" onclick="showPhotoGuide('slot_vehicle_front')">
           <input type="file" id="photo_vehicle_front" accept="image/*" capture="environment" onchange="previewPhoto(this,'slot_vehicle_front','lbl_vehicle_front')">
@@ -536,7 +536,7 @@
       </div>
     </div>
     <button class="checkin-confirm" onclick="confirmCheckin()">✅ Confirm & Accept Job</button>
-    <div style="font-size:10px;color:#444;text-align:center;margin-top:8px;">Photos optional but encouraged.</div>
+    <div style="font-size:10px;color:#444;text-align:center;margin-top:8px;">All photos are required to complete check-in.</div>
   </div>
 </div>
 
@@ -1352,16 +1352,19 @@ async function confirmCheckin() {
   if (!color)   { alert("Please enter your vehicle color."); document.getElementById("ci_color").focus(); return; }
   if (!plate)   { alert("Please enter your license plate."); document.getElementById("ci_plate").focus(); return; }
 
-  const btn = document.querySelector(".checkin-confirm");
-  btn.textContent = "⏳ Uploading photos..."; btn.disabled = true;
-  // Keep overlay open while uploading so file inputs stay accessible
-
   const jobId = currentJob.id;
   const photoVehicle  = document.getElementById("photo_vehicle_front")?.files[0];
   const photoInterior = document.getElementById("photo_car_interior")?.files[0];
-  // Selfie now comes from the camera modal blob, not a file input
   const selfieSlot    = document.getElementById("slot_selfie");
   const photoSelfie   = selfieSlot?._selfieBlob ? new File([selfieSlot._selfieBlob], "selfie.jpg", { type: "image/jpeg" }) : null;
+
+  if (!photoVehicle)  { alert("Please take the vehicle front + plate photo before continuing."); return; }
+  if (!photoInterior) { alert("Please take the car interior photo before continuing."); return; }
+  if (!photoSelfie)   { alert("Please take your selfie verification photo before continuing."); return; }
+
+  const btn = document.querySelector(".checkin-confirm");
+  btn.textContent = "⏳ Uploading photos..."; btn.disabled = true;
+  // Keep overlay open while uploading so file inputs stay accessible
 
   const hasPhotos = photoVehicle || photoInterior || photoSelfie;
   if (hasPhotos) btn.textContent = "⏳ Uploading " + [photoVehicle,photoInterior,photoSelfie].filter(Boolean).length + " photo(s)...";
