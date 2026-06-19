@@ -1526,11 +1526,15 @@ function showWaybill() {
         <div style="padding:9px 12px;border-bottom:1px solid #eaeaea;">
           <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">PICKUP</div>
           <div style="font-size:12px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.from_loc||"—")}</div>
+          ${ex.pickup_airline  ? `<div style="font-size:11px;color:#555;margin-top:3px;">✈ ${escapeHtml(ex.pickup_airline)}</div>` : ""}
+          ${ex.pickup_terminal ? `<div style="font-size:11px;color:#888;margin-top:1px;">🛫 ${escapeHtml(ex.pickup_terminal)}</div>` : ""}
         </div>
         ${stops}
         <div style="padding:9px 12px;">
           <div style="font-size:9px;font-weight:700;color:#aaa;letter-spacing:.14em;margin-bottom:2px;">DROPOFF</div>
           <div style="font-size:12px;font-weight:700;color:#111;line-height:1.4;">${escapeHtml(j.to_loc||"—")}</div>
+          ${ex.dropoff_airline  ? `<div style="font-size:11px;color:#555;margin-top:3px;">✈ ${escapeHtml(ex.dropoff_airline)}</div>` : ""}
+          ${ex.dropoff_terminal ? `<div style="font-size:11px;color:#888;margin-top:1px;">🛫 ${escapeHtml(ex.dropoff_terminal)}</div>` : ""}
         </div>
       </div>
       <!-- Driver + Pay -->
