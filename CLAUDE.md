@@ -84,6 +84,7 @@ layer.
 - `saveJob()` (~3199), `loadJobs()` (~3895) — both have proper try/catch + user-facing error alert/banner on Supabase failure
 - `saveVehicle()`, `saveCompany()`, `saveClient()`, `saveMember()` — all route through `upsertXToSupabase()` helpers that alert on error
 - Multi-day tour batch insert (`saveMultiDayTour()` ~3521) — single atomic insert, alerts on failure
+- Driver Notes: duplicate "Flight #" / "Gate Code" inline fields removed — gate code is now typed into the Special Instructions free-text box (`noteSpecial`); the top "Airline / Flight #" (`extras.pickup_airline`/`dropoff_airline`) is the single flight source read by job.html's tracker/waybill. `parseDriverNotes()` folds any legacy "Gate Code:"/"Flight #:" text from old `waybill_notes` into `noteSpecial` so existing jobs don't lose that data on re-save.
 
 ### index.html — Bugs (fix in order)
 1. Driver assignment (`confirmDispatch()` ~3991) — assigns whatever name is typed; never checks it exists in `team_members` before the PATCH

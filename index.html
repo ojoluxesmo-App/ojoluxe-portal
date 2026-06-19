@@ -1118,19 +1118,8 @@ window.addEventListener("unhandledrejection", function(e) {
           <button type="button" class="driver-tag" data-tag="Suit & Tie" onclick="toggleDriverTag(this)" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;">Suit & Tie</button>
           <button type="button" class="driver-tag" data-tag="Fiji Water" onclick="toggleDriverTag(this)" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s;">Fiji Water</button>
         </div>
-        <!-- Inline value fields -->
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <div style="flex:1;">
-            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Gate Code</label>
-            <input id="noteGateCode" type="text" placeholder="e.g. #1234" style="width:100%;box-sizing:border-box;">
-          </div>
-          <div style="flex:1;">
-            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Flight #</label>
-            <input id="noteFlightNum" type="text" placeholder="e.g. AA123" style="width:100%;box-sizing:border-box;">
-          </div>
-        </div>
         <!-- Special / free notes -->
-        <textarea id="noteSpecial" placeholder="Special instructions, allergies, VIP preferences..." style="min-height:50px;"></textarea>
+        <textarea id="noteSpecial" placeholder="Special instructions, allergies, VIP preferences, gate code (e.g. #1234)…" style="min-height:50px;"></textarea>
         <!-- Hidden combined field for save -->
         <input type="hidden" id="driverNotes">
       </div>
@@ -3793,13 +3782,8 @@ function toggleDriverTag(btn) {
 }
 function buildDriverNotes() {
   const tags = [...document.querySelectorAll(".driver-tag.active")].map(b=>b.dataset.tag);
-  const gate  = (getValue("noteGateCode")||"").trim();
-  const flight= (getValue("noteFlightNum")||"").trim();
   const special=(getValue("noteSpecial")||"").trim();
-  const parts = [...tags];
-  if (gate)   parts.push("Gate Code: " + gate);
-  if (flight) parts.push("Flight #: " + flight);
-  const combined = [parts.join(" · "), special].filter(Boolean).join("\n");
+  const combined = [tags.join(" · "), special].filter(Boolean).join("\n");
   setValue("driverNotes", combined);
   return combined;
 }
@@ -3808,21 +3792,23 @@ function parseDriverNotes(raw) {
   const knownTags = ["Meet & Greet","Car Seat","Help with Luggage","Disability Assistance","Suit & Tie","Fiji Water"];
   const lines = raw.split("\n");
   const tagLine = lines[0] || "";
-  const special = lines.slice(1).join("\n");
+  let special = lines.slice(1).join("\n");
   // Restore tags
   document.querySelectorAll(".driver-tag").forEach(btn => {
     btn.classList.toggle("active", tagLine.includes(btn.dataset.tag));
   });
-  // Restore gate/flight
+  // Legacy gate/flight tags (fields removed) — fold into Special Instructions so re-saving doesn't drop them
   const gateMatch  = tagLine.match(/Gate Code:\s*([^·\n]+)/);
   const flightMatch= tagLine.match(/Flight #:\s*([^·\n]+)/);
-  setValue("noteGateCode",  gateMatch  ? gateMatch[1].trim()  : "");
-  setValue("noteFlightNum", flightMatch? flightMatch[1].trim(): "");
+  const legacy = [];
+  if (gateMatch)   legacy.push("Gate Code: " + gateMatch[1].trim());
+  if (flightMatch) legacy.push("Flight #: " + flightMatch[1].trim());
+  if (legacy.length) special = [legacy.join(" · "), special].filter(Boolean).join("\n");
   setValue("noteSpecial", special);
 }
 function clearDriverNotes() {
   document.querySelectorAll(".driver-tag").forEach(b=>b.classList.remove("active"));
-  setValue("noteGateCode",""); setValue("noteFlightNum",""); setValue("noteSpecial","");
+  setValue("noteSpecial","");
   setValue("driverNotes","");
 }
 
