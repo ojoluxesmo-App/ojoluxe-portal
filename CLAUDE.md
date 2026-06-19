@@ -73,7 +73,7 @@ layer.
 ### index.html — What's Solid
 - Job lifecycle state machine wired end-to-end
 - Pay math engine: base rates, OT at $75/hr, 10% OJO commission, poster commission, addons
-- `PRICING_CONFIG` centralized with all vehicle rates
+- `PRICING_CONFIG` centralized with all vehicle rates, including Mini Van + Sprinter hourly brackets
 - Quick Quote modal
 - Driver assignment + auto-status bump
 - Waybill generation and print layout
@@ -81,20 +81,18 @@ layer.
 - Search, filter, date range on job lists
 - WhatsApp/SMS dispatch message builder
 - Contributions ledger
+- `saveJob()` (~3199), `loadJobs()` (~3895) — both have proper try/catch + user-facing error alert/banner on Supabase failure
+- `saveVehicle()`, `saveCompany()`, `saveClient()`, `saveMember()` — all route through `upsertXToSupabase()` helpers that alert on error
+- Multi-day tour batch insert (`saveMultiDayTour()` ~3521) — single atomic insert, alerts on failure
 
-### index.html — Bugs / Silent Failures (fix in order)
-1. `saveJob()` ~line 3290 — no error check after Supabase insert/update; silently fails
-2. `loadJobs()` — load failure is console.error only; dispatcher sees blank screen
-3. `saveVehicle()`, `saveCompany()`, `saveClient()` — no try/catch (only `saveMember` protected)
-4. `addOnCharges` update ~line 4481 — no error check
-5. Driver assignment — no check if driver exists in team_members before PATCH
-6. Multi-day batch insert — one bad record breaks entire batch silently
-7. Seed data (`seedMembersIfEmpty`) — silent failure leaves app with no drivers
+### index.html — Bugs (fix in order)
+1. Driver assignment (`confirmDispatch()` ~3991) — assigns whatever name is typed; never checks it exists in `team_members` before the PATCH
+2. Manual pricing (`calculateJobPrice()` ~5471) — no validation; can save $0 or negative price
+3. Seed data (`seedMembersIfEmpty()` ~5228) — has try/catch so it won't crash, but failures only `console.error`/`warn` — no user-facing alert if seeding/migration fails
+4. `saveExpenses()` / addon_charges update (~4479) — has an error check but only logs to console, no user alert (minor — other save paths alert, this one doesn't)
 
 ### index.html — Incomplete
-- Square payment gateway — fully stubbed; payment_type is label only, no SDK
-- Manual pricing — no validation (can save $0 or negative price)
-- Mini Van + Sprinter missing hourly bracket rates in PRICING_CONFIG
+- Square payment gateway — fully stubbed; zero references to "Square" in the file; `payment_type` is label only, no `payment_status` field, no SDK
 
 ### job.html — What's Solid
 - Token-based access with proper error states
@@ -106,37 +104,30 @@ layer.
 - GPS navigation (Google / Apple / Waze)
 - Waybill modal + print layout
 - Mobile layout (flexible grid, full-width buttons)
+- Check-in photo upload (`confirmCheckin()` ~1344) — calls `uploadPhotoToSupabase()` for all 3 photos via `Promise.all`, merges URLs into `extras`, persists via `applyStatus()`. No data loss.
 
-### job.html — Critical Bug (fix first)
-1. **Photos never uploaded** — `uploadPhotoToSupabase()` exists but is never called
-   in `confirmCheckin()`. All check-in photos are lost on navigation. DATA LOSS.
-
-### job.html — Other Bugs
-2. `time_start`/`time_end` stored as `HH:MM` only — no date, ambiguous across midnight
-3. Camera permission not pre-checked — silent hang if blocked
-4. No selfie retry button if capture fails mid-flow
-5. `share_token` exposed in browser history via URL query param
+### job.html — Bugs
+1. `time_start`/`time_end` stored as `HH:MM` only (`toTimeString().slice(0,5)`) — no date, ambiguous across midnight
+2. `share_token` — read via `URLSearchParams`, never scrubbed with `history.replaceState`; persists in browser history
+3. Camera permission not pre-checked via `navigator.permissions.query` — `getUserMedia` failure is caught and alerted (not a silent hang), but there's no pre-check before prompting
+4. Selfie capture — manual capture-ring tap lets the driver retry, but there's no explicit "retry" affordance if a captured blob comes back null mid-flow
 
 ---
 
 ## RECOMMENDED FIX ORDER
 
 ```
-MUST FIX BEFORE CALLING STABLE:
-1. Wire photo upload in job.html confirmCheckin()       ← DATA LOSS BUG
-2. Add error feedback on saveJob() in index.html        ← SILENT FAILURE
-3. Add load failure alert in loadJobs()
-4. Add try/catch to saveVehicle, saveCompany, saveClient
-
 SHOULD FIX BEFORE SQUARE INTEGRATION:
-5. Validate manual pricing (no $0 / negative)
-6. Add hourly rates for Mini Van + Sprinter in PRICING_CONFIG
-7. Fix time_start/time_end to full ISO timestamp
+1. Driver assignment validation in confirmDispatch() (check team_members exists first)
+2. Validate manual pricing (no $0 / negative)
+3. Add user-facing alert to seedMembersIfEmpty() failures
+4. Add user-facing alert to saveExpenses() failures
+5. Fix time_start/time_end to full ISO timestamp
 
 NICE TO HAVE:
-8. Camera permission pre-check in job.html
-9. Selfie retry button
-10. Driver assignment validation (check team_members exists first)
+6. Camera permission pre-check in job.html
+7. Explicit selfie retry button/affordance on null capture
+8. Scrub share_token from URL via history.replaceState after read
 ```
 
 ---

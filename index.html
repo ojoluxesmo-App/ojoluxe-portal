@@ -3209,6 +3209,10 @@ async function saveJob() {
   console.log("[S4] calling calculateJobPrice");
   const jobType=getValue("jobType"), vehicleType=getValue("vehicleType");
   const pricingMode=getValue("pricingMode");
+  if (pricingMode === "manual" && num(getValue("manualPrice")) <= 0) {
+    alert("Manual price must be greater than $0.");
+    return;
+  }
   console.log("[S4a] jobType=",jobType," vehicleType=",vehicleType," mode=",pricingMode);
   const pricing=calculateJobPrice({
     job_type:jobType, vehicle_type:vehicleType,
@@ -3227,6 +3231,10 @@ async function saveJob() {
   // STATUS FLOW (for driver app reference):\n  // Offer → Assigned → Accepted → Heading to Pickup → Arrived → In Progress → Completed / Cancelled
   let autoStatus = getValue("status");
   const assignedDriver = getValue("assignedDriver");
+  if (assignedDriver && !findMemberByName(assignedDriver)) {
+    alert(`"${assignedDriver}" is not a recognized team member. Please select a valid driver or leave the field blank.`);
+    return;
+  }
   const activeStatuses = ["Assigned","Accepted","Heading to Pickup","Arrived","In Progress"];
   if (assignedDriver && autoStatus === "Offer") autoStatus = "Assigned";
   if (!assignedDriver && activeStatuses.includes(autoStatus)) autoStatus = "Offer";
@@ -3990,7 +3998,9 @@ function sendDispatchSMS() {
 
 async function confirmDispatch(){
   const driver=getValue("dispatchDriverInput");
-  if(!driver||!_dispatchJobId) return;
+  if(!_dispatchJobId) return;
+  if(!driver){ alert("Please enter a driver name."); return; }
+  if(!findMemberByName(driver)){ alert(`"${driver}" is not a recognized team member. Please select a valid driver.`); return; }
   const{error}=await db.from("jobs").update({assigned_driver:driver,status:"Assigned"}).eq("id",_dispatchJobId);
   if(error){alert("Dispatch failed: "+error.message);return;}
   // Generate share token if not already set, so notification link works
@@ -5731,6 +5741,12 @@ let teamVehiclesCache = [];
 
 function getStoredMembers()  { return [...teamMembersCache]; }
 function getStoredVehicles() { return [...teamVehiclesCache]; }
+
+function findMemberByName(name) {
+  const n = String(name||"").trim().toLowerCase();
+  if (!n) return null;
+  return getStoredMembers().find(m => (m.full_name||"").trim().toLowerCase() === n) || null;
+}
 
 async function loadMembersFromSupabase() {
   if (!db) return [];
