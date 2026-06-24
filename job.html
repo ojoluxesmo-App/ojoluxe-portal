@@ -1776,8 +1776,8 @@ function extractFlightCode(text){
 }
 function trackFlight(code){
   if(!code) return;
-  // FlightAware live tracking — works with IATA codes for major carriers
-  window.open("https://www.flightaware.com/live/flight/" + encodeURIComponent(code), "_blank");
+  // Google flight-status search — works with IATA codes for major carriers
+  window.open("https://www.google.com/search?q=flight+status+" + encodeURIComponent(code), "_blank");
 }
 
 // ── Meet & Greet signage ──────────────────────────────────────────────────────
