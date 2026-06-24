@@ -2605,6 +2605,7 @@ function renderJobs() {
     const jid     = escapeHtml(String(j.id));
     const status  = j.status||"Offer";
     const urgency = getUrgencyLevel(j.date, j.pickup_time);
+    const showUrgency = !["Completed","Cancelled","Voided"].includes(status);
     const pricing = calculateJobPrice(j);
     const icon    = status==="Completed"?"✅":status==="Offer"?"🏷":status==="Cancelled"?"❌":status==="Voided"?"🚫":"🚘";
     const agentBadge = j.booking_mode==="agent" ? '<span class="badge-agent">🤝 Agent</span> ' : "";
@@ -2640,7 +2641,7 @@ function renderJobs() {
             </div>
           </div>
           <div class="badges">
-            <span class="badge urgency-${normalizeClassName(urgency)}">${escapeHtml(urgency)}</span>
+            ${showUrgency?`<span class="badge urgency-${normalizeClassName(urgency)}">${escapeHtml(urgency)}</span>`:""}
             <span class="badge">${escapeHtml(j.vehicle_type||"-")}</span>
             <span class="badge">${escapeHtml(j.payment_type||"Cash")}</span>
             <span class="badge">${escapeHtml(j.job_type||"-")}</span>
