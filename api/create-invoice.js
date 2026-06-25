@@ -56,6 +56,7 @@ export default async function handler(req, res) {
         accepted_payment_methods: { card: true },
         payment_requests: [{
           request_type: "BALANCE",
+          due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
           tipping_enabled: true,
           automatic_payment_source: "NONE",
         }],
