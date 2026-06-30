@@ -23,9 +23,39 @@ async function square(path, body) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
   try {
-    const { jobId, customerName, customerEmail, amountCents, note } = req.body;
+    const {
+      jobId, customerName, customerEmail, amountCents, note,
+      invoice_number, service_type, service_date, from_loc, to_loc,
+      vehicle_class, passenger_name, pax_count, duration, rate_note,
+    } = req.body;
     const locationId = process.env.SQUARE_LOCATION_ID;
     const idem = () => crypto.randomUUID();
+
+    const PUBLIC_MESSAGE =
+      "Thank you for choosing OJO Luxe.\n\n" +
+      "All reservations are subject to availability. Airport fees, tolls, parking, " +
+      "and wait time may apply.\n\n" +
+      "A 3.9% service fee applies to all credit card payments and is included in the " +
+      "total shown. Pay by cash, Zelle, or bank transfer to waive this fee - contact " +
+      "us for payment instructions.\n\n" +
+      "Cancellations within 24 hours of pickup may be subject to a cancellation fee.\n\n" +
+      "For assistance:\n" +
+      "info@ojoluxe.com  |  www.ojoluxe.com\n\n" +
+      "Luxury Transportation - Private Chauffeur - Airport Transfers - Tours - Events\n" +
+      "West Coast & Nationwide Service";
+
+    const tripNote = [
+      service_date    ? "Date: "      + service_date    : null,
+      service_type    ? "Service: "   + service_type    : null,
+      from_loc        ? "From: "      + from_loc        : null,
+      to_loc          ? "To: "        + to_loc          : null,
+      vehicle_class   ? "Vehicle: "   + vehicle_class   : null,
+      (passenger_name || pax_count)
+        ? "Passenger: " + [passenger_name, pax_count ? "(" + pax_count + " pax)" : null].filter(Boolean).join(" ")
+        : null,
+      duration        ? "Duration: "  + duration        : null,
+      rate_note       ? "Rate: "      + rate_note       : null,
+    ].filter(Boolean).join("\n");
 
     const { customer } = await square("customers", {
       idempotency_key: idem(),
@@ -39,9 +69,10 @@ export default async function handler(req, res) {
         location_id: locationId,
         customer_id: customer.id,
         line_items: [{
-          name: note || "OJO Luxe ground transportation",
+          name: "Luxury Ground Transportation",
           quantity: "1",
           base_price_money: { amount: amountCents, currency: "USD" },
+          ...(tripNote ? { note: tripNote } : {}),
         }],
       },
     });
@@ -54,6 +85,9 @@ export default async function handler(req, res) {
         primary_recipient: { customer_id: customer.id },
         delivery_method: "EMAIL",
         accepted_payment_methods: { card: true },
+        ...(invoice_number ? { invoice_number } : {}),
+        title: "OJO Luxe - Official Invoice",
+        description: PUBLIC_MESSAGE,
         payment_requests: [{
           request_type: "BALANCE",
           due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
