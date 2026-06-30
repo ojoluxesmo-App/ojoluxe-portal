@@ -2720,6 +2720,11 @@ function renderJobs() {
             ${(()=>{ const _ex=(typeof j.extras==="string")?JSON.parse(j.extras||"{}")||{}:(j.extras||{}); const hasPhotos=_ex.photo_vehicle_front||_ex.photo_car_interior||_ex.photo_selfie; return hasPhotos?`<button class="btn btn-sec" onclick="showDriverPhotos('${j.id}')" title="View driver check-in photos">📸 Photos</button>`:""; })()}
             <button class="btn btn-sec" onclick="shareJobLink('${j.id}')" title="Share job link with driver">🔗 Share</button>
             <button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button>
+            ${(()=>{
+              if (j.square_invoice_id) return `<button class="btn btn-gold" onclick="window.open('${escapeHtml(j.square_invoice_url||'')}','_blank')">View Invoice</button>`;
+              if (!["Cancelled","Voided"].includes(j.status||"")) return `<button class="btn btn-sec" id="inv-btn-${j.id}" onclick="generateInvoice('${j.id}')">Generate Invoice</button>`;
+              return "";
+            })()}
             <button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
           </div>
           ${isAdminMode()?`<div class="action-row" style="margin-top:6px;"><button class="btn btn-danger btn-full" onclick="deleteJob('${j.id}')">Delete</button></div>`:""}
@@ -4344,6 +4349,102 @@ async function shareJobLink(jobId) {
   }
   // Desktop: show share options modal
   showShareOptions(url, msg);
+}
+
+function buildInvoiceNumber(j) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+    }).formatToParts(new Date())
+    .filter(p => p.type !== "literal")
+    .map(p => [p.type, p.value])
+  );
+  const YYYYMMDD = parts.year + parts.month + parts.day;
+  const HHMMSS   = (parts.hour === "24" ? "00" : parts.hour) + parts.minute + parts.second;
+
+  const phone    = j.client_phone || "";
+  const count    = phone ? allJobs.filter(j2 => j2.client_phone === phone).length : 1;
+  const orderNum = String(count).padStart(2, "0");
+
+  const nameParts = (j.client || "").trim().split(/\s+/);
+  const initials  = nameParts.length >= 2
+    ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+    : (j.client || "XX").slice(0, 2).toUpperCase();
+
+  const loc = (j.from_loc || "").toUpperCase();
+  let cityCode = "LA";
+  if      (/\bLAX\b/.test(loc))                 cityCode = "LA";
+  else if (/\bSFO\b/.test(loc))                 cityCode = "SF";
+  else if (/\bSAN\b/.test(loc))                 cityCode = "SD";
+  else if (/\bLAS\b/.test(loc))                 cityCode = "LV";
+  else if (/\bJFK\b|\bEWR\b|\bLGA\b/.test(loc)) cityCode = "NY";
+  else if (/LOS ANGELES/.test(loc))             cityCode = "LA";
+  else if (/SAN FRANCISCO/.test(loc))           cityCode = "SF";
+  else if (/SAN DIEGO/.test(loc))               cityCode = "SD";
+  else if (/LAS VEGAS/.test(loc))               cityCode = "LV";
+  else if (/NEW YORK/.test(loc))                cityCode = "NY";
+
+  return "OJO-" + YYYYMMDD + "-" + HHMMSS + "-" + orderNum + "-" + initials + cityCode;
+}
+
+async function generateInvoice(jobId) {
+  const j   = allJobs.find(x => String(x.id) === String(jobId));
+  if (!j) return;
+  const btn = document.getElementById("inv-btn-" + jobId);
+  if (btn) { btn.disabled = true; btn.textContent = "Generating..."; }
+
+  try {
+    const invoiceNum  = buildInvoiceNumber(j);
+    const amountCents = Math.round(parseFloat(j.total_price || 0) * 100);
+    const body = {
+      jobId:          j.id,
+      customerName:   j.client        || "",
+      customerEmail:  j.client_email  || "",
+      amountCents,
+      invoice_number: invoiceNum,
+      service_type:   j.job_type      || "",
+      service_date:   j.date          || "",
+      from_loc:       j.from_loc      || "",
+      to_loc:         j.to_loc        || "",
+      vehicle_class:  j.vehicle_type  || "",
+      passenger_name: j.client        || "",
+      duration:       j.hours ? j.hours + " hrs" : "",
+      rate_note:      j.payment_type  || "",
+    };
+
+    const res  = await fetch("/api/create-invoice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Invoice creation failed");
+
+    const { invoiceId, payUrl } = data;
+    await db.from("jobs").update({
+      square_invoice_id:  invoiceId,
+      square_invoice_url: payUrl,
+    }).eq("id", jobId);
+
+    const idx = allJobs.findIndex(x => String(x.id) === String(jobId));
+    if (idx !== -1) {
+      allJobs[idx].square_invoice_id  = invoiceId;
+      allJobs[idx].square_invoice_url = payUrl;
+    }
+
+    if (btn) {
+      btn.disabled    = false;
+      btn.id          = "";
+      btn.textContent = "View Invoice";
+      btn.className   = "btn btn-gold";
+      btn.onclick     = () => window.open(payUrl, "_blank");
+    }
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = "Generate Invoice"; }
+    alert("Invoice error: " + err.message);
+  }
 }
 
 function showShareOptions(url, msg) {
