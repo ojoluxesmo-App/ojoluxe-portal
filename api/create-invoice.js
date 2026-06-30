@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
   try {
     const {
-      jobId, customerName, customerEmail, amountCents, note,
+      jobId, customerName, customerEmail, customerPhone, amountCents, note,
       invoice_number, service_type, service_date, from_loc, to_loc,
       vehicle_class, passenger_name, pax_count, duration, rate_note,
     } = req.body;
@@ -60,7 +60,8 @@ export default async function handler(req, res) {
     const { customer } = await square("customers", {
       idempotency_key: idem(),
       given_name: customerName,
-      email_address: customerEmail,
+      ...(customerEmail ? { email_address: customerEmail } : {}),
+      ...(customerPhone ? { phone_number: customerPhone } : {}),
     });
 
     const { order } = await square("orders", {
@@ -83,7 +84,7 @@ export default async function handler(req, res) {
         location_id: locationId,
         order_id: order.id,
         primary_recipient: { customer_id: customer.id },
-        delivery_method: "EMAIL",
+        delivery_method: customerEmail ? "EMAIL" : "SMS",
         accepted_payment_methods: { card: true },
         ...(invoice_number ? { invoice_number } : {}),
         title: "OJO Luxe - Official Invoice",
