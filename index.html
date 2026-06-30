@@ -4368,10 +4368,14 @@ function buildInvoiceNumber(j) {
   const count    = phone ? allJobs.filter(j2 => j2.client_phone === phone).length : 1;
   const orderNum = String(count).padStart(2, "0");
 
-  const nameParts = (j.client || "").trim().split(/\s+/);
+  const TITLES    = /^(mr|mrs|ms|mx|dr)\.?$/i;
+  const rawParts  = (j.client || "").trim().split(/\s+/);
+  const nameParts = rawParts[0] && TITLES.test(rawParts[0]) ? rawParts.slice(1) : rawParts;
   const initials  = nameParts.length >= 2
     ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
-    : (j.client || "XX").slice(0, 2).toUpperCase();
+    : nameParts.length === 1
+      ? nameParts[0].slice(0, 2).toUpperCase()
+      : "XX";
 
   const loc = (j.from_loc || "").toUpperCase();
   let cityCode = "LA";
