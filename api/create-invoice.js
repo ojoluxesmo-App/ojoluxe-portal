@@ -54,7 +54,7 @@ export default async function handler(req, res) {
         ? "Passenger: " + [passenger_name, pax_count ? "(" + pax_count + " pax)" : null].filter(Boolean).join(" ")
         : null,
       duration        ? "Duration: "  + duration        : null,
-      rate_note       ? "Rate: "      + rate_note       : null,
+      rate_note       ? "Payment: "   + rate_note       : null,
     ].filter(Boolean).join("\n");
 
     const rawPhone = (customerPhone || "").replace(/[\s\-\.\(\)]/g, "");
