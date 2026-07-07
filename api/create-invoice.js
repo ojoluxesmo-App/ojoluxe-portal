@@ -84,7 +84,7 @@ export default async function handler(req, res) {
         location_id: locationId,
         order_id: order.id,
         primary_recipient: { customer_id: customer.id },
-        delivery_method: customerEmail ? "EMAIL" : "SMS",
+        delivery_method: "SHARE_MANUALLY",
         accepted_payment_methods: { card: true },
         ...(invoice_number ? { invoice_number } : {}),
         title: "OJO Luxe - Official Invoice",
