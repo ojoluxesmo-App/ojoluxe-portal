@@ -57,11 +57,15 @@ export default async function handler(req, res) {
       rate_note       ? "Rate: "      + rate_note       : null,
     ].filter(Boolean).join("\n");
 
+    const rawPhone = (customerPhone || "").replace(/[\s\-\.\(\)]/g, "");
+    const validPhone = rawPhone.length > 0 ? rawPhone : null;
+    const contactEmail = customerEmail || (!validPhone ? "info@ojoluxe.com" : null);
+
     const { customer } = await square("customers", {
       idempotency_key: idem(),
       given_name: customerName,
-      ...(customerEmail ? { email_address: customerEmail } : {}),
-      ...(customerPhone ? { phone_number: customerPhone } : {}),
+      ...(contactEmail ? { email_address: contactEmail } : {}),
+      ...(validPhone ? { phone_number: validPhone } : {}),
     });
 
     const { order } = await square("orders", {
