@@ -1132,7 +1132,7 @@ window.addEventListener("unhandledrejection", function(e) {
       </div>
 
       <div class="action-row" style="margin-bottom:16px;">
-        <button class="btn btn-gold" onclick="saveJob()" style="flex:2;">Save Job</button>
+        <button id="btnSaveJob" class="btn btn-gold" onclick="saveJob()" style="flex:2;">Save Job</button>
         <button class="btn btn-sec" onclick="cancelEdit()">Cancel</button>
       </div>
     </div>
@@ -3191,7 +3191,12 @@ function getStops() {
 function clearStops(){const sc=getEl("stopsContainer");if(sc){sc.innerHTML="";} stopCount=0;}
 
 // ── Save Job ──────────────────────────────────────────────────────────────────
+let _saveInFlight = false;
 async function saveJob() {
+  if (_saveInFlight) return;
+  _saveInFlight = true;
+  const saveBtn = document.getElementById("btnSaveJob");
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Saving..."; }
   try {
   buildDriverNotes(); // compile tags + gate/flight + special into driverNotes hidden field
   console.log("[S1] saveJob started");
@@ -3321,6 +3326,9 @@ async function saveJob() {
   } catch(e) {
     console.error("[OJO saveJob CRASH]", e);
     alert("saveJob crashed:\n" + e.message + "\n\nLine: " + (e.lineNumber||"?") + "\nCheck console for details.");
+  } finally {
+    _saveInFlight = false;
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save Job"; }
   }
 }
 function cancelEdit(){editingId=null;getEl("formTitle").textContent="+ New Booking";getEl("editModeLabel").style.display="none";clearForm();}
