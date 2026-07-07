@@ -1391,7 +1391,8 @@ async function confirmCheckin() {
     driver_checkin_name: name,
     photo_vehicle_front: urlVehicle  || null,
     photo_car_interior:  urlInterior || null,
-    photo_selfie:        urlSelfie   || null
+    photo_selfie:        urlSelfie   || null,
+    driver_unverified:   false
   });
   await applyStatus(_pendingStatus || "Accepted", { assigned_driver: name, extras });
   _pendingStatus = null;

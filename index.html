@@ -2648,7 +2648,7 @@ function renderJobs() {
           </div>
           <div class="driver-row">
             <span class="driver-lbl">DRIVER</span>
-            <span class="driver-val" style="color:${j.assigned_driver?"var(--green)":"#444"}">${escapeHtml(j.assigned_driver||"Unassigned")}</span>
+            <span class="driver-val" style="color:${j.assigned_driver?"var(--green)":"#444"}">${escapeHtml(j.assigned_driver||"Unassigned")}</span>${(()=>{ const _dex=(typeof j.extras==="string")?(()=>{ try{return JSON.parse(j.extras);}catch(e){return {};} })():(j.extras||{}); return _dex.driver_unverified?`<span class="badge" style="border-color:var(--gold);color:var(--gold);margin-left:6px;">Unverified</span>`:""; })()}
           </div>
           ${(j.client_phone||j.client_email)?`
           <div class="driver-row" style="margin-bottom:12px;">
@@ -3231,9 +3231,10 @@ async function saveJob() {
   // STATUS FLOW (for driver app reference):\n  // Offer → Assigned → Accepted → Heading to Pickup → Arrived → In Progress → Completed / Cancelled
   let autoStatus = getValue("status");
   const assignedDriver = getValue("assignedDriver");
+  let driverUnverified = false;
   if (assignedDriver && !findMemberByName(assignedDriver)) {
-    alert(`"${assignedDriver}" is not a recognized team member. Please select a valid driver or leave the field blank.`);
-    return;
+    if (!confirm(`"${assignedDriver}" is not in team members. Save anyway?`)) return;
+    driverUnverified = true;
   }
   const activeStatuses = ["Assigned","Accepted","Heading to Pickup","Arrived","In Progress"];
   if (assignedDriver && autoStatus === "Offer") autoStatus = "Assigned";
@@ -3290,6 +3291,16 @@ async function saveJob() {
       dropoff_terminal: dropoffTerminal||null,
       dropoff_airline:  dropoffAirline||null
     });
+  }
+  if (assignedDriver) {
+    const _uvJ = editingId ? allJobs.find(x=>String(x.id)===String(editingId)) : null;
+    const _uvE = _uvJ?.extras;
+    const _uvBase = payload.extras || ((typeof _uvE==="string") ? (()=>{ try{return JSON.parse(_uvE);}catch(er){return {};} })() : (_uvE&&typeof _uvE==="object" ? _uvE : {}));
+    if (driverUnverified) {
+      payload.extras = Object.assign({}, _uvBase, { driver_unverified: true });
+    } else if (findMemberByName(assignedDriver) && _uvBase.driver_unverified) {
+      payload.extras = Object.assign({}, _uvBase, { driver_unverified: false });
+    }
   }
   console.log("[S7] payload=",JSON.stringify(payload).slice(0,200));
   console.log("[OJO] Saving job payload:", JSON.stringify(payload).slice(0,300));
@@ -4000,8 +4011,16 @@ async function confirmDispatch(){
   const driver=getValue("dispatchDriverInput");
   if(!_dispatchJobId) return;
   if(!driver){ alert("Please enter a driver name."); return; }
-  if(!findMemberByName(driver)){ alert(`"${driver}" is not a recognized team member. Please select a valid driver.`); return; }
-  const{error}=await db.from("jobs").update({assigned_driver:driver,status:"Assigned"}).eq("id",_dispatchJobId);
+  let _dspUnverified = false;
+  if(!findMemberByName(driver)){
+    if(!confirm(`"${driver}" is not in team members. Save anyway?`)) return;
+    _dspUnverified = true;
+  }
+  const _dspJob = allJobs.find(x=>String(x.id)===String(_dispatchJobId));
+  const _dspRaw = _dspJob?.extras;
+  const _dspEx = (typeof _dspRaw==="string")?(()=>{ try{return JSON.parse(_dspRaw);}catch(e){return {};} })():(_dspRaw||{});
+  const _dspExtras = Object.assign({}, _dspEx, { driver_unverified: _dspUnverified });
+  const{error}=await db.from("jobs").update({assigned_driver:driver,status:"Assigned",extras:_dspExtras}).eq("id",_dispatchJobId);
   if(error){alert("Dispatch failed: "+error.message);return;}
   // Generate share token if not already set, so notification link works
   const j = allJobs.find(x => String(x.id) === String(_dispatchJobId));
