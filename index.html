@@ -2717,6 +2717,7 @@ function renderJobs() {
             </button>
             ${isAdminMode()?`
             <button class="btn btn-sec" onclick="showStatusLog('${j.id}')" title="View status timeline" style="position:relative;">📋 Log${(()=>{const _ex=(typeof j.extras==="string")?JSON.parse(j.extras||"{}")||{}:(j.extras||{});const log=Array.isArray(_ex.status_log)?_ex.status_log:[];return log.length?`<span style="position:absolute;top:-4px;right:-4px;background:var(--gold-dim);color:var(--gold2);border-radius:999px;font-size:9px;font-weight:800;padding:1px 5px;">${log.length}</span>`:"";})()} </button>
+            <button class="btn btn-sec" onclick="exportJobExcel('${j.id}')" title="Export job to Excel" style="position:relative;">📊 Export</button>
             ${(()=>{ const _ex=(typeof j.extras==="string")?JSON.parse(j.extras||"{}")||{}:(j.extras||{}); const hasPhotos=_ex.photo_vehicle_front||_ex.photo_car_interior||_ex.photo_selfie; return hasPhotos?`<button class="btn btn-sec" onclick="showDriverPhotos('${j.id}')" title="View driver check-in photos">📸 Photos</button>`:""; })()}
             <button class="btn btn-sec" onclick="shareJobLink('${j.id}')" title="Share job link with driver">🔗 Share</button>
             <button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button>
@@ -4981,6 +4982,38 @@ function runExport() {
   const rangeStr = (dateFrom||dateTo) ? `_${dateFrom||""}to${dateTo||""}` : "";
   XLSX.writeFile(wb, `OJO_Luxe_Report${rangeStr}_${dateStr}.xlsx`);
   closeExportModal();
+}
+
+function exportJobExcel(jobId){
+  if (typeof XLSX === "undefined"){ alert("Excel library not ready yet. Please try again in a moment."); return; }
+  var src = (typeof allJobs !== "undefined") ? allJobs : displayJobs;
+  var j = src.find(function(x){ return String(x.id) === String(jobId); });
+  if (!j){ alert("Job not found."); return; }
+  var headers = ["ID","Client","Date","Pickup Time","From","To","Job Type","Vehicle","Payment","Status","Driver","Total ($)","OJO Com ($)","Poster Com ($)","Driver Pay ($)","Posted By","Notes"];
+  var row = [
+    j.id != null ? j.id : "",
+    j.client != null ? j.client : "",
+    j.date != null ? j.date : "",
+    j.pickup_time != null ? j.pickup_time : "",
+    j.from_loc != null ? j.from_loc : "",
+    j.to_loc != null ? j.to_loc : "",
+    j.job_type != null ? j.job_type : "",
+    j.vehicle_type != null ? j.vehicle_type : "",
+    j.payment_type != null ? j.payment_type : "",
+    j.status != null ? j.status : "",
+    j.assigned_driver != null ? j.assigned_driver : "",
+    j.total_price != null ? j.total_price : "",
+    j.commission_ojo_amount != null ? j.commission_ojo_amount : "",
+    j.commission_poster_amount != null ? j.commission_poster_amount : "",
+    j.driver_pay != null ? j.driver_pay : "",
+    j.posted_by != null ? j.posted_by : "",
+    j.waybill_notes != null ? j.waybill_notes : ""
+  ];
+  var ws = XLSX.utils.aoa_to_sheet([headers, row]);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Job");
+  var safeClient = String(j.client || "job").replace(/[^a-zA-Z0-9]+/g, "_").slice(0, 30);
+  XLSX.writeFile(wb, "OJO_Job_" + String(j.id) + "_" + safeClient + ".xlsx");
 }
 
 function styleExportSheet(ws, colCount) {
