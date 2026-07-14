@@ -295,6 +295,26 @@
   }
   .checkin-note-text { font-size: 12px; color: #b8d4b8; line-height: 1.6; }
 
+  /* ── Expense Capture (check-out) ── */
+  .expense-row {
+    background: #0a0a0a; border: 1px solid #262626; border-radius: 12px;
+    padding: 14px 14px 4px; margin-bottom: 12px;
+  }
+  .expense-row-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .expense-remove {
+    background: none; border: none; color: #a55; font-size: 10px;
+    font-weight: 700; letter-spacing: .06em; cursor: pointer; padding: 4px;
+  }
+  .expense-add-btn {
+    width: 100%; padding: 11px; border: 1px dashed #333; border-radius: 10px;
+    background: transparent; color: var(--gold); font-size: 13px;
+    font-weight: 700; cursor: pointer; margin-top: 4px;
+  }
+  .expense-add-btn:active { opacity: .8; }
+
   /* ── Selfie Verification Modal ── */
   .selfie-overlay {
     position: fixed; inset: 0; background: #000;
@@ -537,6 +557,21 @@
     </div>
     <button class="checkin-confirm" onclick="confirmCheckin()">✅ Confirm & Accept Job</button>
     <div style="font-size:10px;color:#444;text-align:center;margin-top:8px;">All photos are required to complete check-in.</div>
+  </div>
+</div>
+
+<!-- Driver Check-out / Expense Capture Sheet -->
+<div id="checkoutOverlay" class="checkin-overlay" style="display:none;">
+  <div class="checkin-sheet">
+    <div class="checkin-title">🏁 Job Check-Out</div>
+    <div class="checkin-sub">Add any billable expenses from this trip (optional), then complete the job.</div>
+
+    <div id="expenseRows"></div>
+
+    <button type="button" class="expense-add-btn" onclick="addExpenseRow()">+ Add Expense</button>
+
+    <button class="checkin-confirm" id="checkoutConfirmBtn" onclick="confirmCheckout()" style="margin-top:16px;">✅ Complete Job</button>
+    <div style="font-size:10px;color:#444;text-align:center;margin-top:8px;">Expenses are optional — you can complete the job without adding any.</div>
   </div>
 </div>
 
@@ -1024,6 +1059,10 @@ function doStatus(newStatus) {
     openCancelModal();
     return;
   }
+  if (newStatus === "Completed") {
+    openCheckout();
+    return;
+  }
   const label = `Move to "${newStatus}"?`;
   if (!confirm(label)) return;
   applyStatus(newStatus, {});
@@ -1186,6 +1225,26 @@ async function uploadPhotoToSupabase(file, jobId, photoType) {
     console.log("[OJO] Photo uploaded OK:", photoType, publicUrl);
     return publicUrl;
   } catch(e) { console.warn("[OJO] Photo upload error:", photoType, e.message); return null; }
+}
+
+async function uploadReceiptToSupabase(file, jobId) {
+  if (!file) return null;
+  try {
+    const ext  = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `receipts/${jobId}/receipt_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+    const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-photos/${path}`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY,
+                 "Content-Type": file.type || "image/jpeg", "x-upsert": "true" },
+      body: file
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(()=>"");
+      console.warn("[OJO] Receipt upload failed:", res.status, errText);
+      return null;
+    }
+    return `${SUPABASE_URL}/storage/v1/object/public/driver-photos/${path}`;
+  } catch(e) { console.warn("[OJO] Receipt upload error:", e.message); return null; }
 }
 
 // ── Selfie Verification ──────────────────────────────────────────────────────
@@ -1396,6 +1455,117 @@ async function confirmCheckin() {
   });
   await applyStatus(_pendingStatus || "Accepted", { assigned_driver: name, extras });
   _pendingStatus = null;
+}
+
+// ── Check-out / Expense Capture ──────────────────────────────────────────────
+let _expenseRowSeq = 0;
+
+function openCheckout() {
+  _expenseRowSeq = 0;
+  document.getElementById("expenseRows").innerHTML = "";
+  document.getElementById("checkoutOverlay").style.display = "flex";
+}
+
+function closeCheckout() {
+  document.getElementById("checkoutOverlay").style.display = "none";
+}
+
+function expenseRowHtml(id) {
+  return `
+  <div class="expense-row" id="exp_row_${id}">
+    <div class="expense-row-head">
+      <div class="checkin-label" style="margin-bottom:0;">Expense</div>
+      <button type="button" class="expense-remove" onclick="removeExpenseRow(${id})">✕ Remove</button>
+    </div>
+    <div class="checkin-field">
+      <div class="checkin-label">Type</div>
+      <select class="checkin-input" id="exp_type_${id}">
+        <option value="Parking">Parking</option>
+        <option value="Tolls">Tolls</option>
+        <option value="Fuel">Fuel</option>
+        <option value="Car Wash">Car Wash</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="checkin-field">
+      <div class="checkin-label">Amount (USD)</div>
+      <input class="checkin-input" id="exp_amount_${id}" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+    </div>
+    <div class="checkin-field">
+      <div class="checkin-label">Note (optional)</div>
+      <input class="checkin-input" id="exp_note_${id}" type="text" placeholder="e.g. LAX Lot C" autocomplete="off">
+    </div>
+    <div class="checkin-field">
+      <div class="checkin-label">Receipt Photo (optional)</div>
+      <div class="photo-slot photo-slot-full" id="exp_slot_${id}">
+        <input type="file" id="exp_photo_${id}" accept="image/*" capture="environment" onchange="previewPhoto(this,'exp_slot_${id}','exp_lbl_${id}')">
+        <div class="photo-slot-icon">🧾</div>
+        <img class="photo-slot-preview" id="exp_prev_${id}">
+        <div class="photo-slot-label" id="exp_lbl_${id}">Add Receipt Photo</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function addExpenseRow() {
+  _expenseRowSeq++;
+  const wrap = document.getElementById("expenseRows");
+  const tmp = document.createElement("div");
+  tmp.innerHTML = expenseRowHtml(_expenseRowSeq);
+  wrap.appendChild(tmp.firstElementChild);
+}
+
+function removeExpenseRow(id) {
+  const row = document.getElementById("exp_row_" + id);
+  if (row) row.remove();
+}
+
+async function confirmCheckout() {
+  const rows = Array.from(document.querySelectorAll("#expenseRows .expense-row"));
+  const drafts = [];
+  for (const row of rows) {
+    const id     = row.id.replace("exp_row_", "");
+    const type   = document.getElementById(`exp_type_${id}`).value;
+    const amtRaw = document.getElementById(`exp_amount_${id}`).value.trim();
+    const note   = document.getElementById(`exp_note_${id}`).value.trim();
+    const file   = document.getElementById(`exp_photo_${id}`)?.files[0] || null;
+    if (!amtRaw && !note && !file) continue; // untouched row — skip silently
+    const amount = parseFloat(amtRaw);
+    if (!amtRaw || isNaN(amount) || amount <= 0) {
+      alert(`Please enter a valid amount for the ${type} expense, or remove it.`);
+      return;
+    }
+    drafts.push({ type, amount, note, file });
+  }
+
+  const btn = document.getElementById("checkoutConfirmBtn");
+  btn.disabled = true;
+  btn.textContent = drafts.some(d => d.file) ? "⏳ Uploading receipts..." : "⏳ Completing job...";
+
+  const jobId = currentJob.id;
+  const rawExtras = currentJob.extras;
+  const ex = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  const driverName = ex.driver_checkin_name || currentJob.assigned_driver || "Driver";
+
+  const newEntries = await Promise.all(drafts.map(async (d) => ({
+    type:         d.type,
+    amount:       Math.round(d.amount * 100) / 100,
+    note:         d.note || "",
+    receipt_url:  d.file ? await uploadReceiptToSupabase(d.file, jobId) : null,
+    added_by:     driverName,
+    added_at:     new Date().toISOString(),
+    billable:     true
+  })));
+
+  closeCheckout();
+  btn.disabled = false;
+  btn.textContent = "✅ Complete Job";
+
+  const existingAddons = Array.isArray(currentJob.addon_charges) ? currentJob.addon_charges : [];
+  const patch = newEntries.length ? { addon_charges: existingAddons.concat(newEntries) } : {};
+  await applyStatus("Completed", patch);
 }
 
 async function applyStatus(newStatus, extraPatch) {
