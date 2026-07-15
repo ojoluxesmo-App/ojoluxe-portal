@@ -1930,8 +1930,11 @@ window.addEventListener("unhandledrejection", function(e) {
       <!-- Add row button -->
       <button onclick="addExpenseRow()" style="width:100%;padding:9px;border:1px dashed #333;border-radius:8px;background:transparent;color:#888;font-size:12px;cursor:pointer;margin-bottom:14px;">+ Add Expense</button>
 
-      <!-- Submit -->
-      <button onclick="submitExpenses()" style="width:100%;padding:12px;background:#c9a84c;border:none;border-radius:10px;color:#000;font-weight:800;font-size:14px;cursor:pointer;">Submit for Approval</button>
+      <!-- Totals block -->
+      <div id="expenseTotals"></div>
+
+      <!-- Save -->
+      <button onclick="submitExpenses()" style="width:100%;padding:12px;background:#c9a84c;border:none;border-radius:10px;color:#000;font-weight:800;font-size:14px;cursor:pointer;">💾 Save Changes</button>
     </div>
   </div>
 </div>
@@ -4329,10 +4332,24 @@ function closeStatusLog() { getEl("statusLogModal").style.display = "none"; }
 let expenseJobId = null;
 let expenseRows  = [];
 
+// Canonical shape: { type, amount:Number, note, receipt_url, added_by, added_at, billable:Boolean, status:"pending"|"approved"|"rejected" }
+function normalizeAddonCharge(row) {
+  return {
+    type:        row.type || "Other",
+    amount:      parseFloat(row.amount) || 0,
+    note:        row.note || "",
+    receipt_url: row.receipt_url || "",
+    added_by:    row.added_by || "",
+    added_at:    row.added_at || "",
+    billable:    row.billable !== false,
+    status:      ["pending","approved","rejected"].includes(row.status) ? row.status : "pending"
+  };
+}
+
 function showExpenseModal(jobId) {
   const j = allJobs.find(x=>String(x.id)===String(jobId)); if(!j) return;
   expenseJobId = jobId;
-  expenseRows  = Array.isArray(j.addon_charges) ? JSON.parse(JSON.stringify(j.addon_charges)) : [];
+  expenseRows  = Array.isArray(j.addon_charges) ? j.addon_charges.map(normalizeAddonCharge) : [];
   getEl("expModalRef").textContent = (j.reference_code||j.id||"") + " · " + escapeHtml(j.client||"");
   const mgRow = getEl("expMeetGreetRow");
   if (mgRow) mgRow.style.display = String(j.waybill_notes||"").includes("Meet & Greet") ? "flex" : "none";
@@ -4551,7 +4568,7 @@ function copyShareLink(encodedUrl) {
 }
 
 function addExpenseRow() {
-  expenseRows.push({ type:"Parking", amount:"", note:"", receipt_url:"", status:"pending" });
+  expenseRows.push({ type:"Parking", amount:0, note:"", receipt_url:"", added_by:"", added_at:"", billable:true, status:"pending" });
   renderExpenseRows();
 }
 
@@ -4560,45 +4577,101 @@ function renderExpenseRows() {
   if (!container) return;
   if (!expenseRows.length) {
     container.innerHTML = '<div style="text-align:center;color:#555;font-size:12px;padding:10px 0;">No expenses added yet.</div>';
+    renderExpenseTotals();
     return;
   }
   container.innerHTML = expenseRows.map((row, i) => {
-    const isApproved = row.status === "approved";
-    const isRejected = row.status === "rejected";
-    const statusColor = isApproved ? "var(--green)" : isRejected ? "var(--red)" : "#888";
-    const statusLabel = isApproved ? "Approved" : isRejected ? "Rejected" : "Pending Review";
-    const dis = (isApproved||isRejected) ? "disabled" : "";
+    const isApproved   = row.status === "approved";
+    const isRejected   = row.status === "rejected";
+    const isPending    = !isApproved && !isRejected;
+    const statusColor  = isApproved ? "var(--green)" : isRejected ? "var(--red)" : "#888";
+    const statusLabel  = isApproved ? "Approved" : isRejected ? "Rejected" : "Pending Review";
+    const needsReview  = num(row.amount) <= 0;
+    const billable     = row.billable !== false;
     return `<div style="background:#111;border:1px solid ${isApproved?"#1a3a1a":isRejected?"#3a1a1a":"#222"};border-radius:8px;padding:10px 12px;">
+      ${needsReview?`<div style="font-size:10px;font-weight:700;color:var(--gold);background:#1a1400;border:1px solid #3a2e00;border-radius:6px;padding:4px 8px;margin-bottom:8px;">⚠️ Needs review — no amount recorded</div>`:""}
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-        <select onchange="expenseRows[${i}].type=this.value" ${dis}
+        <select onchange="expenseRows[${i}].type=this.value;renderExpenseTotals()"
           style="flex:1;background:#0a0a0a;border:1px solid #333;color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;">
           ${["Parking","Toll","Gratuity","Fuel","Other"].map(t=>`<option value="${t}"${row.type===t?" selected":""} >${t}</option>`).join("")}
         </select>
-        <input type="number" placeholder="0.00" value="${row.amount||""}" min="0" step="0.01" ${dis}
-          onchange="expenseRows[${i}].amount=this.value"
+        <input type="number" placeholder="0.00" value="${row.amount||""}" min="0" step="0.01"
+          onchange="expenseRows[${i}].amount=parseFloat(this.value)||0;renderExpenseRows()"
           style="width:80px;background:#0a0a0a;border:1px solid #333;color:#c9a84c;padding:5px 8px;border-radius:6px;font-size:13px;font-weight:700;text-align:right;">
-        ${!isApproved&&!isRejected?`<button onclick="expenseRows.splice(${i},1);renderExpenseRows()" style="background:none;border:none;color:#555;font-size:18px;cursor:pointer;line-height:1;">&#215;</button>`:""}
+        ${isAdminMode()?`<button onclick="deleteExpenseRow(${i})" style="background:none;border:none;color:#555;font-size:18px;cursor:pointer;line-height:1;">&#215;</button>`:""}
       </div>
-      <input type="text" placeholder="Note: e.g. LAX parking 2hrs" value="${escapeHtml(row.note||"")}" ${dis}
+      <input type="text" placeholder="Note: e.g. LAX parking 2hrs" value="${escapeHtml(row.note||"")}"
         onchange="expenseRows[${i}].note=this.value"
         style="width:100%;background:#0a0a0a;border:1px solid #222;color:#ccc;padding:5px 8px;border-radius:6px;font-size:11px;box-sizing:border-box;margin-bottom:6px;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:4px;">
-          <span style="text-decoration:underline;">&#128206; ${row.receipt_url?"Change Receipt":"Upload Receipt"}</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        ${row.receipt_url
+          ? `<a href="${escapeHtml(row.receipt_url)}" target="_blank"><img src="${escapeHtml(row.receipt_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #333;cursor:zoom-in;" onerror="this.style.display='none'"></a>`
+          : `<span style="font-size:10px;color:#666;padding:4px 8px;background:#1a1a1a;border-radius:6px;">No receipt</span>`}
+        <label style="font-size:10px;color:#666;cursor:pointer;text-decoration:underline;">
+          &#128206; ${row.receipt_url?"Change":"Upload"}
           <input type="file" accept="image/*" style="display:none;" onchange="handleReceiptUpload(event,${i})">
         </label>
-        ${row.receipt_url?`<span style="font-size:10px;color:var(--green);">&#10003; Receipt attached</span>`:`<span style="font-size:10px;color:#555;">No receipt</span>`}
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:10px;font-weight:700;color:${statusColor};">${statusLabel}</span>
-        ${isAdminMode()&&!isApproved&&!isRejected?`<div style="display:flex;gap:6px;">
-          <button onclick="setExpenseStatus(${i},'approved')" style="padding:3px 10px;background:#0a2a0a;border:1px solid #2a6a2a;color:var(--green);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;">Approve</button>
-          <button onclick="setExpenseStatus(${i},'rejected')" style="padding:3px 10px;background:#2a0a0a;border:1px solid #6a2a2a;color:var(--red);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;">Reject</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:10px;font-weight:700;color:${statusColor};">${statusLabel}</span>
+          ${isAdminMode()?`<button onclick="toggleExpenseBillable(${i})" style="padding:2px 8px;border-radius:999px;font-size:9px;font-weight:700;cursor:pointer;background:${billable?"#0a1a2a":"#1a1a1a"};border:1px solid ${billable?"#2a4a6a":"#333"};color:${billable?"#7ec8e3":"#777"};">${billable?"💳 Billable to client":"🚫 Not billable"}</button>`:""}
+        </div>
+        ${isAdminMode()?`<div style="display:flex;gap:6px;align-items:center;">
+          <button onclick="setExpenseStatus(${i},'approved')" style="padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:${isApproved?"#0a2a0a":"#111"};border:1px solid ${isApproved?"#2a6a2a":"#333"};color:${isApproved?"var(--green)":"#888"};">✓ Approve</button>
+          <button onclick="setExpenseStatus(${i},'rejected')" style="padding:3px 10px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:${isRejected?"#2a0a0a":"#111"};border:1px solid ${isRejected?"#6a2a2a":"#333"};color:${isRejected?"var(--red)":"#888"};">✕ Reject</button>
+          ${!isPending?`<button onclick="setExpenseStatus(${i},'pending')" style="background:none;border:none;color:#555;font-size:10px;cursor:pointer;text-decoration:underline;">Reset</button>`:""}
         </div>`:""}
-        ${isAdminMode()&&isApproved?`<button onclick="setExpenseStatus(${i},'pending')" style="padding:3px 10px;background:#1a1a00;border:1px solid #444;color:#888;border-radius:6px;font-size:10px;cursor:pointer;">Undo</button>`:""}
       </div>
     </div>`;
   }).join("");
+  renderExpenseTotals();
+}
+
+function renderExpenseTotals() {
+  const el = getEl("expenseTotals");
+  if (!el) return;
+  const j = allJobs.find(x=>String(x.id)===String(expenseJobId));
+  if (!j) { el.innerHTML = ""; return; }
+
+  const pricing  = calculateJobPrice(j) || {};
+  const baseFare = num(pricing.totalPrice);
+  const otTotal  = num(pricing.otTotal);
+  const mgCharge = num(pricing.meetGreetCharge);
+  const csCharge = num(pricing.carSeatCharge);
+  const preAddonSubtotal = baseFare + otTotal + mgCharge + csCharge;
+
+  const billableExpenses = expenseRows.filter(r=>r.billable!==false).reduce((s,r)=>s+num(r.amount),0);
+  const approvedExpenses = expenseRows.filter(r=>r.status==="approved").reduce((s,r)=>s+num(r.amount),0);
+  const clientGrandTotal = preAddonSubtotal + billableExpenses;
+
+  // Driver pay uses the existing commission calc, unchanged; addons are never commissioned.
+  const ojoCom = (j.commission_ojo_type && num(j.commission_ojo_value) > 0)
+    ? calculateCommissionAmount(preAddonSubtotal, j.commission_ojo_type, j.commission_ojo_value)
+    : num(j.commission_ojo_amount);
+  const posterCom = (j.commission_poster_type && num(j.commission_poster_value) > 0)
+    ? calculateCommissionAmount(preAddonSubtotal, j.commission_poster_type, j.commission_poster_value)
+    : num(j.commission_poster_amount);
+  const driverPayBase = preAddonSubtotal - ojoCom - posterCom;
+  const driverPayout  = driverPayBase + approvedExpenses;
+
+  const row    = (label,val) => `<div style="display:flex;justify-content:space-between;font-size:12px;color:#ccc;padding:2px 0;"><span>${label}</span><span>${money(val)}</span></div>`;
+  const sumRow = (label,val,color) => `<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;color:${color};border-top:1px solid #222;margin-top:6px;padding-top:6px;"><span>${label}</span><span>${money(val)}</span></div>`;
+
+  el.innerHTML = `
+    <div style="background:#0a0a0a;border:1px solid #222;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+      <div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:#666;margin-bottom:6px;">CLIENT SIDE</div>
+      ${row("Base fare", baseFare)}
+      ${otTotal>0?row("+ Overtime", otTotal):""}
+      ${mgCharge>0?row("+ Meet & Greet", mgCharge):""}
+      ${csCharge>0?row("+ Car Seat", csCharge):""}
+      ${row("+ Billable expenses", billableExpenses)}
+      ${sumRow("= Client grand total", clientGrandTotal, "var(--gold)")}
+      <div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:#666;margin:12px 0 6px;">DRIVER SIDE</div>
+      ${row("Driver pay", driverPayBase)}
+      ${row("+ Approved expenses", approvedExpenses)}
+      ${sumRow("= Driver payout", driverPayout, "var(--green)")}
+    </div>`;
 }
 
 function setExpenseStatus(i, status) {
@@ -4607,11 +4680,67 @@ function setExpenseStatus(i, status) {
   saveExpenses();
 }
 
+function toggleExpenseBillable(i) {
+  expenseRows[i].billable = expenseRows[i].billable === false;
+  renderExpenseRows();
+  saveExpenses();
+}
+
+function deleteExpenseRow(i) {
+  expenseRows.splice(i,1);
+  renderExpenseRows();
+  saveExpenses();
+}
+
+// Same compression logic as job.html's compressImage — kept in sync manually since
+// the two apps are separate single-file scripts with no shared module system.
+async function compressImage(file, maxEdge = 1600, quality = 0.7) {
+  if (!file) return file;
+  let objectUrl;
+  try {
+    objectUrl = URL.createObjectURL(file);
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload  = () => resolve(im);
+      im.onerror = reject;
+      im.src = objectUrl;
+    });
+    const longEdge = Math.max(img.width, img.height);
+    const scale = longEdge > maxEdge ? maxEdge / longEdge : 1;
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
+    return blob || file;
+  } catch(e) {
+    console.warn("[OJO] Image compression failed, using original file:", e.message);
+    return file;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
 async function handleReceiptUpload(event, i) {
   const file = event.target.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => { expenseRows[i].receipt_url = e.target.result; renderExpenseRows(); };
-  reader.readAsDataURL(file);
+  const jobId = expenseJobId;
+  try {
+    const uploadBlob  = await compressImage(file);
+    const compressed  = uploadBlob !== file;
+    const ext         = compressed ? "jpg" : (file.name.split(".").pop() || "jpg").toLowerCase();
+    const contentType = compressed ? "image/jpeg" : (file.type || "image/jpeg");
+    const path = `receipts/${jobId}/receipt_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+    const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-photos/${path}`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY,
+                 "Content-Type": contentType, "x-upsert": "true" },
+      body: uploadBlob
+    });
+    if (!res.ok) { alert("Receipt upload failed. Please try again."); return; }
+    expenseRows[i].receipt_url = `${SUPABASE_URL}/storage/v1/object/public/driver-photos/${path}`;
+    renderExpenseRows();
+  } catch(e) { alert("Receipt upload failed: " + e.message); }
 }
 
 async function saveExpenses() {
@@ -4624,10 +4753,9 @@ async function saveExpenses() {
 }
 
 async function submitExpenses() {
-  const invalid = expenseRows.filter(r=>!r.amount||num(r.amount)<=0);
-  if (invalid.length) { alert("Please enter an amount for all expense rows."); return; }
+  const invalid = expenseRows.filter(r=>num(r.amount)<=0);
+  if (invalid.length) { alert(`Please enter an amount for the ${invalid[0].type} expense (or delete it) before saving.`); return; }
   await saveExpenses();
-  alert("Expenses submitted for review.\n\nProcessing time: 3-10 business days.\nApproved amounts will be added to your driver pay.");
   closeExpenseModal();
 }
 
