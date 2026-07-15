@@ -1205,16 +1205,47 @@ function previewPhoto(input, slotId, lblId) {
   reader.readAsDataURL(file);
 }
 
+async function compressImage(file, maxEdge = 1600, quality = 0.7) {
+  if (!file) return file;
+  let objectUrl;
+  try {
+    objectUrl = URL.createObjectURL(file);
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload  = () => resolve(im);
+      im.onerror = reject;
+      im.src = objectUrl;
+    });
+    const longEdge = Math.max(img.width, img.height);
+    const scale = longEdge > maxEdge ? maxEdge / longEdge : 1;
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
+    return blob || file;
+  } catch(e) {
+    console.warn("[OJO] Image compression failed, using original file:", e.message);
+    return file;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
 async function uploadPhotoToSupabase(file, jobId, photoType) {
   if (!file) return null;
   try {
-    const ext  = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const uploadBlob  = await compressImage(file);
+    const compressed  = uploadBlob !== file;
+    const ext         = compressed ? "jpg" : (file.name.split(".").pop() || "jpg").toLowerCase();
+    const contentType = compressed ? "image/jpeg" : (file.type || "image/jpeg");
     const path = `checkin/${jobId}/${photoType}_${Date.now()}.${ext}`;
     const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-photos/${path}`, {
       method: "POST",
       headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY,
-                 "Content-Type": file.type || "image/jpeg", "x-upsert": "true" },
-      body: file
+                 "Content-Type": contentType, "x-upsert": "true" },
+      body: uploadBlob
     });
     if (!res.ok) {
       const errText = await res.text().catch(()=>"");
@@ -1230,13 +1261,16 @@ async function uploadPhotoToSupabase(file, jobId, photoType) {
 async function uploadReceiptToSupabase(file, jobId) {
   if (!file) return null;
   try {
-    const ext  = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const uploadBlob  = await compressImage(file);
+    const compressed  = uploadBlob !== file;
+    const ext         = compressed ? "jpg" : (file.name.split(".").pop() || "jpg").toLowerCase();
+    const contentType = compressed ? "image/jpeg" : (file.type || "image/jpeg");
     const path = `receipts/${jobId}/receipt_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
     const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-photos/${path}`, {
       method: "POST",
       headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY,
-                 "Content-Type": file.type || "image/jpeg", "x-upsert": "true" },
-      body: file
+                 "Content-Type": contentType, "x-upsert": "true" },
+      body: uploadBlob
     });
     if (!res.ok) {
       const errText = await res.text().catch(()=>"");
