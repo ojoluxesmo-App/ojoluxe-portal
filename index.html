@@ -3306,6 +3306,14 @@ async function saveJob() {
       payload.extras = Object.assign({}, _uvBase, { driver_unverified: false });
     }
   }
+  // Coerce empty/whitespace-only strings to null for true date/timestamp columns
+  // (agent_invoice_due is `date`, cancelled_at is `timestamptz` — Postgres rejects "")
+  const DATE_FIELDS = ['agent_invoice_due', 'cancelled_at'];
+  DATE_FIELDS.forEach(k => {
+    if (typeof payload[k] === 'string' && payload[k].trim() === '') {
+      payload[k] = null;
+    }
+  });
   console.log("[S7] payload=",JSON.stringify(payload).slice(0,200));
   console.log("[OJO] Saving job payload:", JSON.stringify(payload).slice(0,300));
   let error, savedData;
