@@ -1006,6 +1006,12 @@ function render(job) {
           <a href="${calUrl}" target="_blank" rel="noopener" style="display:block;text-align:center;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;">📅 Add to Calendar</a>
         </div>` : ""; })()}
 
+      <!-- Download .ics (guaranteed reminder + job-card link, independent of Google reminder settings) -->
+      ${(() => { const win = _getJobEventWindow(job);
+        return win ? `<div class="section" style="margin-top:-4px;">
+          <button onclick="downloadIcs()" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;">⬇ Download .ics (reminders + job-card link)</button>
+        </div>` : ""; })()}
+
       <!-- Meet & Greet signage -->
       <div class="section">
         <button onclick="openSignage()" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;">🪧 Meet &amp; Greet Sign</button>
@@ -1839,9 +1845,10 @@ function _fmtGCalDate(d) {
   return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
 
-// Builds a one-tap "Add to Calendar" (Google) link for the job's pickup.
-// Returns null if there's no valid date + pickup_time to anchor the event to.
-function buildCalendarUrl(job, netPay) {
+// Shared by buildCalendarUrl and buildIcsBlob: validates job.date + job.pickup_time
+// and returns the UTC {start, end} instants for the pickup event, or null if there's
+// no valid date + pickup_time to anchor the event to.
+function _getJobEventWindow(job) {
   const dateStr = (job.date || "").trim();
   const timeStr = (job.pickup_time || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{2}:\d{2}$/.test(timeStr)) return null;
@@ -1858,6 +1865,15 @@ function buildCalendarUrl(job, netPay) {
   if (!end || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
     end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
   }
+  return { start, end };
+}
+
+// Builds a one-tap "Add to Calendar" (Google) link for the job's pickup.
+// Returns null if there's no valid date + pickup_time to anchor the event to.
+function buildCalendarUrl(job, netPay) {
+  const win = _getJobEventWindow(job);
+  if (!win) return null;
+  const { start, end } = win;
 
   const ex = (typeof job.extras === "string") ? (() => { try { return JSON.parse(job.extras || "{}"); } catch (e) { return {}; } })() : (job.extras || {});
   const route = [job.from_loc, job.to_loc].filter(Boolean).join(" → ");
@@ -1882,6 +1898,94 @@ function buildCalendarUrl(job, netPay) {
   if (job.from_loc) params.set("location", job.from_loc);
 
   return "https://calendar.google.com/calendar/render?" + params.toString();
+}
+
+// RFC 5545 TEXT escaping for ICS fields.
+function _icsEscape(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+// Builds an RFC-5545 .ics VCALENDAR string for the job's pickup, including two
+// reminders and a link back to this driver's own job card. Returns null if
+// there's no valid date + pickup_time to anchor the event to.
+function buildIcsBlob(job, netPay) {
+  const win = _getJobEventWindow(job);
+  if (!win) return null;
+  const { start, end } = win;
+
+  const PROD_URL = "https://ojoluxe-portal.vercel.app";
+  const cardUrl = PROD_URL + "/job.html?token=" + (job.share_token || "");
+
+  const ex = (typeof job.extras === "string") ? (() => { try { return JSON.parse(job.extras || "{}"); } catch (e) { return {}; } })() : (job.extras || {});
+  const route = [job.from_loc, job.to_loc].filter(Boolean).join(" → ");
+  const title = "OJO Luxe Run — " + (job.client || route || "Job " + (job.reference_code || ""));
+
+  const detailLines = [
+    job.reference_code ? "Ref: " + job.reference_code : "",
+    route ? "Route: " + route : "",
+    ex.pickup_airline ? "Pickup flight: " + [ex.pickup_terminal, ex.pickup_airline].filter(Boolean).join(" · ") : "",
+    ex.dropoff_airline ? "Dropoff flight: " + [ex.dropoff_terminal, ex.dropoff_airline].filter(Boolean).join(" · ") : "",
+    (typeof netPay === "number") ? "Your pay: " + money(netPay) : "",
+    job.waybill_notes ? "Notes: " + job.waybill_notes : "",
+    "Open your job card: " + cardUrl
+  ].filter(Boolean);
+
+  const uid = (job.id || job.share_token || (job.date + job.pickup_time)) + "@ojoluxe";
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//OJO Luxe//Job Card//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    "UID:" + _icsEscape(uid),
+    "DTSTAMP:" + _fmtGCalDate(new Date()),
+    "DTSTART:" + _fmtGCalDate(start),
+    "DTEND:" + _fmtGCalDate(end),
+    "SUMMARY:" + _icsEscape(title),
+    job.from_loc ? "LOCATION:" + _icsEscape(job.from_loc) : "",
+    "DESCRIPTION:" + _icsEscape(detailLines.join("\n")),
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:OJO Luxe pickup soon",
+    "TRIGGER:-PT60M",
+    "END:VALARM",
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:OJO Luxe pickup soon",
+    "TRIGGER:-PT15M",
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].filter(Boolean);
+
+  return lines.join("\r\n");
+}
+
+// Triggers the .ics download/open — branches by platform since iOS Safari and
+// Android Chrome handle calendar blobs differently (see plan discussion).
+function downloadIcs() {
+  const j = currentJob; if (!j) return;
+  const pricing = calculateDriverNet(j);
+  const ics = buildIcsBlob(j, pricing.netPay);
+  if (!ics) return;
+
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+  if (isIOS) {
+    window.open(url, "_blank");
+  } else {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "OJO-Luxe-" + (j.reference_code || j.id || "run") + ".ics";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 // Smart destination based on job status + stops
