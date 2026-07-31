@@ -1000,6 +1000,12 @@ function render(job) {
         </div>
       </div>
 
+      <!-- Add to Calendar -->
+      ${(() => { const calUrl = buildCalendarUrl(job, pricing.netPay);
+        return calUrl ? `<div class="section">
+          <a href="${calUrl}" target="_blank" rel="noopener" style="display:block;text-align:center;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;">📅 Add to Calendar</a>
+        </div>` : ""; })()}
+
       <!-- Meet & Greet signage -->
       <div class="section">
         <button onclick="openSignage()" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;">🪧 Meet &amp; Greet Sign</button>
@@ -1815,6 +1821,67 @@ function _buildGpsUrl(provider, addr) {
   if (provider === "waze")   return "https://waze.com/ul?q=" + enc + "&navigate=yes";
   if (provider === "apple")  return "maps://maps.apple.com/?daddr=" + enc;
   return "";
+}
+
+// Convert a wall-clock date+time in a given IANA zone to the equivalent UTC Date.
+// (No timezone library available — derives the offset for that specific date/time
+// via Intl, so DST is handled correctly for whichever date the job falls on.)
+function _zonedTimeToUtc(dateStr, timeStr, timeZone) {
+  const asUTC = new Date(dateStr + "T" + timeStr + ":00Z");
+  if (isNaN(asUTC.getTime())) return null;
+  const tzString  = asUTC.toLocaleString("en-US", { timeZone });
+  const utcString = asUTC.toLocaleString("en-US", { timeZone: "UTC" });
+  const offset = new Date(utcString).getTime() - new Date(tzString).getTime();
+  return new Date(asUTC.getTime() + offset);
+}
+
+function _fmtGCalDate(d) {
+  return d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+}
+
+// Builds a one-tap "Add to Calendar" (Google) link for the job's pickup.
+// Returns null if there's no valid date + pickup_time to anchor the event to.
+function buildCalendarUrl(job, netPay) {
+  const dateStr = (job.date || "").trim();
+  const timeStr = (job.pickup_time || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !/^\d{2}:\d{2}$/.test(timeStr)) return null;
+
+  const TZ = "America/Los_Angeles";
+  const start = _zonedTimeToUtc(dateStr, timeStr, TZ);
+  if (!start || isNaN(start.getTime())) return null;
+
+  let end = null;
+  const endTimeStr = (job.time_end || "").trim();
+  if (/^\d{2}:\d{2}$/.test(endTimeStr)) {
+    end = _zonedTimeToUtc(dateStr, endTimeStr, TZ);
+  }
+  if (!end || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+    end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  }
+
+  const ex = (typeof job.extras === "string") ? (() => { try { return JSON.parse(job.extras || "{}"); } catch (e) { return {}; } })() : (job.extras || {});
+  const route = [job.from_loc, job.to_loc].filter(Boolean).join(" → ");
+  const title = "OJO Luxe Run — " + (job.client || route || "Job " + (job.reference_code || ""));
+
+  const detailLines = [
+    job.reference_code ? "Ref: " + job.reference_code : "",
+    route ? "Route: " + route : "",
+    ex.pickup_airline ? "Pickup flight: " + [ex.pickup_terminal, ex.pickup_airline].filter(Boolean).join(" · ") : "",
+    ex.dropoff_airline ? "Dropoff flight: " + [ex.dropoff_terminal, ex.dropoff_airline].filter(Boolean).join(" · ") : "",
+    (typeof netPay === "number") ? "Your pay: " + money(netPay) : "",
+    job.waybill_notes ? "Notes: " + job.waybill_notes : ""
+  ].filter(Boolean);
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: _fmtGCalDate(start) + "/" + _fmtGCalDate(end),
+    details: detailLines.join("\n"),
+    ctz: TZ
+  });
+  if (job.from_loc) params.set("location", job.from_loc);
+
+  return "https://calendar.google.com/calendar/render?" + params.toString();
 }
 
 // Smart destination based on job status + stops
