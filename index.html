@@ -2731,6 +2731,7 @@ function renderJobs() {
             })()}
             <button class="btn btn-sec" onclick="fillFormById('${j.id}')">Edit</button>`:""}
           </div>
+          ${(isAdminMode() && !j.square_invoice_id && !["Cancelled","Voided"].includes(j.status||""))?`<div style="font-size:10px;color:var(--text-dim,#888);margin-top:4px;">${cardFeeApplies(j.payment_type)?"3.9% card processing fee will be added":"Fee waived — "+escapeHtml(j.payment_type||"")}</div>`:""}
           ${isAdminMode()?`<div class="action-row" style="margin-top:6px;"><button class="btn btn-danger btn-full" onclick="deleteJob('${j.id}')">Delete</button></div>`:""}
         </div>
       </div>
@@ -4454,6 +4455,11 @@ function buildInvoiceNumber(j) {
   return "OJO-" + YYYYMMDD + "-" + HHMMSS + "-" + orderNum + "-" + initials + cityCode;
 }
 
+function cardFeeApplies(paymentType) {
+  const FEE_OFF = ["cash", "zelle", "venmo", "apple cash"];
+  return !FEE_OFF.includes(String(paymentType || "").trim().toLowerCase());
+}
+
 async function generateInvoice(jobId) {
   const j   = allJobs.find(x => String(x.id) === String(jobId));
   if (!j) return;
@@ -4477,6 +4483,7 @@ async function generateInvoice(jobId) {
       passenger_name: j.client        || "",
       duration:       j.hours ? j.hours + " hrs" : "",
       rate_note:      j.payment_type  || "",
+      apply_card_fee: cardFeeApplies(j.payment_type),
     };
 
     const res  = await fetch("/api/create-invoice", {
