@@ -2725,7 +2725,14 @@ function renderJobs() {
             <button class="btn btn-sec" onclick="shareJobLink('${j.id}')" title="Share job link with driver">🔗 Share</button>
             <button class="btn btn-gold" onclick="dispatchJob('${j.id}')">${j.assigned_driver?"Reassign":"Dispatch"}</button>
             ${(()=>{
-              if (j.square_invoice_id) return `<button class="btn btn-gold" onclick="window.open('${escapeHtml(j.square_invoice_url||'')}','_blank')">View Invoice</button>`;
+              if (j.square_invoice_id) {
+                const phoneDigits = (j.client_phone||"").replace(/\D/g,"");
+                const waText = encodeURIComponent(`Here is your OJO Luxe invoice: ${j.square_invoice_url||""}`);
+                const waBtn = phoneDigits ? `<button class="btn btn-sec" onclick="window.open('https://wa.me/${phoneDigits}?text=${waText}','_blank')">WhatsApp</button>` : "";
+                return `<button class="btn btn-gold" onclick="window.open('${escapeHtml(j.square_invoice_url||'')}','_blank')">View Invoice</button>
+                <button class="btn btn-sec" onclick="copyInvoiceLink('${escapeHtml(j.square_invoice_url||'')}', this)">Copy Link</button>
+                ${waBtn}`;
+              }
               if (!["Cancelled","Voided"].includes(j.status||"")) return `<button class="btn btn-sec" id="inv-btn-${j.id}" onclick="generateInvoice('${j.id}')">Generate Invoice</button>`;
               return "";
             })()}
@@ -4460,11 +4467,22 @@ function cardFeeApplies(paymentType) {
   return !FEE_OFF.includes(String(paymentType || "").trim().toLowerCase());
 }
 
+function copyInvoiceLink(url, btnEl) {
+  navigator.clipboard.writeText(url || "").then(() => {
+    if (!btnEl) return;
+    const original = btnEl.textContent;
+    btnEl.textContent = "Copied!";
+    setTimeout(() => { btnEl.textContent = original; }, 1500);
+  });
+}
+
 async function generateInvoice(jobId) {
   const j   = allJobs.find(x => String(x.id) === String(jobId));
   if (!j) return;
   const btn = document.getElementById("inv-btn-" + jobId);
   if (btn) { btn.disabled = true; btn.textContent = "Generating..."; }
+  const oldErr = document.getElementById("inv-err-" + jobId);
+  if (oldErr) oldErr.remove();
 
   try {
     const invoiceNum  = buildInvoiceNumber(j);
@@ -4506,16 +4524,14 @@ async function generateInvoice(jobId) {
       allJobs[idx].square_invoice_url = payUrl;
     }
 
+    renderJobs();
+  } catch (err) {
     if (btn) {
       btn.disabled    = false;
-      btn.id          = "";
-      btn.textContent = "View Invoice";
-      btn.className   = "btn btn-gold";
-      btn.onclick     = () => window.open(payUrl, "_blank");
+      btn.textContent = "Generate Invoice";
+      btn.insertAdjacentHTML("afterend",
+        `<span id="inv-err-${jobId}" style="font-size:11px;color:var(--red);margin-left:6px;">Invoice failed — try again</span>`);
     }
-  } catch (err) {
-    if (btn) { btn.disabled = false; btn.textContent = "Generate Invoice"; }
-    alert("Invoice error: " + err.message);
   }
 }
 
