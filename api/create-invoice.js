@@ -20,6 +20,49 @@ async function square(path, body) {
   return data;
 }
 
+const AWB_BLOCK_MAX_CHARS = 4000;
+
+function buildAwbBlock({ title, client, date, pickupTime, vehicle, fromLoc, toLoc, stops, reference, notes }) {
+  const clean = (v) => (v === null || v === undefined ? "" : String(v).trim());
+  const label = (text, width) => (text + ":").padEnd(width);
+  const LW = 13;
+
+  const routeLines = [];
+  const stopList = Array.isArray(stops) ? stops.filter((s) => clean(s)) : [];
+  if (stopList.length) {
+    const legs = [clean(fromLoc), ...stopList.map(clean), clean(toLoc)].filter(Boolean);
+    legs.forEach((leg, i) => routeLines.push(`${i + 1}. ${leg}`));
+  } else if (clean(fromLoc) || clean(toLoc)) {
+    routeLines.push(label("Route", LW) + [clean(fromLoc), clean(toLoc)].filter(Boolean).join("  ->  "));
+  }
+
+  const lines = [
+    clean(client) ? label("Client", LW) + clean(client) : null,
+    clean(date) ? label("Date", LW) + clean(date) : null,
+    clean(pickupTime) ? label("Pickup", LW) + clean(pickupTime) : null,
+    clean(vehicle) ? label("Vehicle", LW) + clean(vehicle) : null,
+    ...routeLines,
+    clean(reference) ? label("Reference", LW) + clean(reference) : null,
+    clean(notes) ? label("Notes", LW) + clean(notes) : null,
+  ].filter(Boolean);
+
+  if (!lines.length) return clean(title);
+
+  const divider = "-".repeat(40);
+  const body = [clean(title) || null, divider, ...lines].filter(Boolean).join("\n");
+
+  if (body.length <= AWB_BLOCK_MAX_CHARS) return body;
+
+  // Defensive truncation (should not trigger given Square's 65,536-char description limit):
+  // trim Notes first, then hard-cut the rest.
+  const withoutNotes = [clean(title) || null, divider, ...lines.filter((l) => !l.startsWith(label("Notes", LW)))]
+    .filter(Boolean)
+    .join("\n");
+  return withoutNotes.length <= AWB_BLOCK_MAX_CHARS
+    ? withoutNotes
+    : withoutNotes.slice(0, AWB_BLOCK_MAX_CHARS);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
   try {
@@ -27,6 +70,7 @@ export default async function handler(req, res) {
       jobId, customerName, customerEmail, customerPhone, amountCents, note,
       invoice_number, service_type, service_date, from_loc, to_loc,
       vehicle_class, passenger_name, pax_count, duration, rate_note,
+      pickup_time, stops, reference_code, waybill_notes,
     } = req.body;
     const locationId = process.env.SQUARE_LOCATION_ID;
     const idem = () => crypto.randomUUID();
@@ -57,6 +101,19 @@ export default async function handler(req, res) {
       rate_note       ? "Payment: "   + rate_note       : null,
     ].filter(Boolean).join("\n");
 
+    const awbBlock = buildAwbBlock({
+      title: service_type,
+      client: customerName || passenger_name,
+      date: service_date,
+      pickupTime: pickup_time,
+      vehicle: vehicle_class,
+      fromLoc: from_loc,
+      toLoc: to_loc,
+      stops,
+      reference: reference_code || invoice_number,
+      notes: waybill_notes || note,
+    });
+
     const rawPhone = (customerPhone || "").replace(/[\s\-\.\(\)]/g, "");
     const validPhone = rawPhone.length > 0 ? rawPhone : null;
     const contactEmail = customerEmail || (!validPhone ? "info@ojoluxe.com" : null);
@@ -74,7 +131,7 @@ export default async function handler(req, res) {
         location_id: locationId,
         customer_id: customer.id,
         line_items: [{
-          name: "Luxury Ground Transportation",
+          name: (service_type || "Luxury Ground Transportation").slice(0, 500),
           quantity: "1",
           base_price_money: { amount: amountCents, currency: "USD" },
           ...(tripNote ? { note: tripNote } : {}),
@@ -92,7 +149,7 @@ export default async function handler(req, res) {
         accepted_payment_methods: { card: true },
         ...(invoice_number ? { invoice_number } : {}),
         title: "OJO Luxe - Official Invoice",
-        description: PUBLIC_MESSAGE,
+        description: awbBlock + "\n\n" + PUBLIC_MESSAGE,
         payment_requests: [{
           request_type: "BALANCE",
           due_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
