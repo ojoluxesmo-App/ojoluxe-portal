@@ -70,8 +70,10 @@ export default async function handler(req, res) {
       jobId, customerName, customerEmail, customerPhone, amountCents, note,
       invoice_number, service_type, service_date, from_loc, to_loc,
       vehicle_class, passenger_name, pax_count, duration, rate_note,
-      pickup_time, stops, reference_code, waybill_notes,
+      pickup_time, stops, reference_code, waybill_notes, apply_card_fee,
     } = req.body;
+    const applyCardFee = apply_card_fee !== false;
+    const CARD_FEE_RATE = 0.039;
     const locationId = process.env.SQUARE_LOCATION_ID;
     const idem = () => crypto.randomUUID();
 
@@ -79,9 +81,8 @@ export default async function handler(req, res) {
       "Thank you for choosing OJO Luxe.\n\n" +
       "All reservations are subject to availability. Airport fees, tolls, parking, " +
       "and wait time may apply.\n\n" +
-      "A 3.9% service fee applies to all credit card payments and is included in the " +
-      "total shown. Pay by cash, Zelle, or bank transfer to waive this fee - contact " +
-      "us for payment instructions.\n\n" +
+      "A 3.9% card processing fee applies to card payments and is itemized above; it " +
+      "is waived for cash, Zelle, or bank transfer - contact us for payment instructions.\n\n" +
       "Cancellations within 24 hours of pickup may be subject to a cancellation fee.\n\n" +
       "For assistance:\n" +
       "info@ojoluxe.com  |  www.ojoluxe.com\n\n" +
@@ -130,12 +131,19 @@ export default async function handler(req, res) {
       order: {
         location_id: locationId,
         customer_id: customer.id,
-        line_items: [{
-          name: (service_type || "Luxury Ground Transportation").slice(0, 500),
-          quantity: "1",
-          base_price_money: { amount: amountCents, currency: "USD" },
-          ...(tripNote ? { note: tripNote } : {}),
-        }],
+        line_items: [
+          {
+            name: (service_type || "Luxury Ground Transportation").slice(0, 500),
+            quantity: "1",
+            base_price_money: { amount: amountCents, currency: "USD" },
+            ...(tripNote ? { note: tripNote } : {}),
+          },
+          ...(applyCardFee ? [{
+            name: "Card Processing Fee (3.9%)",
+            quantity: "1",
+            base_price_money: { amount: Math.round(amountCents * CARD_FEE_RATE), currency: "USD" },
+          }] : []),
+        ],
       },
     });
 
