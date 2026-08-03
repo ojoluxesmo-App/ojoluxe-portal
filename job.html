@@ -1001,7 +1001,9 @@ function render(job) {
       </div>
 
       <!-- Add to Calendar -->
-      ${(() => { const calUrl = buildCalendarUrl(job, pricing.netPay);
+      ${(() => { let calUrl = null;
+        try { calUrl = buildCalendarUrl(job, pricing.netPay); }
+        catch (e) { console.warn("[OJO] Add-to-Calendar link failed:", e.message); }
         return calUrl ? `<div class="section">
           <a href="${calUrl}" target="_blank" rel="noopener" style="display:block;text-align:center;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;">📅 Add to Calendar</a>
         </div>` : ""; })()}
@@ -1864,7 +1866,7 @@ function _getJobEventWindow(job) {
   if (!end || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
     end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
   }
-  return { start, end };
+  return { start, end, TZ };
 }
 
 // Builds a one-tap "Add to Calendar" (Google) link for the job's pickup.
@@ -1872,7 +1874,7 @@ function _getJobEventWindow(job) {
 function buildCalendarUrl(job, netPay) {
   const win = _getJobEventWindow(job);
   if (!win) return null;
-  const { start, end } = win;
+  const { start, end, TZ } = win;
 
   const ex = (typeof job.extras === "string") ? (() => { try { return JSON.parse(job.extras || "{}"); } catch (e) { return {}; } })() : (job.extras || {});
   const route = [job.from_loc, job.to_loc].filter(Boolean).join(" → ");
