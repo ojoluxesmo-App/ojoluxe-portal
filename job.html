@@ -1668,6 +1668,7 @@ async function claimOfferJob() {
     if (Array.isArray(data) && data.length === 1) {
       render(data[0]);
       showToast("✅ Job accepted!");
+      showWhatsAppNotifyPanel(buildOfferAcceptedMessage(data[0], name));
     } else {
       showToast("Sorry, this job was just taken.");
       const fresh = await fetchJob(getToken());
@@ -1676,6 +1677,47 @@ async function claimOfferJob() {
   } catch(e) {
     alert("Failed to accept job: " + e.message);
     if (btn) { btn.disabled = false; btn.textContent = "✅ Accept This Job"; }
+  }
+}
+
+function buildOfferAcceptedMessage(job, driverName) {
+  const date    = job.date || "";
+  const from    = job.from_loc || "";
+  const to      = job.to_loc || "";
+  const vehicle = job.vehicle_type || "";
+  return `Hi, Job COVERED by me - ${driverName}. ${date}, ${from} to ${to}, unit ${vehicle}. Thank you for the offer!`;
+}
+
+let _lastOfferMessage = "";
+
+function showWhatsAppNotifyPanel(message) {
+  _lastOfferMessage = message;
+  document.getElementById("waNotifyPanel")?.remove();
+  const waUrl = "https://wa.me/?text=" + encodeURIComponent(message);
+  const panel = document.createElement("div");
+  panel.id = "waNotifyPanel";
+  panel.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:500;"
+    + "background:#F0E8D5;border:1px solid #C9A84C;border-radius:12px;padding:14px;"
+    + "box-shadow:0 6px 24px rgba(0,0,0,.4);";
+  panel.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:#0C0B09;margin-bottom:8px;">📣 Let the drivers group know you've got this job</div>
+    <div style="display:flex;gap:8px;">
+      <a href="${waUrl}" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:11px;border-radius:10px;background:#C9A84C;color:#0C0B09;font-size:13px;font-weight:800;text-decoration:none;">💬 Open WhatsApp</a>
+      <button onclick="copyOfferAcceptedMessage(this)" style="flex:1;padding:11px;border:1px solid #0C0B09;border-radius:10px;background:transparent;color:#0C0B09;font-size:13px;font-weight:700;cursor:pointer;">📋 Copy message</button>
+    </div>
+    <button onclick="document.getElementById('waNotifyPanel')?.remove()" style="width:100%;margin-top:8px;padding:6px;border:none;background:transparent;color:#0C0B09;font-size:11px;opacity:.6;cursor:pointer;">Dismiss</button>
+  `;
+  document.body.appendChild(panel);
+}
+
+async function copyOfferAcceptedMessage(btn) {
+  try {
+    await navigator.clipboard.writeText(_lastOfferMessage);
+    const orig = btn.textContent;
+    btn.textContent = "✅ Copied";
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  } catch(e) {
+    alert(_lastOfferMessage);
   }
 }
 
