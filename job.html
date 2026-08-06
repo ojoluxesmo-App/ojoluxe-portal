@@ -789,6 +789,14 @@ const NEXT_LABEL = {
   "In Progress":      "✅ Complete Job",
 };
 
+// Placeholder written to assigned_driver by the atomic claim lock, before the
+// driver has typed their real name in check-in.
+const CLAIM_PENDING_LABEL = "Claiming…";
+function driverDisplayName(job) {
+  const d = job.assigned_driver || "";
+  return (!d || d === CLAIM_PENDING_LABEL) ? "another driver" : d;
+}
+
 // ── Supabase helpers ──────────────────────────────────────────────────────────
 const H = {
   "Content-Type": "application/json",
@@ -865,7 +873,7 @@ function render(job) {
   } else if (next) {
     if (!isMine) {
       statusHtml = `
-        <div class="status-cancelled-badge">🔒 This job has already been accepted by ${escapeHtml(job.assigned_driver||"another driver")}. Thank you!</div>
+        <div class="status-cancelled-badge">🔒 This job has already been accepted by ${escapeHtml(driverDisplayName(job))}. Thank you!</div>
         <button onclick="promptClaimRecovery()" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;">I am the assigned driver</button>`;
     } else {
       const btnLabel = NEXT_LABEL[status] || ("→ " + next);
@@ -1040,8 +1048,8 @@ function render(job) {
         ${statusHtml}
       </div>
 
-      <!-- Reopen WhatsApp notify (available any time after claiming) -->
-      ${(isMine && job.assigned_driver && isOpen && status !== "Offer") ? `
+      <!-- Reopen WhatsApp notify (available any time after check-in has attached a real name) -->
+      ${(isMine && job.assigned_driver && job.assigned_driver !== CLAIM_PENDING_LABEL && isOpen && status !== "Offer") ? `
       <div class="section">
         <button onclick="reopenWhatsAppNotify()" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:#25D366;font-size:13px;font-weight:700;cursor:pointer;">📣 Notify Drivers Group</button>
       </div>` : ""}
@@ -1179,7 +1187,7 @@ function openCheckin() {
   const nameEl    = document.getElementById("ci_name");
   const phoneEl   = document.getElementById("ci_phone");
   const vehicleEl = document.getElementById("ci_vehicle");
-  if (currentJob.assigned_driver && currentJob.assigned_driver !== "Unassigned") {
+  if (currentJob.assigned_driver && currentJob.assigned_driver !== "Unassigned" && currentJob.assigned_driver !== CLAIM_PENDING_LABEL) {
     nameEl.value = currentJob.assigned_driver;
   }
   const rawExtras = currentJob.extras;
@@ -1536,11 +1544,26 @@ async function confirmCheckin() {
     photo_selfie:        urlSelfie   || null,
     driver_unverified:   false
   });
-  // Check-in only adds confirmation data and advances status — it must NOT
-  // touch assigned_driver, so a late opener of this link can't take over a
-  // job that's already Assigned to someone else.
-  await applyStatus(_pendingStatus || "Accepted", { extras });
+  // Normally check-in only adds confirmation data and advances status — it
+  // must NOT touch assigned_driver, so a late opener of this link can't take
+  // over a job that's already Assigned to someone else. The one exception is
+  // the claim-lock flow: assigned_driver is still the CLAIM_PENDING_LABEL
+  // placeholder set by claimOfferJob(), and this submit is what attaches the
+  // driver's real name to it for the first time.
+  const isClaimFlow = currentJob.assigned_driver === CLAIM_PENDING_LABEL;
+  const patch = isClaimFlow ? { extras, assigned_driver: name } : { extras };
+
+  await applyStatus(_pendingStatus || "Accepted", patch);
   _pendingStatus = null;
+
+  if (isClaimFlow && currentJob.extras && currentJob.extras.driver_checkin_name === name) {
+    // applyStatus() already rendered with the real name in assigned_driver,
+    // but localStorage still held the placeholder at that moment — update it
+    // and re-render so the "isMine" gate doesn't briefly show the locked panel.
+    localStorage.setItem("ojo_claim_" + currentJob.id, name);
+    render(currentJob);
+    showWhatsAppNotifyPanel(buildOfferAcceptedMessage(currentJob, name));
+  }
 }
 
 // ── Check-out / Expense Capture ──────────────────────────────────────────────
@@ -1655,15 +1678,16 @@ async function confirmCheckout() {
 }
 
 // ── Offer claim (atomic accept guard — first tap wins) ───────────────────────
+// Locks the row the instant the button is tapped, using a placeholder driver
+// name — no prompts, no delay, so a 2nd/3rd tap gets blocked almost
+// immediately. The real name is captured once, in the check-in form that
+// opens right after (see confirmCheckin), which then replaces the
+// placeholder in assigned_driver.
 async function claimOfferJob() {
   if (!currentJob || currentJob.status !== "Offer") return;
-  const name = (prompt("Enter your name to accept this job:") || "").trim();
-  if (!name) return;
-  const phone = (prompt("Enter your phone number:") || "").trim();
-  if (!phone) return;
 
   const btn = document.getElementById("offerClaimBtn");
-  if (btn) { btn.disabled = true; btn.textContent = "⏳ Accepting..."; }
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Locking job..."; }
 
   const rawExtras = currentJob.extras;
   const existingExtras = (typeof rawExtras === "string")
@@ -1673,11 +1697,7 @@ async function claimOfferJob() {
   existingLog.push({ status: "Assigned", prev: "Offer", ts: new Date().toISOString() });
   // Merge over existingExtras (not a bare {}) so pre-existing keys like
   // settlement, booking_ref, and payment_note survive the claim PATCH.
-  const mergedExtras = Object.assign({}, existingExtras, {
-    driver_checkin_name:  name,
-    driver_checkin_phone: phone,
-    status_log:            existingLog
-  });
+  const mergedExtras = Object.assign({}, existingExtras, { status_log: existingLog });
 
   try {
     const url = SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(currentJob.id) +
@@ -1685,7 +1705,7 @@ async function claimOfferJob() {
     const r = await fetch(url, {
       method: "PATCH",
       headers: { ...H, "Prefer": "return=representation" },
-      body: JSON.stringify({ assigned_driver: name, status: "Assigned", extras: mergedExtras })
+      body: JSON.stringify({ assigned_driver: CLAIM_PENDING_LABEL, status: "Assigned", extras: mergedExtras })
     });
     const data = await r.json().catch(() => []);
     if (!r.ok) throw new Error(data.message || "Failed to accept job");
@@ -1693,10 +1713,8 @@ async function claimOfferJob() {
     if (Array.isArray(data) && data.length === 1) {
       localStorage.setItem("ojo_claim_" + data[0].id, data[0].assigned_driver);
       render(data[0]);
-      showToast("✅ Job accepted!");
-      showWhatsAppNotifyPanel(buildOfferAcceptedMessage(data[0], name));
-      // Continue straight into the existing vehicle + photos check-in —
-      // name/phone were just captured above, so openCheckin() pre-fills them.
+      // Drop straight into the existing vehicle + photos check-in — that's
+      // where the driver's real name/phone get captured, once.
       _pendingStatus = "Accepted";
       openCheckin();
     } else {
