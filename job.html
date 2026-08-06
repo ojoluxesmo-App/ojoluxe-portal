@@ -861,12 +861,20 @@ function render(job) {
       ? `<div class="status-cancelled-badge">This job was already accepted by another driver.</div>`
       : `<button id="offerClaimBtn" class="status-next" onclick="claimOfferJob()">✅ Accept This Job</button>`;
   } else if (next) {
-    const btnLabel = NEXT_LABEL[status] || ("→ " + next);
-    statusHtml = `
-      <button class="status-next ${isComplete?"complete":""}" onclick="doStatus('${next}')">
-        ${btnLabel}
-      </button>
-      <button class="status-cancel" onclick="doStatus('Cancelled')">✕ Cancel Job</button>`;
+    const myClaim = localStorage.getItem("ojo_claim_" + job.id);
+    const isMine  = myClaim && myClaim === job.assigned_driver;
+    if (!isMine) {
+      statusHtml = `
+        <div class="status-cancelled-badge">🔒 This job has already been accepted by ${escapeHtml(job.assigned_driver||"another driver")}. Thank you!</div>
+        <button onclick="promptClaimRecovery()" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;">I am the assigned driver</button>`;
+    } else {
+      const btnLabel = NEXT_LABEL[status] || ("→ " + next);
+      statusHtml = `
+        <button class="status-next ${isComplete?"complete":""}" onclick="doStatus('${next}')">
+          ${btnLabel}
+        </button>
+        <button class="status-cancel" onclick="doStatus('Cancelled')">✕ Cancel Job</button>`;
+    }
   }
 
   document.getElementById("app").innerHTML = `
@@ -1666,6 +1674,7 @@ async function claimOfferJob() {
     if (!r.ok) throw new Error(data.message || "Failed to accept job");
 
     if (Array.isArray(data) && data.length === 1) {
+      localStorage.setItem("ojo_claim_" + data[0].id, data[0].assigned_driver);
       render(data[0]);
       showToast("✅ Job accepted!");
       showWhatsAppNotifyPanel(buildOfferAcceptedMessage(data[0], name));
@@ -1677,6 +1686,18 @@ async function claimOfferJob() {
   } catch(e) {
     alert("Failed to accept job: " + e.message);
     if (btn) { btn.disabled = false; btn.textContent = "✅ Accept This Job"; }
+  }
+}
+
+function promptClaimRecovery() {
+  if (!currentJob) return;
+  const typed = (prompt("Enter your name exactly as used when you accepted this job:") || "").trim();
+  if (!typed) return;
+  if (typed.toLowerCase() === (currentJob.assigned_driver || "").toLowerCase()) {
+    localStorage.setItem("ojo_claim_" + currentJob.id, currentJob.assigned_driver);
+    render(currentJob);
+  } else {
+    alert("That name doesn't match our records for this job. Please contact your dispatcher.");
   }
 }
 
