@@ -852,6 +852,10 @@ function render(job) {
     statusHtml = `<div class="status-done-badge">✅ Job Completed</div>`;
   } else if (status === "Cancelled") {
     statusHtml = `<div class="status-cancelled-badge">✕ Job Cancelled</div>`;
+  } else if (status === "Offer") {
+    statusHtml = job.assigned_driver
+      ? `<div class="status-cancelled-badge">This job was already accepted by another driver.</div>`
+      : `<button id="offerClaimBtn" class="status-next" onclick="claimOfferJob()">✅ Accept This Job</button>`;
   } else if (next) {
     const btnLabel = NEXT_LABEL[status] || ("→ " + next);
     statusHtml = `
@@ -1613,6 +1617,48 @@ async function confirmCheckout() {
   const existingAddons = Array.isArray(currentJob.addon_charges) ? currentJob.addon_charges : [];
   const patch = newEntries.length ? { addon_charges: existingAddons.concat(newEntries) } : {};
   await applyStatus("Completed", patch);
+}
+
+// ── Offer claim (atomic accept guard — first tap wins) ───────────────────────
+async function claimOfferJob() {
+  if (!currentJob || currentJob.status !== "Offer") return;
+  const name = (prompt("Enter your name to accept this job:") || "").trim();
+  if (!name) return;
+
+  const btn = document.getElementById("offerClaimBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Accepting..."; }
+
+  const rawExtras = currentJob.extras;
+  const existingExtras = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
+  existingLog.push({ status: "Assigned", prev: "Offer", ts: new Date().toISOString() });
+  const mergedExtras = Object.assign({}, existingExtras, { driver_checkin_name: name, status_log: existingLog });
+
+  try {
+    const url = SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(currentJob.id) +
+                "&status=eq.Offer&assigned_driver=eq.";
+    const r = await fetch(url, {
+      method: "PATCH",
+      headers: { ...H, "Prefer": "return=representation" },
+      body: JSON.stringify({ assigned_driver: name, status: "Assigned", extras: mergedExtras })
+    });
+    const data = await r.json().catch(() => []);
+    if (!r.ok) throw new Error(data.message || "Failed to accept job");
+
+    if (Array.isArray(data) && data.length === 1) {
+      render(data[0]);
+      showToast("✅ Job accepted!");
+    } else {
+      showToast("Sorry, this job was just taken.");
+      const fresh = await fetchJob(getToken());
+      if (fresh) render(fresh);
+    }
+  } catch(e) {
+    alert("Failed to accept job: " + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = "✅ Accept This Job"; }
+  }
 }
 
 async function applyStatus(newStatus, extraPatch) {
