@@ -517,6 +517,10 @@
       <input class="checkin-input" id="ci_name" type="text" placeholder="e.g. John Smith" autocomplete="off">
     </div>
     <div class="checkin-field">
+      <div class="checkin-label">Phone Number</div>
+      <input class="checkin-input" id="ci_phone" type="tel" placeholder="e.g. (310) 555-0123" autocomplete="off">
+    </div>
+    <div class="checkin-field">
       <div class="checkin-label">Vehicle Type</div>
       <input class="checkin-input" id="ci_vehicle" type="text" placeholder="e.g. Black Cadillac Escalade" autocomplete="off">
     </div>
@@ -852,6 +856,10 @@ function render(job) {
     statusHtml = `<div class="status-done-badge">✅ Job Completed</div>`;
   } else if (status === "Cancelled") {
     statusHtml = `<div class="status-cancelled-badge">✕ Job Cancelled</div>`;
+  } else if (status === "Offer") {
+    statusHtml = job.assigned_driver
+      ? `<div class="status-cancelled-badge">This job was already accepted by another driver.</div>`
+      : `<button id="offerClaimBtn" class="status-next" onclick="claimOfferJob()">✅ Accept This Job</button>`;
   } else if (next) {
     const btnLabel = NEXT_LABEL[status] || ("→ " + next);
     statusHtml = `
@@ -1449,11 +1457,13 @@ function _stopSelfieStream() {
 
 async function confirmCheckin() {
   const name    = document.getElementById("ci_name").value.trim();
+  const phone   = document.getElementById("ci_phone").value.trim();
   const vehicle = document.getElementById("ci_vehicle").value.trim();
   const color   = document.getElementById("ci_color").value.trim();
   const plate   = document.getElementById("ci_plate").value.trim().toUpperCase();
 
   if (!name)    { alert("Please enter your name."); document.getElementById("ci_name").focus(); return; }
+  if (!phone)   { alert("Please enter your phone number."); document.getElementById("ci_phone").focus(); return; }
   if (!vehicle) { alert("Please enter your vehicle type."); document.getElementById("ci_vehicle").focus(); return; }
   if (!color)   { alert("Please enter your vehicle color."); document.getElementById("ci_color").focus(); return; }
   if (!plate)   { alert("Please enter your license plate."); document.getElementById("ci_plate").focus(); return; }
@@ -1495,12 +1505,16 @@ async function confirmCheckin() {
     driver_color:        color,
     driver_checkin_plate: plate,
     driver_checkin_name: name,
+    driver_checkin_phone: phone,
     photo_vehicle_front: urlVehicle  || null,
     photo_car_interior:  urlInterior || null,
     photo_selfie:        urlSelfie   || null,
     driver_unverified:   false
   });
-  await applyStatus(_pendingStatus || "Accepted", { assigned_driver: name, extras });
+  // Check-in only adds confirmation data and advances status — it must NOT
+  // touch assigned_driver, so a late opener of this link can't take over a
+  // job that's already Assigned to someone else.
+  await applyStatus(_pendingStatus || "Accepted", { extras });
   _pendingStatus = null;
 }
 
@@ -1613,6 +1627,98 @@ async function confirmCheckout() {
   const existingAddons = Array.isArray(currentJob.addon_charges) ? currentJob.addon_charges : [];
   const patch = newEntries.length ? { addon_charges: existingAddons.concat(newEntries) } : {};
   await applyStatus("Completed", patch);
+}
+
+// ── Offer claim (atomic accept guard — first tap wins) ───────────────────────
+async function claimOfferJob() {
+  if (!currentJob || currentJob.status !== "Offer") return;
+  const name = (prompt("Enter your name to accept this job:") || "").trim();
+  if (!name) return;
+  const phone = (prompt("Enter your phone number:") || "").trim();
+  if (!phone) return;
+
+  const btn = document.getElementById("offerClaimBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Accepting..."; }
+
+  const rawExtras = currentJob.extras;
+  const existingExtras = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
+  existingLog.push({ status: "Assigned", prev: "Offer", ts: new Date().toISOString() });
+  // Merge over existingExtras (not a bare {}) so pre-existing keys like
+  // settlement, booking_ref, and payment_note survive the claim PATCH.
+  const mergedExtras = Object.assign({}, existingExtras, {
+    driver_checkin_name:  name,
+    driver_checkin_phone: phone,
+    status_log:            existingLog
+  });
+
+  try {
+    const url = SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(currentJob.id) +
+                "&status=eq.Offer&assigned_driver=eq.";
+    const r = await fetch(url, {
+      method: "PATCH",
+      headers: { ...H, "Prefer": "return=representation" },
+      body: JSON.stringify({ assigned_driver: name, status: "Assigned", extras: mergedExtras })
+    });
+    const data = await r.json().catch(() => []);
+    if (!r.ok) throw new Error(data.message || "Failed to accept job");
+
+    if (Array.isArray(data) && data.length === 1) {
+      render(data[0]);
+      showToast("✅ Job accepted!");
+      showWhatsAppNotifyPanel(buildOfferAcceptedMessage(data[0], name));
+    } else {
+      showToast("Sorry, this job was just taken.");
+      const fresh = await fetchJob(getToken());
+      if (fresh) render(fresh);
+    }
+  } catch(e) {
+    alert("Failed to accept job: " + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = "✅ Accept This Job"; }
+  }
+}
+
+function buildOfferAcceptedMessage(job, driverName) {
+  const date    = job.date || "";
+  const from    = job.from_loc || "";
+  const to      = job.to_loc || "";
+  const vehicle = job.vehicle_type || "";
+  return `Hi, Job COVERED by me - ${driverName}. ${date}, ${from} to ${to}, unit ${vehicle}. Thank you for the offer!`;
+}
+
+let _lastOfferMessage = "";
+
+function showWhatsAppNotifyPanel(message) {
+  _lastOfferMessage = message;
+  document.getElementById("waNotifyPanel")?.remove();
+  const waUrl = "https://wa.me/?text=" + encodeURIComponent(message);
+  const panel = document.createElement("div");
+  panel.id = "waNotifyPanel";
+  panel.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:500;"
+    + "background:#F0E8D5;border:1px solid #C9A84C;border-radius:12px;padding:14px;"
+    + "box-shadow:0 6px 24px rgba(0,0,0,.4);";
+  panel.innerHTML = `
+    <div style="font-size:12px;font-weight:700;color:#0C0B09;margin-bottom:8px;">📣 Let the drivers group know you've got this job</div>
+    <div style="display:flex;gap:8px;">
+      <a href="${waUrl}" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:11px;border-radius:10px;background:#C9A84C;color:#0C0B09;font-size:13px;font-weight:800;text-decoration:none;">💬 Open WhatsApp</a>
+      <button onclick="copyOfferAcceptedMessage(this)" style="flex:1;padding:11px;border:1px solid #0C0B09;border-radius:10px;background:transparent;color:#0C0B09;font-size:13px;font-weight:700;cursor:pointer;">📋 Copy message</button>
+    </div>
+    <button onclick="document.getElementById('waNotifyPanel')?.remove()" style="width:100%;margin-top:8px;padding:6px;border:none;background:transparent;color:#0C0B09;font-size:11px;opacity:.6;cursor:pointer;">Dismiss</button>
+  `;
+  document.body.appendChild(panel);
+}
+
+async function copyOfferAcceptedMessage(btn) {
+  try {
+    await navigator.clipboard.writeText(_lastOfferMessage);
+    const orig = btn.textContent;
+    btn.textContent = "✅ Copied";
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  } catch(e) {
+    alert(_lastOfferMessage);
+  }
 }
 
 async function applyStatus(newStatus, extraPatch) {
