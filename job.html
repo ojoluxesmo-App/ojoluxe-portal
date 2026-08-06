@@ -833,6 +833,8 @@ function render(job) {
   const isOpen  = OPEN_STATUSES.includes(status);
   const next    = getNextStatus(status);
   const isComplete = next === "Completed";
+  const myClaim = localStorage.getItem("ojo_claim_" + job.id);
+  const isMine  = !!myClaim && myClaim === job.assigned_driver;
 
   document.getElementById("headerRef").textContent = job.reference_code || ("#" + String(job.id).slice(0,8));
 
@@ -861,8 +863,6 @@ function render(job) {
       ? `<div class="status-cancelled-badge">This job was already accepted by another driver.</div>`
       : `<button id="offerClaimBtn" class="status-next" onclick="claimOfferJob()">✅ Accept This Job</button>`;
   } else if (next) {
-    const myClaim = localStorage.getItem("ojo_claim_" + job.id);
-    const isMine  = myClaim && myClaim === job.assigned_driver;
     if (!isMine) {
       statusHtml = `
         <div class="status-cancelled-badge">🔒 This job has already been accepted by ${escapeHtml(job.assigned_driver||"another driver")}. Thank you!</div>
@@ -1040,6 +1040,12 @@ function render(job) {
         ${statusHtml}
       </div>
 
+      <!-- Reopen WhatsApp notify (available any time after claiming) -->
+      ${(isMine && job.assigned_driver && isOpen && status !== "Offer") ? `
+      <div class="section">
+        <button onclick="reopenWhatsAppNotify()" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:#25D366;font-size:13px;font-weight:700;cursor:pointer;">📣 Notify Drivers Group</button>
+      </div>` : ""}
+
     </div>
   </div>
 
@@ -1169,11 +1175,18 @@ async function confirmCancel() {
 
 function openCheckin() {
   const overlay = document.getElementById("checkinOverlay");
-  // Pre-fill if driver already accepted before (driver name on the job)
-  const nameEl = document.getElementById("ci_name");
+  // Pre-fill if driver already accepted before (name/phone captured at claim)
+  const nameEl    = document.getElementById("ci_name");
+  const phoneEl   = document.getElementById("ci_phone");
+  const vehicleEl = document.getElementById("ci_vehicle");
   if (currentJob.assigned_driver && currentJob.assigned_driver !== "Unassigned") {
     nameEl.value = currentJob.assigned_driver;
   }
+  const rawExtras = currentJob.extras;
+  const ex = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  if (ex.driver_checkin_phone) phoneEl.value = ex.driver_checkin_phone;
   // Show dispatcher note if waybill_notes present
   const note = (currentJob.waybill_notes||"").trim();
   const noteBox = document.getElementById("checkinAdminNote");
@@ -1183,8 +1196,12 @@ function openCheckin() {
   } else {
     noteBox.style.display = "none";
   }
+  // Keep the WhatsApp notify panel visible above the check-in sheet instead
+  // of both fixed bottom-anchored panels overlapping.
+  const waPanel = document.getElementById("waNotifyPanel");
+  if (waPanel) { waPanel.style.top = "12px"; waPanel.style.bottom = "auto"; }
   overlay.style.display = "flex";
-  setTimeout(() => nameEl.focus(), 300);
+  setTimeout(() => (nameEl.value ? vehicleEl : nameEl).focus(), 300);
 }
 
 // ── Photo uploads ─────────────────────────────────────────────────────────────
@@ -1678,6 +1695,10 @@ async function claimOfferJob() {
       render(data[0]);
       showToast("✅ Job accepted!");
       showWhatsAppNotifyPanel(buildOfferAcceptedMessage(data[0], name));
+      // Continue straight into the existing vehicle + photos check-in —
+      // name/phone were just captured above, so openCheckin() pre-fills them.
+      _pendingStatus = "Accepted";
+      openCheckin();
     } else {
       showToast("Sorry, this job was just taken.");
       const fresh = await fetchJob(getToken());
@@ -1729,6 +1750,16 @@ function showWhatsAppNotifyPanel(message) {
     <button onclick="document.getElementById('waNotifyPanel')?.remove()" style="width:100%;margin-top:8px;padding:6px;border:none;background:transparent;color:#0C0B09;font-size:11px;opacity:.6;cursor:pointer;">Dismiss</button>
   `;
   document.body.appendChild(panel);
+}
+
+function reopenWhatsAppNotify() {
+  if (!currentJob) return;
+  const rawExtras = currentJob.extras;
+  const ex = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  const driverName = currentJob.assigned_driver || ex.driver_checkin_name || "Driver";
+  showWhatsAppNotifyPanel(buildOfferAcceptedMessage(currentJob, driverName));
 }
 
 async function copyOfferAcceptedMessage(btn) {
