@@ -830,6 +830,16 @@ function getToken() {
   return new URLSearchParams(window.location.search).get("token") || "";
 }
 
+// ── TEMP DIAGNOSTIC (debug=1 only) — remove once claim-lock issue is closed ──
+function isDebugMode() {
+  return new URLSearchParams(window.location.search).get("debug") === "1";
+}
+function _debugWebviewLabel() {
+  const ua = navigator.userAgent || "";
+  const inApp = /WhatsApp/i.test(ua) || /; wv\)/i.test(ua) || /FBAN|FBAV|Instagram|Line\/|MicroMessenger/i.test(ua);
+  return inApp ? "WhatsApp/in-app" : "normal browser";
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentJob = null;
 
@@ -872,9 +882,16 @@ function render(job) {
       : `<button id="offerClaimBtn" class="status-next" onclick="claimOfferJob()">✅ Accept This Job</button>`;
   } else if (next) {
     if (!isMine) {
+      const debugHtml = isDebugMode() ? `
+        <div style="margin-top:8px;padding:8px;border:1px dashed var(--border);border-radius:8px;font-family:monospace;font-size:10px;line-height:1.6;color:var(--muted);opacity:0.85;">
+          <div>myClaim = ${myClaim ? escapeHtml(myClaim) : "NULL"}</div>
+          <div>assigned = ${escapeHtml(job.assigned_driver || "")}</div>
+          <div>match(===) = ${myClaim === job.assigned_driver}</div>
+          <div>webview = ${_debugWebviewLabel()}</div>
+        </div>` : "";
       statusHtml = `
         <div class="status-cancelled-badge">🔒 This job has already been accepted by ${escapeHtml(driverDisplayName(job))}. Thank you!</div>
-        <button onclick="promptClaimRecovery()" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;">I am the assigned driver</button>`;
+        <button onclick="promptClaimRecovery()" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;">I am the assigned driver</button>${debugHtml}`;
     } else {
       const btnLabel = NEXT_LABEL[status] || ("→ " + next);
       statusHtml = `
