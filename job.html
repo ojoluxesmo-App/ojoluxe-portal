@@ -1069,10 +1069,11 @@ function render(job) {
           <button onclick="downloadIcs()" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;">⬇ Download .ics (reminders + job-card link)</button>
         </div>` : ""; })()}
 
-      <!-- Meet & Greet signage -->
+      <!-- Meet & Greet signage (airport transfers only) -->
+      ${(job.job_type || "").trim().toLowerCase() === "airport transfer" ? `
       <div class="section">
         <button onclick="openSignage()" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;">🪧 Meet &amp; Greet Sign</button>
-      </div>
+      </div>` : ""}
 
       <!-- Status actions -->
       <div class="section status-section">
