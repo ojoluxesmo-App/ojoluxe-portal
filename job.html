@@ -1783,8 +1783,22 @@ function buildOfferAcceptedMessage(job, driverName) {
 let _lastOfferMessage = "";
 let _waNotifyDismissedJobId = null;
 
-function showWhatsAppNotifyPanel(message) {
-  if (currentJob && _waNotifyDismissedJobId === currentJob.id) return;
+function _waNotifyDismissKey(jobId) {
+  return "ojo_wa_dismissed_" + jobId;
+}
+
+function persistWaNotifyDismiss() {
+  if (currentJob) localStorage.setItem(_waNotifyDismissKey(currentJob.id), "1");
+}
+
+function showWhatsAppNotifyPanel(message, force) {
+  if (!force && currentJob) {
+    if (_waNotifyDismissedJobId === currentJob.id) return;
+    if (localStorage.getItem(_waNotifyDismissKey(currentJob.id)) === "1") return;
+    const acceptedIdx = STATUS_FLOW.indexOf("Accepted");
+    const stageIdx = STATUS_FLOW.indexOf(currentJob.status);
+    if (stageIdx > acceptedIdx) return; // past Accepted/Checked-In — no longer relevant
+  }
   _lastOfferMessage = message;
   document.getElementById("waNotifyPanel")?.remove();
   const waUrl = "https://wa.me/?text=" + encodeURIComponent(message);
@@ -1796,8 +1810,8 @@ function showWhatsAppNotifyPanel(message) {
   panel.innerHTML = `
     <div style="font-size:12px;font-weight:700;color:#0C0B09;margin-bottom:8px;">📣 Let the drivers group know you've got this job</div>
     <div style="display:flex;gap:8px;">
-      <a href="${waUrl}" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:11px;border-radius:10px;background:#C9A84C;color:#0C0B09;font-size:13px;font-weight:800;text-decoration:none;">💬 Open WhatsApp</a>
-      <button onclick="copyOfferAcceptedMessage(this)" style="flex:1;padding:11px;border:1px solid #0C0B09;border-radius:10px;background:transparent;color:#0C0B09;font-size:13px;font-weight:700;cursor:pointer;">📋 Copy message</button>
+      <a href="${waUrl}" target="_blank" rel="noopener" onclick="persistWaNotifyDismiss()" style="flex:1;text-align:center;padding:11px;border-radius:10px;background:#C9A84C;color:#0C0B09;font-size:13px;font-weight:800;text-decoration:none;">💬 Open WhatsApp</a>
+      <button onclick="persistWaNotifyDismiss();copyOfferAcceptedMessage(this)" style="flex:1;padding:11px;border:1px solid #0C0B09;border-radius:10px;background:transparent;color:#0C0B09;font-size:13px;font-weight:700;cursor:pointer;">📋 Copy message</button>
     </div>
     <button onclick="dismissWhatsAppNotify()" style="width:100%;margin-top:8px;padding:6px;border:none;background:transparent;color:#0C0B09;font-size:11px;opacity:.6;cursor:pointer;">Dismiss</button>
   `;
@@ -1805,19 +1819,23 @@ function showWhatsAppNotifyPanel(message) {
 }
 
 function dismissWhatsAppNotify() {
-  if (currentJob) _waNotifyDismissedJobId = currentJob.id;
+  if (currentJob) {
+    _waNotifyDismissedJobId = currentJob.id;
+    persistWaNotifyDismiss();
+  }
   document.getElementById("waNotifyPanel")?.remove();
 }
 
 function reopenWhatsAppNotify() {
   if (!currentJob) return;
   _waNotifyDismissedJobId = null;
+  localStorage.removeItem(_waNotifyDismissKey(currentJob.id));
   const rawExtras = currentJob.extras;
   const ex = (typeof rawExtras === "string")
     ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
     : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
   const driverName = currentJob.assigned_driver || ex.driver_checkin_name || "Driver";
-  showWhatsAppNotifyPanel(buildOfferAcceptedMessage(currentJob, driverName));
+  showWhatsAppNotifyPanel(buildOfferAcceptedMessage(currentJob, driverName), true);
 }
 
 async function copyOfferAcceptedMessage(btn) {
