@@ -834,14 +834,21 @@ function getToken() {
 function isDebugMode() {
   return new URLSearchParams(window.location.search).get("debug") === "1";
 }
-function _debugWebviewLabel() {
+function isInAppBrowser() {
   const ua = navigator.userAgent || "";
-  const inApp = /WhatsApp/i.test(ua) || /; wv\)/i.test(ua) || /FBAN|FBAV|Instagram|Line\/|MicroMessenger/i.test(ua);
-  return inApp ? "WhatsApp/in-app" : "normal browser";
+  return /WhatsApp/i.test(ua) || /; wv\)/i.test(ua) || /FBAN|FBAV|Instagram|Line\/|MicroMessenger/i.test(ua);
+}
+function _debugWebviewLabel() {
+  return isInAppBrowser() ? "WhatsApp/in-app" : "normal browser";
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentJob = null;
+let _inAppBannerDismissed = false;
+function dismissInAppBanner() {
+  _inAppBannerDismissed = true;
+  if (currentJob) render(currentJob);
+}
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render(job) {
@@ -902,8 +909,15 @@ function render(job) {
     }
   }
 
+  const showInAppBanner = isInAppBrowser() && !_inAppBannerDismissed;
+
   document.getElementById("app").innerHTML = `
   <div class="job-card">
+    ${showInAppBanner ? `
+    <div style="position:relative;margin:12px 12px 0;padding:10px 30px 10px 12px;border:1px solid #C9A84C;border-radius:10px;background:rgba(201,168,76,0.12);color:#C9A84C;font-size:11px;font-weight:600;line-height:1.5;">
+      You are viewing inside WhatsApp. Tap the <strong>⋯</strong> (or Share) menu and choose "Open in Safari" or "Open in Chrome" before accepting, so your Accept and status buttons work and stay saved.
+      <button onclick="dismissInAppBanner()" aria-label="Dismiss" style="position:absolute;top:6px;right:8px;background:none;border:none;color:#C9A84C;font-size:14px;font-weight:800;cursor:pointer;line-height:1;padding:4px;">✕</button>
+    </div>` : ""}
     <div class="jc-head">
       <div>
         <div class="jc-client">${escapeHtml(job.client||"—")}</div>
