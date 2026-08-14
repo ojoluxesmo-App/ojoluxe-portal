@@ -1020,7 +1020,7 @@ function render(job) {
       <!-- Client contact — tap only, number hidden -->
       ${job.client_phone ? `
       <div class="section" style="position:relative;">
-        <button id="contactBtn" onclick="toggleContactMenu()" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;">Contact</button>
+        <button id="contactBtn" onclick="toggleContactMenu()" style="width:100%;padding:11px;border:none;border-radius:10px;background:#7FB8E6;color:#0F3A5F;font-size:13px;font-weight:700;cursor:pointer;">Contact Client</button>
         <div id="contactMenu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:12px;padding:12px;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:150;">
           <div style="display:flex;justify-content:center;gap:16px;">
             <a href="tel:${escapeHtml(job.client_phone)}" onclick="toggleContactMenu()" aria-label="Call client" style="width:48px;height:48px;border-radius:50%;background:#0a2a0a;color:#4caf7d;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none;">📞</a>
@@ -1072,6 +1072,14 @@ function render(job) {
                   </div>`}
               </div>`;
             })() : ""}
+            <div style="padding:10px 16px;border-top:1px solid #f0f0f0;">
+              <div style="font-size:10px;font-weight:700;color:#999;letter-spacing:.08em;margin-bottom:6px;">CONTACT SUPPORT</div>
+              <div style="display:flex;justify-content:center;gap:16px;">
+                <a href="tel:+13104066692" onclick="toggleMoreMenu()" aria-label="Call support" style="width:48px;height:48px;border-radius:50%;background:#0a2a0a;color:#4caf7d;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none;">&#128222;</a>
+                <a href="sms:+13104066692" onclick="toggleMoreMenu()" aria-label="Text support" style="width:48px;height:48px;border-radius:50%;background:#0a1a2a;color:#5b9bd5;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none;">&#128172;</a>
+                <a href="https://wa.me/13104066692" target="_blank" rel="noopener" onclick="toggleMoreMenu()" aria-label="WhatsApp support" style="width:48px;height:48px;border-radius:50%;background:#0a2a0a;color:#25D366;display:flex;align-items:center;justify-content:center;font-size:20px;text-decoration:none;">&#128994;</a>
+              </div>
+            </div>
           </div>
         </div>
         <div style="position:relative;">
