@@ -4636,11 +4636,13 @@ function renderExpenseRows() {
         style="width:100%;background:#0a0a0a;border:1px solid #222;color:#ccc;padding:5px 8px;border-radius:6px;font-size:11px;box-sizing:border-box;margin-bottom:6px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
         ${row.receipt_url
-          ? `<a href="${escapeHtml(row.receipt_url)}" target="_blank"><img src="${escapeHtml(row.receipt_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #333;cursor:zoom-in;" onerror="this.style.display='none'"></a>`
+          ? (/\.pdf(\?|$)/i.test(row.receipt_url)
+              ? `<a href="${escapeHtml(row.receipt_url)}" target="_blank" style="font-size:10px;font-weight:700;color:var(--gold);background:#1a1400;border:1px solid #3a2e00;border-radius:6px;padding:6px 8px;text-decoration:none;">📄 PDF · ${escapeHtml(row.receipt_url.split("/").pop())}</a>`
+              : `<a href="${escapeHtml(row.receipt_url)}" target="_blank"><img src="${escapeHtml(row.receipt_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #333;cursor:zoom-in;" onerror="this.style.display='none'"></a>`)
           : `<span style="font-size:10px;color:#666;padding:4px 8px;background:#1a1a1a;border-radius:6px;">No receipt</span>`}
         <label style="font-size:10px;color:#666;cursor:pointer;text-decoration:underline;">
           &#128206; ${row.receipt_url?"Change":"Upload"}
-          <input type="file" accept="image/*" style="display:none;" onchange="handleReceiptUpload(event,${i})">
+          <input type="file" accept="image/*,application/pdf" style="display:none;" onchange="handleReceiptUpload(event,${i})">
         </label>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
@@ -4753,10 +4755,28 @@ async function compressImage(file, maxEdge = 1600, quality = 0.7) {
   }
 }
 
+function isPdfFile(file) {
+  return !!file && (file.type === "application/pdf" || /\.pdf$/i.test(file.name || ""));
+}
+
 async function handleReceiptUpload(event, i) {
   const file = event.target.files[0]; if(!file) return;
   const jobId = expenseJobId;
   try {
+    if (isPdfFile(file)) {
+      if (file.size > 10 * 1024 * 1024) console.warn("[OJO] Large PDF receipt uploading:", file.size);
+      const path = `receipts/${jobId}/receipt_${Date.now()}_${Math.random().toString(36).slice(2,7)}.pdf`;
+      const res  = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-photos/${path}`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY,
+                   "Content-Type": "application/pdf", "x-upsert": "true" },
+        body: file
+      });
+      if (!res.ok) { alert("Receipt upload failed. Please try again."); return; }
+      expenseRows[i].receipt_url = `${SUPABASE_URL}/storage/v1/object/public/driver-photos/${path}`;
+      renderExpenseRows();
+      return;
+    }
     const uploadBlob  = await compressImage(file);
     const compressed  = uploadBlob !== file;
     const ext         = compressed ? "jpg" : (file.name.split(".").pop() || "jpg").toLowerCase();
