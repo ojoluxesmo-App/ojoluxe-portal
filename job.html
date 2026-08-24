@@ -1851,13 +1851,24 @@ async function claimOfferJob() {
 
 function promptClaimRecovery() {
   if (!currentJob) return;
-  const typed = (prompt("Enter your name exactly as used when you accepted this job:") || "").trim();
+  const typed = (prompt("Enter your name OR the last 4 digits of your phone number, exactly as used when you accepted this job:") || "").trim();
   if (!typed) return;
-  if (typed.toLowerCase() === (currentJob.assigned_driver || "").toLowerCase()) {
+
+  const nameMatch = typed.toLowerCase() === (currentJob.assigned_driver || "").toLowerCase();
+
+  const rawExtras = currentJob.extras;
+  const existingExtras = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  const storedLast4 = existingExtras.driver_phone_last4 ||
+    (existingExtras.driver_checkin_phone ? existingExtras.driver_checkin_phone.replace(/\D/g, "").slice(-4) : "");
+  const phoneMatch = /^\d{4}$/.test(typed) && !!storedLast4 && typed === storedLast4;
+
+  if (nameMatch || phoneMatch) {
     localStorage.setItem("ojo_claim_" + currentJob.id, currentJob.assigned_driver);
     render(currentJob);
   } else {
-    alert("That name doesn't match our records for this job. Please contact your dispatcher.");
+    alert("That name or phone number doesn't match our records for this job. Please contact your dispatcher.");
   }
 }
 
