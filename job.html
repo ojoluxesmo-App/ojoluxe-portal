@@ -883,15 +883,18 @@ function render(job) {
     : "";
 
   // Status buttons — label keyed by CURRENT status, not next
+  // Open claim = no driver on the job yet, whether it's sitting at Offer or
+  // was posted straight to Assigned with an empty assigned_driver.
+  const isOpenClaim = (status === "Offer" || status === "Assigned") && !job.assigned_driver;
   let statusHtml = "";
   if (status === "Completed") {
     statusHtml = `<div class="status-done-badge">✅ Job Completed</div>`;
   } else if (status === "Cancelled") {
     statusHtml = `<div class="status-cancelled-badge">✕ Job Cancelled</div>`;
+  } else if (isOpenClaim) {
+    statusHtml = `<button id="offerClaimBtn" class="status-next" onclick="claimOfferJob()">✅ Accept This Job</button>`;
   } else if (status === "Offer") {
-    statusHtml = job.assigned_driver
-      ? `<div class="status-cancelled-badge">This job was already accepted by another driver.</div>`
-      : `<button id="offerClaimBtn" class="status-next" onclick="claimOfferJob()">✅ Accept This Job</button>`;
+    statusHtml = `<div class="status-cancelled-badge">This job was already accepted by another driver.</div>`;
   } else if (next) {
     if (!isMine) {
       const debugHtml = isDebugMode() ? `
@@ -1792,29 +1795,38 @@ async function confirmCheckout() {
 // immediately. The real name is captured once, in the check-in form that
 // opens right after (see confirmCheckin), which then replaces the
 // placeholder in assigned_driver.
+//
+// The WHERE clause is the race lock, not an assigned_driver equality check
+// (that used to compare against '' and silently missed rows seeded with
+// NULL, so open jobs could never be claimed). Any row still sitting in
+// Offer or Assigned with no driver on it is fair game; the PATCH flips it
+// straight to Accepted, so a second tap's .in() no longer matches and comes
+// back with 0 rows.
 async function claimOfferJob() {
-  if (!currentJob || currentJob.status !== "Offer") return;
+  const isOpenClaim = !!currentJob && (currentJob.status === "Offer" || currentJob.status === "Assigned") && !currentJob.assigned_driver;
+  if (!isOpenClaim) return;
 
   const btn = document.getElementById("offerClaimBtn");
   if (btn) { btn.disabled = true; btn.textContent = "⏳ Locking job..."; }
 
+  const prevStatus = currentJob.status;
   const rawExtras = currentJob.extras;
   const existingExtras = (typeof rawExtras === "string")
     ? (() => { try { return JSON.parse(rawExtras); } catch(e) { return {}; } })()
     : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
   const existingLog = Array.isArray(existingExtras.status_log) ? existingExtras.status_log : [];
-  existingLog.push({ status: "Assigned", prev: "Offer", ts: new Date().toISOString() });
+  existingLog.push({ status: "Accepted", prev: prevStatus, ts: new Date().toISOString() });
   // Merge over existingExtras (not a bare {}) so pre-existing keys like
   // settlement, booking_ref, and payment_note survive the claim PATCH.
   const mergedExtras = Object.assign({}, existingExtras, { status_log: existingLog });
 
   try {
     const url = SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(currentJob.id) +
-                "&status=eq.Offer&assigned_driver=eq.";
+                "&status=in.(Offer,Assigned)";
     const r = await fetch(url, {
       method: "PATCH",
       headers: { ...H, "Prefer": "return=representation" },
-      body: JSON.stringify({ assigned_driver: CLAIM_PENDING_LABEL, status: "Assigned", extras: mergedExtras })
+      body: JSON.stringify({ assigned_driver: CLAIM_PENDING_LABEL, status: "Accepted", extras: mergedExtras })
     });
     const data = await r.json().catch(() => []);
     if (!r.ok) throw new Error(data.message || "Failed to accept job");
@@ -1946,12 +1958,17 @@ async function applyStatus(newStatus, extraPatch) {
     const driver = patchExtras.cancelled_by_driver || currentJob.assigned_driver || "Driver";
     logLabel = `Cancelled by ${driver} → back to Offer`;
   }
-  existingLog.push({
-    status:  logLabel,
-    prev:    prevStatus,
-    ts:      new Date().toISOString(),
-    ...(patchExtras.cancel_reason ? { cancel_reason: patchExtras.cancel_reason } : {})
-  });
+  // Skip a no-op log line when the status isn't actually changing — e.g. the
+  // open-claim flow already flips status to Accepted atomically, so the
+  // check-in submit that follows shouldn't log a second "Accepted → Accepted".
+  if (newStatus !== prevStatus) {
+    existingLog.push({
+      status:  logLabel,
+      prev:    prevStatus,
+      ts:      new Date().toISOString(),
+      ...(patchExtras.cancel_reason ? { cancel_reason: patchExtras.cancel_reason } : {})
+    });
+  }
 
   // Merge with any extraPatch.extras (e.g. driver check-in fields)
   const mergedExtras = Object.assign({}, existingExtras, patchExtras, { status_log: existingLog });

@@ -3267,7 +3267,7 @@ async function saveJob() {
     stops:(typeof getStops==="function" ? getStops() : []),
     job_type:jobType, vehicle_type:vehicleType,
     payment_type:getValue("paymentType"), status:autoStatus,
-    assigned_driver:assignedDriver,
+    assigned_driver:assignedDriver || null,
     waybill_notes:getValue("driverNotes"),
     internal_notes:getValue("internalNotes"),
     pricing_mode:pricingMode,
@@ -3638,7 +3638,7 @@ async function saveMultiDayTour() {
         vehicle_type: vehicleType,
         payment_type: getValue("paymentType"),
         status:       assignedDriver ? "Assigned" : "Offer",
-        assigned_driver: assignedDriver,
+        assigned_driver: assignedDriver || null,
         waybill_notes:   getValue("driverNotes"),
         // Internal notes: include tour context + day label
         internal_notes: [
@@ -4067,7 +4067,7 @@ async function confirmDispatch(){
 // ── Release Job ───────────────────────────────────────────────────────────────
 async function releaseJob(id){
   if(!confirm("Release this job?")) return;
-  const{error}=await db.from("jobs").update({assigned_driver:"",status:"Offer"}).eq("id",id);
+  const{error}=await db.from("jobs").update({assigned_driver:null,status:"Offer"}).eq("id",id);
   if(error){alert("Release failed: "+error.message);return;}
   await loadJobs();renderJobs();
 }
