@@ -1252,6 +1252,9 @@ function openCheckin() {
   const phoneEl = document.getElementById("ci_phone");
   if (currentJob.assigned_driver && currentJob.assigned_driver !== "Unassigned" && currentJob.assigned_driver !== CLAIM_PENDING_LABEL) {
     nameEl.value = currentJob.assigned_driver;
+    nameEl.readOnly = true;
+  } else {
+    nameEl.readOnly = false;
   }
   const rawExtras = currentJob.extras;
   const ex = (typeof rawExtras === "string")
@@ -1638,12 +1641,17 @@ async function confirmAccept() {
   document.getElementById("checkinOverlay").style.display = "none";
   btn.textContent = "✅ Confirm & Accept Job"; btn.disabled = false;
 
+  // Grant local ownership on every successful Stage A completion — not just
+  // the offer-claim path — so the isMine gate resolves for legacy/
+  // admin-assigned jobs too, not only jobs claimed off the offer board.
+  localStorage.setItem("ojo_claim_" + currentJob.id, name);
+  render(currentJob);
+
   if (isClaimFlow && currentJob.extras && currentJob.extras.driver_checkin_name === name) {
     // applyStatus() already rendered with the real name in assigned_driver,
-    // but localStorage still held the placeholder at that moment — update it
-    // and re-render so the "isMine" gate doesn't briefly show the locked panel.
-    localStorage.setItem("ojo_claim_" + currentJob.id, name);
-    render(currentJob);
+    // but localStorage still held the placeholder at that moment — the
+    // unconditional render() above now covers that too. Only the offer-claim
+    // WhatsApp broadcast stays gated to this branch.
     showWhatsAppNotifyPanel(buildOfferAcceptedMessage(currentJob, name));
   }
 }
@@ -1699,7 +1707,7 @@ async function confirmVehicleCheckin() {
     driver_unverified:   false
   });
 
-  await applyStatus("Checked In", { extras });
+  await applyStatus("Accepted", { extras });
 }
 
 // ── Check-out / Expense Capture ──────────────────────────────────────────────
@@ -2039,11 +2047,73 @@ async function init() {
       document.getElementById("headerRef").textContent = "Not Found";
       return;
     }
-    render(job);
+    routeCheckinEntry(job);
   } catch(e) {
     renderError("Could not load job: " + e.message);
     document.getElementById("headerRef").textContent = "Error";
   }
+}
+
+// ── Check-in entry routing (last-4 gate) ─────────────────────────────────────
+// Runs once, on load, after the job is fetched — never from internal
+// re-renders. Routes by phone/plate presence in extras, not driver_unverified
+// (unreliable: false on never-checked-in jobs, null on others) or status
+// (Stage B keeps status "Accepted", so status alone can't tell done vs not-done).
+function routeCheckinEntry(job) {
+  render(job);
+
+  const status = job.status || "Offer";
+  if (status !== "Assigned" && status !== "Accepted") return;
+  if (!job.assigned_driver) return; // open/unclaimed — leave the offer-board atomic-claim button alone
+
+  const rawExtras = job.extras;
+  const ex = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+
+  const hasPhone = !!(ex.driver_phone_last4 || ex.driver_checkin_phone);
+  const hasPlate = !!ex.driver_checkin_plate;
+
+  if (hasPlate) return;                       // fully checked in — normal view, no gate
+  if (!hasPhone) { openCheckin(); return; }    // no phone on file — Stage A
+
+  // Phone present, no plate — gate, then Vehicle sheet
+  if (localStorage.getItem("ojo_gate_" + job.id) === "1") {
+    openVehicleCheckin();
+    return;
+  }
+  promptCheckinGate(ex);
+}
+
+function promptCheckinGate(ex) {
+  const typed = (prompt("Enter the last 4 digits of the phone number used to accept this job:") || "").trim();
+  if (!typed) return;
+  const storedLast4 = ex.driver_phone_last4 ||
+    (ex.driver_checkin_phone ? ex.driver_checkin_phone.replace(/\D/g, "").slice(-4) : "");
+  const typedDigits = typed.replace(/\D/g, "");
+  const phoneMatch = typedDigits.length >= 4 && !!storedLast4 && typedDigits.slice(-4) === storedLast4;
+  if (phoneMatch) {
+    localStorage.setItem("ojo_claim_" + currentJob.id, currentJob.assigned_driver);
+    localStorage.setItem("ojo_gate_" + currentJob.id, "1");
+    render(currentJob);
+    openVehicleCheckin();
+  } else {
+    alert("That doesn't match the phone number on file for this job. Please contact your dispatcher.");
+  }
+}
+
+function openVehicleCheckin() {
+  const overlay = document.getElementById("vehicleCheckinOverlay");
+  const rawExtras = currentJob.extras;
+  const ex = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  const vehicleEl = document.getElementById("ci_vehicle");
+  const colorEl   = document.getElementById("ci_color");
+  if (ex.driver_vehicle) vehicleEl.value = ex.driver_vehicle;
+  if (ex.driver_color)   colorEl.value   = ex.driver_color;
+  overlay.style.display = "flex";
+  setTimeout(() => vehicleEl.focus(), 300);
 }
 
 init();
