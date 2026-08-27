@@ -1862,7 +1862,8 @@ function promptClaimRecovery() {
     : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
   const storedLast4 = existingExtras.driver_phone_last4 ||
     (existingExtras.driver_checkin_phone ? existingExtras.driver_checkin_phone.replace(/\D/g, "").slice(-4) : "");
-  const phoneMatch = /^\d{4}$/.test(typed) && !!storedLast4 && typed === storedLast4;
+  const typedDigits = typed.replace(/\D/g, "");
+  const phoneMatch = typedDigits.length >= 4 && !!storedLast4 && typedDigits.slice(-4) === storedLast4;
 
   if (nameMatch || phoneMatch) {
     localStorage.setItem("ojo_claim_" + currentJob.id, currentJob.assigned_driver);
