@@ -527,15 +527,15 @@
     </div>
     <div class="checkin-field">
       <div class="checkin-label">Vehicle Type</div>
-      <input class="checkin-input" id="ci_vehicle" type="text" placeholder="e.g. Black Cadillac Escalade" autocomplete="off">
+      <input class="checkin-input" id="ci_vehicle" type="text" placeholder="e.g. Black Cadillac Escalade" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
     </div>
     <div class="checkin-field">
       <div class="checkin-label">Vehicle Color</div>
-      <input class="checkin-input" id="ci_color" type="text" placeholder="e.g. Black" autocomplete="off">
+      <input class="checkin-input" id="ci_color" type="text" placeholder="e.g. Black" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
     </div>
     <div class="checkin-field">
       <div class="checkin-label">License Plate</div>
-      <input class="checkin-input" id="ci_plate" type="text" placeholder="e.g. 7ABC123" autocomplete="off" style="text-transform:uppercase;">
+      <input class="checkin-input" id="ci_plate" type="text" placeholder="e.g. 7ABC123" autocomplete="off" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
     </div>
     <div class="checkin-field">
       <div class="checkin-label">📸 Photos (Required)</div>
@@ -1603,8 +1603,8 @@ function _stopSelfieStream() {
 async function confirmCheckin() {
   const name    = document.getElementById("ci_name").value.trim();
   const phone   = document.getElementById("ci_phone").value.trim();
-  const vehicle = document.getElementById("ci_vehicle").value.trim();
-  const color   = document.getElementById("ci_color").value.trim();
+  const vehicle = document.getElementById("ci_vehicle").value.trim().toUpperCase();
+  const color   = document.getElementById("ci_color").value.trim().toUpperCase();
   const plate   = document.getElementById("ci_plate").value.trim().toUpperCase();
 
   if (!name)    { alert("Please enter your name."); document.getElementById("ci_name").focus(); return; }
@@ -1651,6 +1651,7 @@ async function confirmCheckin() {
     driver_checkin_plate: plate,
     driver_checkin_name: name,
     driver_checkin_phone: phone,
+    driver_phone_last4:  phone.replace(/\D/g, "").slice(-4),
     photo_vehicle_front: urlVehicle  || null,
     photo_car_interior:  urlInterior || null,
     photo_selfie:        urlSelfie   || null,
