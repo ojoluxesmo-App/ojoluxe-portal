@@ -2033,13 +2033,17 @@ const SERVICE_KEY = ""; // ← Paste your Supabase service_role key here for adm
 // Canonical PUBLIC base URL for Event Manager registration links/QR codes.
 // Deliberately NOT derived from window.location.origin — this admin portal
 // may itself be viewed from a Vercel Preview deployment (auth-walled) or any
-// other host, and a public QR code must never point at that. Leave blank
-// until set: Event Manager will refuse to generate links rather than risk
-// leaking a non-public hostname. Set to this Vercel project's Production
-// domain today; switch to "https://ojoluxe.com" once ojoluxe.com/partner is
-// actually routed to this app (it is not, as of this writing).
-const PARTNER_BASE_URL = "";
-const PARTNER_PATH = "/partner"; // clean URL — Vercel serves partner.html here by default
+// other host, and a public QR code must never point at that. Verified live
+// (2026-08-31): https://ojoluxe-portal.vercel.app is this project's actual
+// Production domain (200 OK, Server: Vercel, no auth wall). Switch to
+// "https://ojoluxe.com" once ojoluxe.com/partner is actually routed to this
+// app — confirmed NOT the case yet (ojoluxe.com is a separate WordPress site;
+// /partner there currently 404s).
+const PARTNER_BASE_URL = "https://ojoluxe-portal.vercel.app";
+// Verified live: clean "/partner" 404s on this deployment (no rewrite
+// configured), only "/partner.html" actually resolves. Update this if a
+// vercel.json rewrite for the clean URL is added later.
+const PARTNER_PATH = "/partner.html";
 // Admin API token is never hardcoded here — it's entered once per browser
 // via an inline field (see renderLeads()/saveAdminTokenAndReload()) and kept
 // in localStorage only. Must match the ADMIN_API_TOKEN env var on Vercel;
