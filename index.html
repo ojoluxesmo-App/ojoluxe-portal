@@ -1454,6 +1454,7 @@ window.addEventListener("unhandledrejection", function(e) {
       <div class="sec-bar" style="margin-bottom:12px;">
         <button class="sec-btn active" onclick="setAffiliatesSubTab('companies')" id="aft-companies">🏢 Companies</button>
         <button class="sec-btn" onclick="setAffiliatesSubTab('leads')" id="aft-leads">📋 Leads</button>
+        <button class="sec-btn" onclick="setAffiliatesSubTab('events')" id="aft-events">🎫 Events</button>
       </div>
 
       <!-- Companies sub-view -->
@@ -1607,11 +1608,64 @@ window.addEventListener("unhandledrejection", function(e) {
             <select id="leadFilterCountry" onchange="renderLeads()"><option value="">All Countries</option></select>
           </div>
           <button class="btn btn-sec" type="button" onclick="loadLeadsFromSupabase().then(renderLeads)" style="height:38px;">↻ Refresh</button>
+          <button class="btn btn-sec" type="button" onclick="exportLeadsCSV()" style="height:38px;">⬇ Export CSV</button>
           <button class="btn btn-sec" type="button" onclick="forgetAdminToken()" style="height:38px;">🔓 Forget Admin Token</button>
+        </div>
+        <div id="leadsSummaryCards" style="margin-bottom:12px;"></div>
+        <div id="lead-edit-form" style="display:none;margin-bottom:12px;">
+          <div class="form-card">
+            <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:14px;">✏️ EDIT LEAD</div>
+            <input id="editingLeadId" type="hidden">
+            <div class="field"><label>Full Name</label><input id="leEditFullName"></div>
+            <div class="field"><label>Company Name</label><input id="leEditCompanyName"></div>
+            <div class="field"><label>Position</label><input id="leEditPosition"></div>
+            <div class="field-row">
+              <div class="field"><label>Phone</label><input id="leEditPhone"></div>
+              <div class="field"><label>Email</label><input id="leEditEmail"></div>
+            </div>
+            <div class="field"><label>Country</label><input id="leEditCountry"></div>
+            <div class="action-row">
+              <button class="btn btn-gold" type="button" style="flex:2;" onclick="saveEditLead()">Save</button>
+              <button class="btn btn-sec" type="button" onclick="closeEditLead()">Cancel</button>
+            </div>
+          </div>
         </div>
         <div id="leadsList"></div>
       </div>
       <!-- /Leads sub-view -->
+
+      <!-- Events sub-view -->
+      <div id="af-events" style="display:none;">
+        <div class="form-toggle" onclick="toggleFormPanel('event-form')">
+          <span>➕ Create New Event</span><span>▼</span>
+        </div>
+        <div id="event-form" style="display:none;">
+          <div class="form-card" id="eventFormCard">
+            <div class="field">
+              <label>Event Display Name</label>
+              <input id="evDisplayName" placeholder="e.g. Indonesia Travel Expo 2026" oninput="autofillEventCode()">
+            </div>
+            <div class="field">
+              <label>Event Code (used in the registration link — auto-generated, editable)</label>
+              <input id="evCode" placeholder="INDONESIA_EXPO_2026" style="text-transform:uppercase;" oninput="this.dataset.autofilled='false'">
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Country (optional)</label><input id="evCountry" placeholder="Indonesia"></div>
+              <div class="field"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Start Date (optional)</label><input id="evStartDate" type="date"></div>
+              <div class="field"><label>End Date (optional)</label><input id="evEndDate" type="date"></div>
+            </div>
+            <div class="action-row">
+              <button class="btn btn-gold" type="button" style="flex:2;" onclick="saveEvent()">Save Event</button>
+              <button class="btn btn-sec" type="button" onclick="clearEventForm()">Clear</button>
+            </div>
+          </div>
+        </div>
+        <div id="eventsList"></div>
+      </div>
+      <!-- /Events sub-view -->
     </div>
 
     <!-- Clients sub-view -->
@@ -1976,6 +2030,20 @@ window.addEventListener("unhandledrejection", function(e) {
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZGxxYWdweHdzaHBkY2N4d3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYyODQsImV4cCI6MjA4OTcxMjI4NH0.MaNNRIcsD6aDizz2J4YzqXzkn32RhwJZqHM61t-TLYg";
 const SERVICE_KEY = ""; // ← Paste your Supabase service_role key here for admin ops
+// Canonical PUBLIC base URL for Event Manager registration links/QR codes.
+// Deliberately NOT derived from window.location.origin — this admin portal
+// may itself be viewed from a Vercel Preview deployment (auth-walled) or any
+// other host, and a public QR code must never point at that. Verified live
+// (2026-08-31): https://ojoluxe-portal.vercel.app is this project's actual
+// Production domain (200 OK, Server: Vercel, no auth wall). Switch to
+// "https://ojoluxe.com" once ojoluxe.com/partner is actually routed to this
+// app — confirmed NOT the case yet (ojoluxe.com is a separate WordPress site;
+// /partner there currently 404s).
+const PARTNER_BASE_URL = "https://ojoluxe-portal.vercel.app";
+// Verified live: clean "/partner" 404s on this deployment (no rewrite
+// configured), only "/partner.html" actually resolves. Update this if a
+// vercel.json rewrite for the clean URL is added later.
+const PARTNER_PATH = "/partner.html";
 // Admin API token is never hardcoded here — it's entered once per browser
 // via an inline field (see renderLeads()/saveAdminTokenAndReload()) and kept
 // in localStorage only. Must match the ADMIN_API_TOKEN env var on Vercel;
@@ -2262,6 +2330,7 @@ function toggleFormPanel(id, forceOpen) {
       if(id === "member-form") clearMemberForm();
       if(id === "vehicle-form") clearVehicleForm();
       if(id === "company-form") clearCompanyForm();
+      if(id === "event-form") clearEventForm();
     }
   }
 }
@@ -7253,14 +7322,17 @@ async function initCompaniesModule() {
 
 // ── Affiliates sub-tabs (Companies / Leads) ─────────────────────────────────────
 function setAffiliatesSubTab(tab) {
-  const companiesBtn = getEl("aft-companies"), leadsBtn = getEl("aft-leads");
-  const companiesView = getEl("af-companies"), leadsView = getEl("af-leads");
+  const companiesBtn = getEl("aft-companies"), leadsBtn = getEl("aft-leads"), eventsBtn = getEl("aft-events");
+  const companiesView = getEl("af-companies"), leadsView = getEl("af-leads"), eventsView = getEl("af-events");
   if (companiesBtn) companiesBtn.classList.toggle("active", tab === "companies");
   if (leadsBtn) leadsBtn.classList.toggle("active", tab === "leads");
+  if (eventsBtn) eventsBtn.classList.toggle("active", tab === "events");
   if (companiesView) companiesView.style.display = tab === "companies" ? "block" : "none";
   if (leadsView) leadsView.style.display = tab === "leads" ? "block" : "none";
+  if (eventsView) eventsView.style.display = tab === "events" ? "block" : "none";
   if (tab === "companies") { renderCompanies(); renderCompanyAlerts(); populateDriverCheckboxes([]); }
   if (tab === "leads") { loadLeadsFromSupabase().then(renderLeads); }
+  if (tab === "events") { loadEventsFromSupabase().then(renderEvents); if (!allLeads.length) loadLeadsFromSupabase().then(renderEvents); }
 }
 
 // ── Trade Show Leads (Phase 1) ───────────────────────────────────────────────────
@@ -7338,6 +7410,32 @@ function renderLeads() {
     (!fCountry || (r.leads && r.leads.country) === fCountry)
   );
 
+  // Summary cards for the currently filtered Event/Country selection.
+  // "New" vs "Repeat" is based on each lead's TOTAL registration count across
+  // all events (unfiltered), so it reflects whether this person is new to
+  // OJO Luxe entirely, not just new to this one event.
+  const cardsEl = getEl("leadsSummaryCards");
+  if (cardsEl) {
+    const totalEventsPerLead = {};
+    allLeads.forEach(r => {
+      const lid = r.leads && r.leads.id;
+      if (lid) totalEventsPerLead[lid] = (totalEventsPerLead[lid] || 0) + 1;
+    });
+    const uniqueLeadIds = [...new Set(rows.map(r => r.leads && r.leads.id).filter(Boolean))];
+    const stat = (label, val) =>
+      `<div style="flex:1;min-width:110px;padding:10px 12px;background:#0a0a0a;border-radius:8px;border:1px solid #1e1e1e;text-align:center;">` +
+        `<div style="font-size:20px;font-weight:800;color:var(--gold);">${val}</div>` +
+        `<div style="font-size:9px;font-weight:700;color:#666;letter-spacing:.05em;margin-top:2px;">${label}</div>` +
+      `</div>`;
+    cardsEl.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+      stat("TOTAL REGISTRATIONS", rows.length) +
+      stat("UNIQUE COMPANIES", new Set(rows.map(r => r.leads && r.leads.company_name).filter(Boolean)).size) +
+      stat("COUNTRIES", new Set(rows.map(r => r.leads && r.leads.country).filter(Boolean)).size) +
+      stat("NEW LEADS", uniqueLeadIds.filter(id => totalEventsPerLead[id] === 1).length) +
+      stat("REPEAT CONTACTS", uniqueLeadIds.filter(id => totalEventsPerLead[id] > 1).length) +
+    '</div>';
+  }
+
   if (!allLeads.length) {
     list.innerHTML = '<div class="card"><div class="job-meta">No registrations yet.</div></div>';
     return;
@@ -7366,8 +7464,266 @@ function renderLeads() {
           <div style="font-size:12px;color:#888;">🌍 ${escapeHtml(lead.country || "-")}</div>
           <div style="font-size:12px;color:#888;">🕒 ${escapeHtml(when)}</div>
         </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
+          <button class="small-btn secondary-btn" onclick="openEditLead('${lead.id}')">✏️ Edit</button>
+          <button class="small-btn danger-btn" onclick="deleteLeadEventRow('${r.id}')">🗑 Delete Registration</button>
+          <button class="small-btn danger-btn" style="opacity:.7;" onclick="deleteLeadCompletely('${lead.id}')">⚠️ Delete Lead Completely</button>
+        </div>
       </div>`;
     }).join("");
+}
+
+// ── Lead edit / delete ───────────────────────────────────────────────────────
+function openEditLead(leadId) {
+  const row = allLeads.find(r => r.leads && r.leads.id === leadId);
+  const lead = row && row.leads;
+  if (!lead) return;
+  setValue("editingLeadId", lead.id);
+  setValue("leEditFullName", lead.full_name || "");
+  setValue("leEditCompanyName", lead.company_name || "");
+  setValue("leEditPosition", lead.position || "");
+  setValue("leEditPhone", lead.phone || "");
+  setValue("leEditEmail", lead.email || "");
+  setValue("leEditCountry", lead.country || "");
+  const panel = getEl("lead-edit-form");
+  if (panel) { panel.style.display = "block"; panel.scrollIntoView({ behavior: "smooth", block: "start" }); }
+}
+
+function closeEditLead() {
+  const panel = getEl("lead-edit-form");
+  if (panel) panel.style.display = "none";
+}
+
+async function saveEditLead() {
+  const leadId = getValue("editingLeadId");
+  if (!leadId) return;
+  const payload = {
+    lead_id: leadId,
+    full_name: getValue("leEditFullName"),
+    company_name: getValue("leEditCompanyName"),
+    position: getValue("leEditPosition"),
+    phone: getValue("leEditPhone"),
+    email: getValue("leEditEmail"),
+    country: getValue("leEditCountry"),
+  };
+  try {
+    const r = await fetch("/api/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-token": getAdminToken() },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { alert("Failed to save: " + (data.error || r.status)); return; }
+    closeEditLead();
+    await loadLeadsFromSupabase();
+    renderLeads();
+  } catch (err) {
+    alert("Failed to save: " + err.message);
+  }
+}
+
+async function deleteViaLeadsApi(scope, id) {
+  try {
+    const r = await fetch(`/api/leads?scope=${scope}&id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { "x-admin-token": getAdminToken() },
+    });
+    if (!r.ok && r.status !== 204) {
+      const data = await r.json().catch(() => ({}));
+      alert("Delete failed: " + (data.error || r.status));
+      return;
+    }
+    await loadLeadsFromSupabase();
+    renderLeads();
+  } catch (err) {
+    alert("Delete failed: " + err.message);
+  }
+}
+
+// Deletes ONE registration only — the lead and any other event history they
+// have is preserved untouched (a separate lead_events row per event).
+async function deleteLeadEventRow(eventRowId) {
+  const row = allLeads.find(r => r.id === eventRowId);
+  const label = row ? (row.leads?.full_name || "this lead") + (row.event_source ? " — " + row.event_source : "") : "this registration";
+  if (!confirm(`Delete registration for ${label}?\n\nThe lead and their other event history (if any) will be kept.`)) return;
+  await deleteViaLeadsApi("event", eventRowId);
+}
+
+// Deletes the lead entirely — cascades to ALL of their event registrations.
+// Separate, more destructive action from deleteLeadEventRow(); only fires on
+// explicit confirmation naming exactly how many registrations will be lost.
+async function deleteLeadCompletely(leadId) {
+  const eventRows = allLeads.filter(r => r.leads && r.leads.id === leadId);
+  const name = eventRows[0] ? eventRows[0].leads.full_name : "this lead";
+  if (!confirm(`⚠️ Delete "${name}" COMPLETELY?\n\nThis removes the lead and ALL ${eventRows.length} of their event registration(s) across every event. This cannot be undone.`)) return;
+  await deleteViaLeadsApi("lead", leadId);
+}
+
+// ── Export CSV ────────────────────────────────────────────────────────────────
+function exportLeadsCSV() {
+  const eventSel = getEl("leadFilterEvent"), countrySel = getEl("leadFilterCountry");
+  const fEvent = eventSel ? eventSel.value : "";
+  const fCountry = countrySel ? countrySel.value : "";
+  const rows = allLeads.filter(r =>
+    (!fEvent || r.event_source === fEvent) &&
+    (!fCountry || (r.leads && r.leads.country) === fCountry)
+  );
+  if (!rows.length) { alert("No registrations to export for the current filters."); return; }
+
+  const headers = ["Full Name","Company","Position","Phone","Email","Country","Event/Source","Registration Method","Registered At"];
+  const csvRows = [headers.join(",")];
+  rows.forEach(r => {
+    const lead = r.leads || {};
+    const vals = [lead.full_name, lead.company_name, lead.position, lead.phone, lead.email, lead.country, r.event_source, r.registration_method, r.registered_at]
+      .map(v => `"${String(v || "").replace(/"/g, '""')}"`);
+    csvRows.push(vals.join(","));
+  });
+  const blob = new Blob([csvRows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const suffix = [fEvent, fCountry].filter(Boolean).join("_") || "all";
+  a.download = `ojo_leads_${suffix.replace(/[^a-z0-9_-]/gi, "_")}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Event Manager ─────────────────────────────────────────────────────────────
+// events holds display metadata only (name/code/country/dates) — no PII, and
+// never touched by the public partner.html page, so it uses the same
+// anon-open posture already used for companies/clients/jobs in this portal.
+// lead_events.event_source stays free text (no FK to this table), so
+// existing/future event codes work whether or not a matching row exists here.
+let allEvents = [];
+let eventsLoadError = null;
+
+async function loadEventsFromSupabase() {
+  eventsLoadError = null;
+  if (!db) { allEvents = []; return allEvents; }
+  const { data, error } = await db.from("events").select("*").order("created_at", { ascending: false });
+  if (error) { eventsLoadError = error.message; allEvents = []; return allEvents; }
+  allEvents = data || [];
+  return allEvents;
+}
+
+function autofillEventCode() {
+  const nameEl = getEl("evDisplayName"), codeEl = getEl("evCode");
+  if (!nameEl || !codeEl) return;
+  if (codeEl.dataset.autofilled === "false") return; // user hand-edited the code — stop overwriting it
+  codeEl.value = nameEl.value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function clearEventForm() {
+  ["evDisplayName", "evCode", "evCountry", "evStartDate", "evEndDate"].forEach(id => setValue(id, ""));
+  const codeEl = getEl("evCode");
+  if (codeEl) codeEl.dataset.autofilled = "true";
+}
+
+async function saveEvent() {
+  const display_name = getValue("evDisplayName");
+  const code = getValue("evCode").trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+  if (!display_name) { alert("Event Display Name is required."); return; }
+  if (!code) { alert("Event Code is required."); return; }
+  if (!db) { alert("Database not connected."); return; }
+  const payload = {
+    display_name, code,
+    country: getValue("evCountry") || null,
+    start_date: getValue("evStartDate") || null,
+    end_date: getValue("evEndDate") || null,
+  };
+  const { error } = await db.from("events").insert([payload]);
+  if (error) { alert("Failed to save event: " + (error.message || JSON.stringify(error))); return; }
+  clearEventForm();
+  toggleFormPanel("event-form", false);
+  await loadEventsFromSupabase();
+  renderEvents();
+  alert("Event saved.");
+}
+
+function eventRegistrationCount(code) {
+  return allLeads.filter(r => r.event_source === code).length;
+}
+
+// Returns null (never a Preview/admin hostname) until PARTNER_BASE_URL is
+// configured — see the comment on that constant above.
+function eventRegistrationLink(code) {
+  if (!PARTNER_BASE_URL) return null;
+  return PARTNER_BASE_URL.replace(/\/$/, "") + PARTNER_PATH + "?event=" + encodeURIComponent(code);
+}
+
+function copyEventLink(code) {
+  const link = eventRegistrationLink(code);
+  if (!link) { alert("PARTNER_BASE_URL is not configured yet — see the comment near the top of index.html. Links can't be generated until it's set, so a Preview/admin URL is never handed out as the public link."); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(
+      () => alert("Registration link copied:\n" + link),
+      () => prompt("Copy this link:", link)
+    );
+  } else {
+    prompt("Copy this link:", link);
+  }
+}
+
+function toggleEventQR(code) {
+  const el = getEl("qr-" + code.replace(/[^a-zA-Z0-9_-]/g, ""));
+  if (!el) return;
+  if (el.style.display === "none") {
+    if (!el.innerHTML) {
+      const link = eventRegistrationLink(code);
+      el.innerHTML = link
+        ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}" alt="QR code for ${escapeHtml(code)}" style="width:160px;height:160px;border-radius:8px;border:1px solid #333;">`
+        : `<div style="font-size:12px;color:#ff8b8b;max-width:200px;">⚠️ PARTNER_BASE_URL is not configured — see the comment near the top of index.html.</div>`;
+    }
+    el.style.display = "block";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+function renderEvents() {
+  const list = getEl("eventsList");
+  if (!list) return;
+  if (eventsLoadError) {
+    list.innerHTML = '<div class="card"><div class="job-meta" style="color:#ff8b8b;">⚠️ ' + escapeHtml(eventsLoadError) + '</div></div>';
+    return;
+  }
+
+  let banner = !getAdminToken()
+    ? '<div class="card" style="margin-bottom:10px;"><div style="font-size:12px;color:#888;">🔑 Enter your admin token in the Leads tab to see live registration counts here.</div></div>'
+    : "";
+  if (!PARTNER_BASE_URL) {
+    banner += '<div class="card" style="margin-bottom:10px;"><div style="font-size:12px;color:#ff8b8b;">⚠️ PARTNER_BASE_URL is not set — Copy Link / Show QR are disabled so a Preview or admin URL never gets handed out as a public link. Set it near the top of index.html.</div></div>';
+  }
+
+  if (!allEvents.length) {
+    list.innerHTML = banner + '<div class="card"><div class="job-meta">No events yet. Use "Create New Event" above.</div></div>';
+    return;
+  }
+
+  list.innerHTML = banner + allEvents.map(ev => {
+    const count = eventRegistrationCount(ev.code);
+    const link = eventRegistrationLink(ev.code);
+    const qrId = "qr-" + ev.code.replace(/[^a-zA-Z0-9_-]/g, "");
+    return `
+    <div class="card" style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#f4f4f4;">${escapeHtml(ev.display_name)}</div>
+          <div style="font-size:12px;color:#888;">Code: ${escapeHtml(ev.code)}${ev.country ? " · " + escapeHtml(ev.country) : ""}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #333;color:#87e18b;background:#111;white-space:nowrap;">${count} reg${count === 1 ? "" : "s"}</span>
+      </div>
+      ${(ev.start_date || ev.end_date) ? `<div style="font-size:12px;color:#888;margin-top:6px;">📅 ${escapeHtml(ev.start_date || "?")} – ${escapeHtml(ev.end_date || "?")}</div>` : ""}
+      <div style="font-size:11px;color:#555;margin-top:8px;word-break:break-all;">${link ? escapeHtml(link) : "⚠️ PARTNER_BASE_URL not configured"}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
+        <button class="small-btn secondary-btn" onclick="copyEventLink('${ev.code}')">📋 Copy Link</button>
+        <button class="small-btn secondary-btn" onclick="toggleEventQR('${ev.code}')">▦ Show QR</button>
+      </div>
+      <div id="${qrId}" style="display:none;margin-top:10px;"></div>
+    </div>`;
+  }).join("");
 }
 
 document.getElementById("saveCompanyBtn")?.addEventListener("click", saveCompany);
