@@ -17,7 +17,6 @@
   header{background:var(--onyx);padding:22px 16px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.25)}
   .brand-logo{width:clamp(150px,42vw,200px);height:auto;display:block;margin:0 auto;object-fit:contain}
   header p{color:var(--gold-light);font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-top:10px}
-  .success-logo{width:clamp(150px,42vw,200px);height:auto;display:block;margin:0 auto 18px;object-fit:contain}
   main{max-width:520px;margin:32px auto;padding:0 16px}
   .card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px 24px;box-shadow:0 1px 4px rgba(12,11,9,0.06)}
   .intro{font-size:14px;color:var(--text-sub);margin-bottom:22px;line-height:1.5}
@@ -31,9 +30,18 @@
   .msg{margin-top:16px;font-size:14px;text-align:center;display:none}
   .msg.ok{color:#2f7a3f}
   .msg.err{color:#a33}
-  .success-view{display:none;text-align:center;padding:20px 0}
-  .success-view h2{font-family:'Cormorant Garamond',serif;font-size:24px;margin-bottom:10px}
-  .success-view p{color:var(--text-sub);font-size:14px;line-height:1.5}
+  .success-view{display:none;text-align:center;padding:8px 0}
+  .success-icon{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold-light));display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px;font-weight:700;color:var(--onyx);box-shadow:0 4px 16px rgba(201,168,76,0.35)}
+  .success-view h2{font-family:'Cormorant Garamond',serif;font-size:26px;margin-bottom:10px}
+  .success-msg{color:var(--text-sub);font-size:14px;line-height:1.5;margin-bottom:24px}
+  .next-steps{text-align:left;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;padding:18px 16px;margin-bottom:20px}
+  .next-steps-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-sub);margin-bottom:14px;text-align:center}
+  .step{display:flex;gap:12px;align-items:flex-start}
+  .step + .step{margin-top:14px}
+  .step-num{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--onyx);color:var(--gold);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .step-text strong{display:block;font-size:13px;color:var(--text);margin-bottom:2px}
+  .step-text span{display:block;font-size:12.5px;color:var(--text-sub);line-height:1.4}
+  .success-footer{font-size:11px;color:var(--text-sub);letter-spacing:.3px;padding-top:16px;border-top:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -71,9 +79,25 @@
       <div class="msg" id="msg"></div>
     </div>
     <div class="success-view" id="successView">
-      <img class="success-logo" src="/assets/ojo-luxe-logo.png" alt="OJO Luxe">
+      <div class="success-icon">✓</div>
       <h2>Thank you</h2>
-      <p>Your registration has been received. A member of our team will be in touch soon.</p>
+      <p class="success-msg">Your registration has been received. A member of our team will be in touch soon.</p>
+      <div class="next-steps">
+        <div class="next-steps-title">What happens next?</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text"><strong>We've received your information</strong><span>Our team will review your submission.</span></div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text"><strong>Personal follow-up</strong><span>Expect a follow-up from our team within 2–3 business days.</span></div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text"><strong>Partnership opportunities</strong><span>Let's explore how we can work together.</span></div>
+        </div>
+      </div>
+      <div class="success-footer">OJO Luxe · Premium Transportation Services · USA · Canada · Mexico</div>
     </div>
   </div>
 </main>
