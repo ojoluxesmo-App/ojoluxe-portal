@@ -2030,6 +2030,16 @@ window.addEventListener("unhandledrejection", function(e) {
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZGxxYWdweHdzaHBkY2N4d3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYyODQsImV4cCI6MjA4OTcxMjI4NH0.MaNNRIcsD6aDizz2J4YzqXzkn32RhwJZqHM61t-TLYg";
 const SERVICE_KEY = ""; // ← Paste your Supabase service_role key here for admin ops
+// Canonical PUBLIC base URL for Event Manager registration links/QR codes.
+// Deliberately NOT derived from window.location.origin — this admin portal
+// may itself be viewed from a Vercel Preview deployment (auth-walled) or any
+// other host, and a public QR code must never point at that. Leave blank
+// until set: Event Manager will refuse to generate links rather than risk
+// leaking a non-public hostname. Set to this Vercel project's Production
+// domain today; switch to "https://ojoluxe.com" once ojoluxe.com/partner is
+// actually routed to this app (it is not, as of this writing).
+const PARTNER_BASE_URL = "";
+const PARTNER_PATH = "/partner"; // clean URL — Vercel serves partner.html here by default
 // Admin API token is never hardcoded here — it's entered once per browser
 // via an inline field (see renderLeads()/saveAdminTokenAndReload()) and kept
 // in localStorage only. Must match the ADMIN_API_TOKEN env var on Vercel;
@@ -7632,12 +7642,16 @@ function eventRegistrationCount(code) {
   return allLeads.filter(r => r.event_source === code).length;
 }
 
+// Returns null (never a Preview/admin hostname) until PARTNER_BASE_URL is
+// configured — see the comment on that constant above.
 function eventRegistrationLink(code) {
-  return window.location.origin + "/partner.html?event=" + encodeURIComponent(code);
+  if (!PARTNER_BASE_URL) return null;
+  return PARTNER_BASE_URL.replace(/\/$/, "") + PARTNER_PATH + "?event=" + encodeURIComponent(code);
 }
 
 function copyEventLink(code) {
   const link = eventRegistrationLink(code);
+  if (!link) { alert("PARTNER_BASE_URL is not configured yet — see the comment near the top of index.html. Links can't be generated until it's set, so a Preview/admin URL is never handed out as the public link."); return; }
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(link).then(
       () => alert("Registration link copied:\n" + link),
@@ -7654,7 +7668,9 @@ function toggleEventQR(code) {
   if (el.style.display === "none") {
     if (!el.innerHTML) {
       const link = eventRegistrationLink(code);
-      el.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}" alt="QR code for ${escapeHtml(code)}" style="width:160px;height:160px;border-radius:8px;border:1px solid #333;">`;
+      el.innerHTML = link
+        ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(link)}" alt="QR code for ${escapeHtml(code)}" style="width:160px;height:160px;border-radius:8px;border:1px solid #333;">`
+        : `<div style="font-size:12px;color:#ff8b8b;max-width:200px;">⚠️ PARTNER_BASE_URL is not configured — see the comment near the top of index.html.</div>`;
     }
     el.style.display = "block";
   } else {
@@ -7670,9 +7686,12 @@ function renderEvents() {
     return;
   }
 
-  const banner = !getAdminToken()
+  let banner = !getAdminToken()
     ? '<div class="card" style="margin-bottom:10px;"><div style="font-size:12px;color:#888;">🔑 Enter your admin token in the Leads tab to see live registration counts here.</div></div>'
     : "";
+  if (!PARTNER_BASE_URL) {
+    banner += '<div class="card" style="margin-bottom:10px;"><div style="font-size:12px;color:#ff8b8b;">⚠️ PARTNER_BASE_URL is not set — Copy Link / Show QR are disabled so a Preview or admin URL never gets handed out as a public link. Set it near the top of index.html.</div></div>';
+  }
 
   if (!allEvents.length) {
     list.innerHTML = banner + '<div class="card"><div class="job-meta">No events yet. Use "Create New Event" above.</div></div>';
@@ -7693,7 +7712,7 @@ function renderEvents() {
         <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #333;color:#87e18b;background:#111;white-space:nowrap;">${count} reg${count === 1 ? "" : "s"}</span>
       </div>
       ${(ev.start_date || ev.end_date) ? `<div style="font-size:12px;color:#888;margin-top:6px;">📅 ${escapeHtml(ev.start_date || "?")} – ${escapeHtml(ev.end_date || "?")}</div>` : ""}
-      <div style="font-size:11px;color:#555;margin-top:8px;word-break:break-all;">${escapeHtml(link)}</div>
+      <div style="font-size:11px;color:#555;margin-top:8px;word-break:break-all;">${link ? escapeHtml(link) : "⚠️ PARTNER_BASE_URL not configured"}</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
         <button class="small-btn secondary-btn" onclick="copyEventLink('${ev.code}')">📋 Copy Link</button>
         <button class="small-btn secondary-btn" onclick="toggleEventQR('${ev.code}')">▦ Show QR</button>
