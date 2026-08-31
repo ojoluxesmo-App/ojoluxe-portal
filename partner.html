@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Become an OJO Luxe Partner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #C9A84C; --gold-light: #e2c06a; --onyx: #0C0B09; --cream: #F0E8D5;
+    --bg: #F5F0E8; --bg-card: #FFFFFF; --bg-input: #FDFAF5; --border: #DDD5C0;
+    --text: #1A1712; --text-sub: #6B6150; --radius: 6px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;min-height:100vh;padding-bottom:60px}
+  header{background:var(--onyx);padding:22px 16px;text-align:center;border-bottom:1px solid rgba(201,168,76,0.25)}
+  header h1{font-family:'Cormorant Garamond',serif;color:var(--cream);font-size:28px;font-weight:600;letter-spacing:0.5px}
+  header p{color:var(--gold-light);font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-top:4px}
+  main{max-width:520px;margin:32px auto;padding:0 16px}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px 24px;box-shadow:0 1px 4px rgba(12,11,9,0.06)}
+  .intro{font-size:14px;color:var(--text-sub);margin-bottom:22px;line-height:1.5}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--text-sub);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+  .field input, .field select{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-input);color:var(--text);font-family:inherit;font-size:15px}
+  .field input:focus, .field select:focus{outline:none;border-color:var(--gold)}
+  .hp{position:absolute;left:-9999px;opacity:0}
+  button{width:100%;padding:14px;border:none;border-radius:var(--radius);background:var(--gold);color:var(--onyx);font-family:inherit;font-weight:600;font-size:15px;letter-spacing:0.5px;cursor:pointer;margin-top:6px}
+  button:disabled{opacity:0.6;cursor:default}
+  .msg{margin-top:16px;font-size:14px;text-align:center;display:none}
+  .msg.ok{color:#2f7a3f}
+  .msg.err{color:#a33}
+  .success-view{display:none;text-align:center;padding:20px 0}
+  .success-view h2{font-family:'Cormorant Garamond',serif;font-size:24px;margin-bottom:10px}
+  .success-view p{color:var(--text-sub);font-size:14px;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <h1>OJO Luxe</h1>
+  <p>Partner Registration</p>
+</header>
+<main>
+  <div class="card">
+    <div id="formView">
+      <div class="intro">Register your interest in becoming an OJO Luxe affiliate partner. Our team will follow up with you shortly.</div>
+      <form id="leadForm">
+        <input class="hp" type="text" name="website" id="website" tabindex="-1" autocomplete="off">
+        <div class="field"><label>Full Name *</label><input type="text" id="full_name" required></div>
+        <div class="field"><label>Company Name *</label><input type="text" id="company_name" required></div>
+        <div class="field"><label>Position</label><input type="text" id="position"></div>
+        <div class="field"><label>Phone / WhatsApp *</label><input type="tel" id="phone" required></div>
+        <div class="field"><label>Email *</label><input type="email" id="email" required></div>
+        <div class="field">
+          <label>Country *</label>
+          <select id="country" required>
+            <option value="">Select country…</option>
+            <option>Indonesia</option>
+            <option>United States</option>
+            <option>Singapore</option>
+            <option>Malaysia</option>
+            <option>Australia</option>
+            <option>United Arab Emirates</option>
+            <option>United Kingdom</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <button type="submit" id="submitBtn">Register</button>
+      </form>
+      <div class="msg" id="msg"></div>
+    </div>
+    <div class="success-view" id="successView">
+      <h2>Thank you</h2>
+      <p>Your registration has been received. A member of our team will be in touch soon.</p>
+    </div>
+  </div>
+</main>
+<script>
+  // API_BASE points at the Vercel deployment that hosts /api/trade-show-lead.
+  // Same-origin when this page is served from the portal's own domain;
+  // set to the portal's full origin once embedded on ojoluxe.com/partner.
+  const API_BASE = "";
+
+  const params = new URLSearchParams(window.location.search);
+  const eventParam = params.get("event") || null;
+  const methodParam = ["QR","Tablet","Admin"].includes(params.get("method")) ? params.get("method") : "QR";
+
+  const form = document.getElementById("leadForm");
+  const msg = document.getElementById("msg");
+  const btn = document.getElementById("submitBtn");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    btn.textContent = "Submitting…";
+    msg.style.display = "none";
+
+    const payload = {
+      website: document.getElementById("website").value, // honeypot
+      full_name: document.getElementById("full_name").value.trim(),
+      company_name: document.getElementById("company_name").value.trim(),
+      position: document.getElementById("position").value.trim(),
+      phone: document.getElementById("phone").value.trim(),
+      email: document.getElementById("email").value.trim(),
+      country: document.getElementById("country").value,
+      event: eventParam,
+      registration_method: methodParam,
+    };
+
+    try {
+      const r = await fetch(API_BASE + "/api/trade-show-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+
+      document.getElementById("formView").style.display = "none";
+      document.getElementById("successView").style.display = "block";
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.className = "msg err";
+      msg.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Register";
+    }
+  });
+</script>
+</body>
+</html>
