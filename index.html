@@ -1975,7 +1975,17 @@ window.addEventListener("unhandledrejection", function(e) {
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZGxxYWdweHdzaHBkY2N4d3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYyODQsImV4cCI6MjA4OTcxMjI4NH0.MaNNRIcsD6aDizz2J4YzqXzkn32RhwJZqHM61t-TLYg";
 const SERVICE_KEY = ""; // ← Paste your Supabase service_role key here for admin ops
-const ADMIN_API_TOKEN = ""; // ← Must match ADMIN_API_TOKEN env var on Vercel; gates /api/leads and /api/team-members
+// Admin API token is never hardcoded here — it's entered once per browser
+// and kept in localStorage only (see getAdminToken()). Must match the
+// ADMIN_API_TOKEN env var on Vercel; gates /api/leads and /api/team-members.
+function getAdminToken() {
+  let t = localStorage.getItem("ojo_admin_token") || "";
+  if (!t) {
+    t = prompt("Enter admin API token (needed to load Leads):") || "";
+    if (t) localStorage.setItem("ojo_admin_token", t);
+  }
+  return t;
+}
 
 // Lightweight Supabase REST client — no CDN needed, works on file://
 const db = (()=>{
@@ -7246,15 +7256,26 @@ function setAffiliatesSubTab(tab) {
 // access to it either.
 let allLeads = [];
 
+let leadsLoadError = null;
+
 async function loadLeadsFromSupabase() {
+  leadsLoadError = null;
+  const token = getAdminToken();
+  if (!token) { leadsLoadError = "Admin token required to load Leads."; allLeads = []; return allLeads; }
   try {
-    const r = await fetch("/api/leads", { headers: { "x-admin-token": ADMIN_API_TOKEN } });
+    const r = await fetch("/api/leads", { headers: { "x-admin-token": token } });
+    if (r.status === 401) {
+      localStorage.removeItem("ojo_admin_token"); // bad/stale token — re-prompt next time
+      leadsLoadError = "Admin token rejected. Click Refresh to re-enter it.";
+      allLeads = [];
+      return allLeads;
+    }
     const data = await r.json();
-    if (!r.ok) { console.error("loadLeads:", data.error); allLeads = []; return allLeads; }
+    if (!r.ok) { leadsLoadError = data.error || "Failed to load leads."; allLeads = []; return allLeads; }
     allLeads = Array.isArray(data) ? data : [];
     return allLeads;
   } catch (err) {
-    console.error("loadLeads:", err.message);
+    leadsLoadError = err.message;
     allLeads = [];
     return allLeads;
   }
@@ -7263,6 +7284,11 @@ async function loadLeadsFromSupabase() {
 function renderLeads() {
   const list = getEl("leadsList");
   if (!list) return;
+
+  if (leadsLoadError) {
+    list.innerHTML = '<div class="card"><div class="job-meta" style="color:#ff8b8b;">⚠️ ' + escapeHtml(leadsLoadError) + '</div></div>';
+    return;
+  }
 
   // Populate filter dropdowns from the loaded data, preserving current selection.
   const eventSel = getEl("leadFilterEvent"), countrySel = getEl("leadFilterCountry");
