@@ -1976,15 +1976,22 @@ const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZGxxYWdweHdzaHBkY2N4d3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYyODQsImV4cCI6MjA4OTcxMjI4NH0.MaNNRIcsD6aDizz2J4YzqXzkn32RhwJZqHM61t-TLYg";
 const SERVICE_KEY = ""; // ← Paste your Supabase service_role key here for admin ops
 // Admin API token is never hardcoded here — it's entered once per browser
-// and kept in localStorage only (see getAdminToken()). Must match the
-// ADMIN_API_TOKEN env var on Vercel; gates /api/leads and /api/team-members.
+// via an inline field (see renderLeads()/saveAdminTokenAndReload()) and kept
+// in localStorage only. Must match the ADMIN_API_TOKEN env var on Vercel;
+// gates /api/leads. (Not window.prompt()-based: browsers silently suppress
+// further dialogs on a page after one is dismissed via "Prevent this page
+// from creating additional dialogs," with no error — an inline field can't
+// be blocked that way.)
 function getAdminToken() {
-  let t = localStorage.getItem("ojo_admin_token") || "";
-  if (!t) {
-    t = prompt("Enter admin API token (needed to load Leads):") || "";
-    if (t) localStorage.setItem("ojo_admin_token", t);
-  }
-  return t;
+  return localStorage.getItem("ojo_admin_token") || "";
+}
+
+function saveAdminTokenAndReload() {
+  const input = getEl("leadsTokenInput");
+  const val = input ? input.value.trim() : "";
+  if (!val) return;
+  localStorage.setItem("ojo_admin_token", val);
+  loadLeadsFromSupabase().then(renderLeads);
 }
 
 // Lightweight Supabase REST client — no CDN needed, works on file://
@@ -7261,7 +7268,7 @@ let leadsLoadError = null;
 async function loadLeadsFromSupabase() {
   leadsLoadError = null;
   const token = getAdminToken();
-  if (!token) { leadsLoadError = "Admin token required to load Leads."; allLeads = []; return allLeads; }
+  if (!token) { allLeads = []; return allLeads; } // renderLeads() shows the token entry field
   try {
     const r = await fetch("/api/leads", { headers: { "x-admin-token": token } });
     if (r.status === 401) {
@@ -7284,6 +7291,19 @@ async function loadLeadsFromSupabase() {
 function renderLeads() {
   const list = getEl("leadsList");
   if (!list) return;
+
+  if (!getAdminToken()) {
+    list.innerHTML =
+      '<div class="card">' +
+        '<div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:8px;">🔑 Admin token required</div>' +
+        '<div style="font-size:12px;color:#888;margin-bottom:10px;">Enter the admin API token to load registrations. It is saved only in this browser.</div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<input id="leadsTokenInput" type="password" placeholder="Admin token" style="flex:1;" onkeydown="if(event.key===\'Enter\')saveAdminTokenAndReload()">' +
+          '<button class="btn btn-gold" type="button" onclick="saveAdminTokenAndReload()">Load</button>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
 
   if (leadsLoadError) {
     list.innerHTML = '<div class="card"><div class="job-meta" style="color:#ff8b8b;">⚠️ ' + escapeHtml(leadsLoadError) + '</div></div>';
