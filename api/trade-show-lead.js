@@ -55,6 +55,12 @@ export default async function handler(req, res) {
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return res.status(500).json({ error: "Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY" });
+  // A real Supabase service_role key is a JWT: three dot-separated base64
+  // segments, ~200+ chars. Catch a wrong/partial value early with a clear
+  // message instead of an opaque Supabase 401 later.
+  if (serviceKey.split(".").length !== 3 || serviceKey.length < 100) {
+    return res.status(500).json({ error: `Server misconfigured: SUPABASE_SERVICE_ROLE_KEY does not look like a valid Supabase service_role JWT (length ${serviceKey.length}) — re-copy it from Supabase Dashboard > Project Settings > API > service_role` });
+  }
 
   const body = req.body || {};
 
