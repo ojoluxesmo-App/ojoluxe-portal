@@ -1607,6 +1607,7 @@ window.addEventListener("unhandledrejection", function(e) {
             <select id="leadFilterCountry" onchange="renderLeads()"><option value="">All Countries</option></select>
           </div>
           <button class="btn btn-sec" type="button" onclick="loadLeadsFromSupabase().then(renderLeads)" style="height:38px;">↻ Refresh</button>
+          <button class="btn btn-sec" type="button" onclick="forgetAdminToken()" style="height:38px;">🔓 Forget Admin Token</button>
         </div>
         <div id="leadsList"></div>
       </div>
@@ -1992,6 +1993,13 @@ function saveAdminTokenAndReload() {
   if (!val) return;
   localStorage.setItem("ojo_admin_token", val);
   loadLeadsFromSupabase().then(renderLeads);
+}
+
+function forgetAdminToken() {
+  localStorage.removeItem("ojo_admin_token");
+  allLeads = [];
+  leadsLoadError = null;
+  renderLeads();
 }
 
 // Lightweight Supabase REST client — no CDN needed, works on file://
