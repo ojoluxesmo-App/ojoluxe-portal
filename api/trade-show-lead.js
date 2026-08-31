@@ -55,11 +55,15 @@ export default async function handler(req, res) {
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return res.status(500).json({ error: "Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY" });
-  // A real Supabase service_role key is a JWT: three dot-separated base64
-  // segments, ~200+ chars. Catch a wrong/partial value early with a clear
-  // message instead of an opaque Supabase 401 later.
-  if (serviceKey.split(".").length !== 3 || serviceKey.length < 100) {
-    return res.status(500).json({ error: `Server misconfigured: SUPABASE_SERVICE_ROLE_KEY does not look like a valid Supabase service_role JWT (length ${serviceKey.length}) — re-copy it from Supabase Dashboard > Project Settings > API > service_role` });
+  // Accept either key format Supabase issues for server-side use: the legacy
+  // service_role JWT (three dot-separated base64 segments, ~200+ chars) or
+  // the newer opaque sb_secret_... secret key. Both work as-is in the
+  // apikey / Bearer headers below — this is just an early sanity check so a
+  // wrong/partial value fails loudly here instead of as an opaque 401 later.
+  const looksLikeJwt = serviceKey.split(".").length === 3 && serviceKey.length >= 100;
+  const looksLikeSecretKey = serviceKey.startsWith("sb_secret_") && serviceKey.length >= 20;
+  if (!looksLikeJwt && !looksLikeSecretKey) {
+    return res.status(500).json({ error: `Server misconfigured: SUPABASE_SERVICE_ROLE_KEY does not look like a valid Supabase service_role JWT or sb_secret_ key (length ${serviceKey.length}) — re-copy it from Supabase Dashboard > Project Settings > API Keys` });
   }
 
   const body = req.body || {};
