@@ -1451,6 +1451,13 @@ window.addEventListener("unhandledrejection", function(e) {
 
     <!-- Affiliates sub-view -->
     <div id="pv-affiliates" style="display:none;">
+      <div class="sec-bar" style="margin-bottom:12px;">
+        <button class="sec-btn active" onclick="setAffiliatesSubTab('companies')" id="aft-companies">🏢 Companies</button>
+        <button class="sec-btn" onclick="setAffiliatesSubTab('leads')" id="aft-leads">📋 Leads</button>
+      </div>
+
+      <!-- Companies sub-view -->
+      <div id="af-companies">
       <div id="companyAlerts" style="margin-bottom:10px;"></div>
       <div class="form-toggle" onclick="toggleFormPanel('company-form')">
         <span>➕ Add / Edit Company</span><span>▼</span>
@@ -1585,6 +1592,26 @@ window.addEventListener("unhandledrejection", function(e) {
         </div>
       </div>
       <div id="companyList"></div>
+      </div>
+      <!-- /Companies sub-view -->
+
+      <!-- Leads sub-view -->
+      <div id="af-leads" style="display:none;">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px;">
+          <div class="field" style="flex:1;min-width:160px;margin-bottom:0;">
+            <label>Event / Source</label>
+            <select id="leadFilterEvent" onchange="renderLeads()"><option value="">All Events</option></select>
+          </div>
+          <div class="field" style="flex:1;min-width:160px;margin-bottom:0;">
+            <label>Country</label>
+            <select id="leadFilterCountry" onchange="renderLeads()"><option value="">All Countries</option></select>
+          </div>
+          <button class="btn btn-sec" type="button" onclick="loadLeadsFromSupabase().then(renderLeads)" style="height:38px;">↻ Refresh</button>
+          <button class="btn btn-sec" type="button" onclick="forgetAdminToken()" style="height:38px;">🔓 Forget Admin Token</button>
+        </div>
+        <div id="leadsList"></div>
+      </div>
+      <!-- /Leads sub-view -->
     </div>
 
     <!-- Clients sub-view -->
@@ -1949,6 +1976,31 @@ window.addEventListener("unhandledrejection", function(e) {
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZGxxYWdweHdzaHBkY2N4d3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzYyODQsImV4cCI6MjA4OTcxMjI4NH0.MaNNRIcsD6aDizz2J4YzqXzkn32RhwJZqHM61t-TLYg";
 const SERVICE_KEY = ""; // ← Paste your Supabase service_role key here for admin ops
+// Admin API token is never hardcoded here — it's entered once per browser
+// via an inline field (see renderLeads()/saveAdminTokenAndReload()) and kept
+// in localStorage only. Must match the ADMIN_API_TOKEN env var on Vercel;
+// gates /api/leads. (Not window.prompt()-based: browsers silently suppress
+// further dialogs on a page after one is dismissed via "Prevent this page
+// from creating additional dialogs," with no error — an inline field can't
+// be blocked that way.)
+function getAdminToken() {
+  return localStorage.getItem("ojo_admin_token") || "";
+}
+
+function saveAdminTokenAndReload() {
+  const input = getEl("leadsTokenInput");
+  const val = input ? input.value.trim() : "";
+  if (!val) return;
+  localStorage.setItem("ojo_admin_token", val);
+  loadLeadsFromSupabase().then(renderLeads);
+}
+
+function forgetAdminToken() {
+  localStorage.removeItem("ojo_admin_token");
+  allLeads = [];
+  leadsLoadError = null;
+  renderLeads();
+}
 
 // Lightweight Supabase REST client — no CDN needed, works on file://
 const db = (()=>{
@@ -2178,7 +2230,7 @@ function setPeopleTab(tab) {
     if(b) b.classList.toggle("active", t===tab);
     if(v) v.style.display = t===tab ? "block" : "none";
   });
-  if(tab==="affiliates") { renderCompanies(); renderCompanyAlerts(); populateDriverCheckboxes([]); }
+  if(tab==="affiliates") { setAffiliatesSubTab("companies"); }
   if(tab==="drivers") { renderMembers(); renderTeamAlerts(); }
   if(tab==="fleet") { renderVehicles(); renderTeamAlerts(); populateAssignedMemberDropdown(); }
   if(tab==="clients") { renderClients(); }
@@ -7197,6 +7249,125 @@ function renderCompanies() {
 async function initCompaniesModule() {
   await loadCompaniesFromSupabase();
   populateDriverCheckboxes([]);
+}
+
+// ── Affiliates sub-tabs (Companies / Leads) ─────────────────────────────────────
+function setAffiliatesSubTab(tab) {
+  const companiesBtn = getEl("aft-companies"), leadsBtn = getEl("aft-leads");
+  const companiesView = getEl("af-companies"), leadsView = getEl("af-leads");
+  if (companiesBtn) companiesBtn.classList.toggle("active", tab === "companies");
+  if (leadsBtn) leadsBtn.classList.toggle("active", tab === "leads");
+  if (companiesView) companiesView.style.display = tab === "companies" ? "block" : "none";
+  if (leadsView) leadsView.style.display = tab === "leads" ? "block" : "none";
+  if (tab === "companies") { renderCompanies(); renderCompanyAlerts(); populateDriverCheckboxes([]); }
+  if (tab === "leads") { loadLeadsFromSupabase().then(renderLeads); }
+}
+
+// ── Trade Show Leads (Phase 1) ───────────────────────────────────────────────────
+// Reads go through /api/leads (service-role, x-admin-token gated) because the
+// leads/lead_events tables intentionally carry no anon RLS policy — the
+// public /partner registration page must never be able to read this data,
+// and the anon key that's already public in this file shouldn't gain read
+// access to it either.
+let allLeads = [];
+
+let leadsLoadError = null;
+
+async function loadLeadsFromSupabase() {
+  leadsLoadError = null;
+  const token = getAdminToken();
+  if (!token) { allLeads = []; return allLeads; } // renderLeads() shows the token entry field
+  try {
+    const r = await fetch("/api/leads", { headers: { "x-admin-token": token } });
+    if (r.status === 401) {
+      localStorage.removeItem("ojo_admin_token"); // bad/stale token — re-prompt next time
+      leadsLoadError = "Admin token rejected. Click Refresh to re-enter it.";
+      allLeads = [];
+      return allLeads;
+    }
+    const data = await r.json();
+    if (!r.ok) { leadsLoadError = data.error || "Failed to load leads."; allLeads = []; return allLeads; }
+    allLeads = Array.isArray(data) ? data : [];
+    return allLeads;
+  } catch (err) {
+    leadsLoadError = err.message;
+    allLeads = [];
+    return allLeads;
+  }
+}
+
+function renderLeads() {
+  const list = getEl("leadsList");
+  if (!list) return;
+
+  if (!getAdminToken()) {
+    list.innerHTML =
+      '<div class="card">' +
+        '<div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:8px;">🔑 Admin token required</div>' +
+        '<div style="font-size:12px;color:#888;margin-bottom:10px;">Enter the admin API token to load registrations. It is saved only in this browser.</div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<input id="leadsTokenInput" type="password" placeholder="Admin token" style="flex:1;" onkeydown="if(event.key===\'Enter\')saveAdminTokenAndReload()">' +
+          '<button class="btn btn-gold" type="button" onclick="saveAdminTokenAndReload()">Load</button>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
+  if (leadsLoadError) {
+    list.innerHTML = '<div class="card"><div class="job-meta" style="color:#ff8b8b;">⚠️ ' + escapeHtml(leadsLoadError) + '</div></div>';
+    return;
+  }
+
+  // Populate filter dropdowns from the loaded data, preserving current selection.
+  const eventSel = getEl("leadFilterEvent"), countrySel = getEl("leadFilterCountry");
+  const events = [...new Set(allLeads.map(r => r.event_source).filter(Boolean))].sort();
+  const countries = [...new Set(allLeads.map(r => r.leads && r.leads.country).filter(Boolean))].sort();
+  if (eventSel) {
+    const cur = eventSel.value;
+    eventSel.innerHTML = '<option value="">All Events</option>' + events.map(e => `<option ${e===cur?"selected":""}>${escapeHtml(e)}</option>`).join("");
+  }
+  if (countrySel) {
+    const cur = countrySel.value;
+    countrySel.innerHTML = '<option value="">All Countries</option>' + countries.map(c => `<option ${c===cur?"selected":""}>${escapeHtml(c)}</option>`).join("");
+  }
+
+  const fEvent = eventSel ? eventSel.value : "";
+  const fCountry = countrySel ? countrySel.value : "";
+  const rows = allLeads.filter(r =>
+    (!fEvent || r.event_source === fEvent) &&
+    (!fCountry || (r.leads && r.leads.country) === fCountry)
+  );
+
+  if (!allLeads.length) {
+    list.innerHTML = '<div class="card"><div class="job-meta">No registrations yet.</div></div>';
+    return;
+  }
+  if (!rows.length) {
+    list.innerHTML = '<div class="card"><div class="job-meta">No registrations match the selected filters.</div></div>';
+    return;
+  }
+
+  list.innerHTML = '<div class="sh-title" style="margin-bottom:10px;">📋 Registrations (' + rows.length + ')</div>' +
+    rows.map(r => {
+      const lead = r.leads || {};
+      const when = r.registered_at ? new Date(r.registered_at).toLocaleString() : "-";
+      return `
+      <div class="card" style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div>
+            <div style="font-size:15px;font-weight:800;color:#f4f4f4;">${escapeHtml(lead.full_name || "-")}</div>
+            <div style="font-size:12px;color:#888;">${escapeHtml(lead.company_name || "-")}${lead.position ? " · " + escapeHtml(lead.position) : ""}</div>
+          </div>
+          ${r.event_source ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #333;color:#f2cf63;background:#111;white-space:nowrap;">${escapeHtml(r.event_source)}</span>` : ""}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:8px;">
+          <div style="font-size:12px;color:#888;">📞 ${escapeHtml(lead.phone || "-")}</div>
+          <div style="font-size:12px;color:#888;">✉️ ${escapeHtml(lead.email || "-")}</div>
+          <div style="font-size:12px;color:#888;">🌍 ${escapeHtml(lead.country || "-")}</div>
+          <div style="font-size:12px;color:#888;">🕒 ${escapeHtml(when)}</div>
+        </div>
+      </div>`;
+    }).join("");
 }
 
 document.getElementById("saveCompanyBtn")?.addEventListener("click", saveCompany);
