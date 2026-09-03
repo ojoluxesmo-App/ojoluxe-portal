@@ -7203,6 +7203,36 @@ function getSelectedDriverIds() {
   return Array.from(boxes).map(b => b.value);
 }
 
+// ── Shared company dropdown options ──────────────────────────────────────────
+// Single source of truth for every "pick an affiliate/company" dropdown (Job
+// Affiliate field, Client "Referred by Affiliate", Performance filter) so
+// they can never render inconsistently with each other. Defensively dedupes
+// by company.id — loadCompaniesFromSupabase() is one unfiltered query so
+// allCompanies shouldn't itself contain id-duplicates, but this guarantees
+// the dropdown can never show the same id twice even if that ever changes.
+// Two distinct company records CAN legitimately share a display name (e.g.
+// two real "test llc" entries with different contacts) — those are never
+// merged or hidden here, just labeled with a disambiguator (contact name,
+// else country) so an admin can tell them apart.
+function companyOptionsHtml(currentValue, emptyLabel) {
+  const seen = new Set();
+  const unique = (allCompanies || []).filter(c => {
+    if (!c || !c.id || seen.has(c.id)) return false;
+    seen.add(c.id);
+    return true;
+  });
+  const opts = unique
+    .slice()
+    .sort((a, b) => (a.legal_name || "").localeCompare(b.legal_name || ""))
+    .map(c => {
+      const name = c.legal_name || c.dba || "Unnamed";
+      const extra = c.responsible_name || c.country;
+      const label = extra ? `${name} — ${extra}` : name;
+      return `<option value="${escapeHtml(c.id)}" ${c.id === currentValue ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    }).join("");
+  return `<option value="">${escapeHtml(emptyLabel)}</option>` + opts;
+}
+
 // ── Company form mode (Affiliate/Partner vs Local/TCP Vendor) ────────────────
 // The companies table serves two conceptually different workflows. Rather
 // than duplicate the table or the save path, the form shows only the fields
@@ -7321,17 +7351,31 @@ function validateCompany(data) {
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
+// Guards against a double-click/double-submit creating two identical company
+// rows (upsert() with no id always INSERTs a fresh row, so a second request
+// firing before the first completes produces a genuine duplicate — this is
+// what happened in production for at least one real affiliate save).
+let _companySaveInFlight = false;
 async function saveCompany() {
-  const data = getCompanyFormData();
-  if (!validateCompany(data)) return;
-  const company = { ...data }; if (!company.id) delete company.id;
-  const ok = await upsertCompanyToSupabase(company);
-  if (!ok) return;
-  renderCompanies();
-  renderCompanyAlerts();
-  clearCompanyForm();
-  toggleFormPanel("company-form", false);
-  alert("Company saved.");
+  if (_companySaveInFlight) return;
+  _companySaveInFlight = true;
+  const saveBtn = getEl("saveCompanyBtn");
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Saving..."; }
+  try {
+    const data = getCompanyFormData();
+    if (!validateCompany(data)) return;
+    const company = { ...data }; if (!company.id) delete company.id;
+    const ok = await upsertCompanyToSupabase(company);
+    if (!ok) return;
+    renderCompanies();
+    renderCompanyAlerts();
+    clearCompanyForm();
+    toggleFormPanel("company-form", false);
+    alert("Company saved.");
+  } finally {
+    _companySaveInFlight = false;
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save Company"; }
+  }
 }
 
 // ── Edit ──────────────────────────────────────────────────────────────────────
@@ -7663,10 +7707,7 @@ function renderAffiliatePerformance() {
     yearSel.innerHTML = '<option value="">All Years</option>' + years.map(y => `<option ${y === cur ? "selected" : ""}>${escapeHtml(y)}</option>`).join("");
   }
   if (affSel) {
-    const cur = affSel.value;
-    affSel.innerHTML = '<option value="">All Affiliates</option>' +
-      (allCompanies || []).slice().sort((a, b) => (a.legal_name || "").localeCompare(b.legal_name || ""))
-        .map(c => `<option value="${escapeHtml(c.id)}" ${c.id === cur ? "selected" : ""}>${escapeHtml(c.legal_name || c.dba || "Unnamed")}</option>`).join("");
+    affSel.innerHTML = companyOptionsHtml(affSel.value, "All Affiliates");
   }
 
   const fYear = yearSel ? yearSel.value : "";
@@ -8372,11 +8413,7 @@ function editClient(id) {
 function populateClientAffiliateFields() {
   const companySel = getEl("clReferringCompanyId");
   if (companySel) {
-    const cur = companySel.value;
-    companySel.innerHTML = '<option value="">None</option>' +
-      (allCompanies || []).slice().sort((a, b) => (a.legal_name || "").localeCompare(b.legal_name || ""))
-        .map(c => `<option value="${escapeHtml(c.id)}" ${c.id === cur ? "selected" : ""}>${escapeHtml(c.legal_name || c.dba || "Unnamed")}</option>`)
-        .join("");
+    companySel.innerHTML = companyOptionsHtml(companySel.value, "None");
   }
   const sourceSel = getEl("clReferralSourceSelect");
   if (sourceSel) {
@@ -8530,10 +8567,7 @@ function onClientNameInput() {
 function updateJobAffiliateOptions() {
   const sel = getEl("jobAffiliateCompanyId");
   if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">No Affiliate / Direct Client</option>' +
-    (allCompanies || []).slice().sort((a, b) => (a.legal_name || "").localeCompare(b.legal_name || ""))
-      .map(c => `<option value="${escapeHtml(c.id)}" ${c.id === cur ? "selected" : ""}>${escapeHtml(c.legal_name || c.dba || "Unnamed")}</option>`).join("");
+  sel.innerHTML = companyOptionsHtml(sel.value, "No Affiliate / Direct Client");
 }
 
 // ── Bind buttons + init ───────────────────────────────────────────────────────
