@@ -1504,114 +1504,150 @@ window.addEventListener("unhandledrejection", function(e) {
       <div id="company-form" style="display:none;">
         <div class="form-card" id="companyFormCard">
           <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:14px;" id="companyFormTitle">➕ ADD COMPANY</div>
+
+          <div class="booking-mode-toggle" id="coFormModeToggle">
+            <button type="button" class="bmt-btn agent active" id="cft-affiliate" onclick="setCompanyFormMode('affiliate')">🤝 Affiliate / Partner</button>
+            <button type="button" class="bmt-btn standard" id="cft-vendor" onclick="setCompanyFormMode('vendor')">🚗 Local / TCP Vendor</button>
+          </div>
+
           <div class="form-section">COMPANY IDENTITY</div>
-          <div class="field"><label>Legal Business Name</label><input id="coLegalName" placeholder="e.g. Smith Transportation LLC"></div>
-          <div class="field"><label>DBA / Trade Name</label><input id="coDba" placeholder="e.g. Smith Limo"></div>
-          <div class="field-row">
-            <div class="field"><label>Business Type</label>
-              <select id="coType">
-                <option value="">Select Type</option>
-                <option>Sole Proprietorship</option><option>LLC</option>
-                <option>S-Corp</option><option>C-Corp</option>
-                <option>Partnership</option><option>Non-Profit</option><option>Other</option>
-              </select>
-            </div>
-            <div class="field"><label>Status</label>
-              <select id="coStatus">
-                <option>Active</option><option>Pending</option>
-                <option>Suspended</option><option>Inactive</option>
-              </select>
-            </div>
+          <div class="field"><label>Company Name</label><input id="coLegalName" placeholder="e.g. Smith Transportation LLC"></div>
+          <div class="field"><label id="coStatusLabel">Affiliate Status</label>
+            <select id="coStatus">
+              <option>Active</option><option>Pending</option>
+              <option>Suspended</option><option>Inactive</option>
+            </select>
           </div>
-          <div class="field-row">
-            <div class="field"><label>EIN / Tax ID</label><input id="coEin" placeholder="XX-XXXXXXX"></div>
-            <div class="field"><label>State of Formation</label><input id="coStateOfFormation" placeholder="California"></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Date Formed</label><input id="coDateFormed" type="date"></div>
-            <div class="field"><label>Affiliate Since</label><input id="coAffiliateStartDate" type="date"></div>
-          </div>
-          <div class="form-section">RESPONSIBLE PERSON</div>
-          <div class="field"><label>Full Name</label><input id="coResponsibleName" placeholder="Owner / Officer Name"></div>
-          <div class="field"><label>Title</label><input id="coResponsibleTitle" placeholder="e.g. Owner, President"></div>
-          <div class="field-row">
-            <div class="field"><label>Phone</label><input id="coResponsiblePhone" placeholder="(310) 000-0000"></div>
-            <div class="field"><label>Email</label><input id="coResponsibleEmail" placeholder="owner@co.com"></div>
-          </div>
-          <div class="form-section">ADDRESS</div>
-          <div class="field"><label>Business Address</label><input id="coAddress" placeholder="Street, City, State, ZIP"></div>
-          <div class="field"><label>Mailing Address (if different)</label><input id="coMailingAddress" placeholder="Leave blank if same"></div>
-          <div class="form-section">LINKED DRIVERS</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Select team members affiliated with this company:</div>
-          <div id="coDriverCheckboxes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
-          <div class="form-section">LICENSES & COMPLIANCE</div>
-          <div class="field-row">
-            <div class="field"><label>TCP License #</label><input id="coTcpNumber" placeholder="PSG0049661"></div>
-            <div class="field"><label>TCP Expiry</label><input id="coTcpExpiry" type="date"></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Business License #</label><input id="coBizLicenseNumber" placeholder="License Number"></div>
-            <div class="field"><label>Biz License Expiry</label><input id="coBizLicenseExpiry" type="date"></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Insurance Provider</label><input id="coInsuranceProvider" placeholder="Progressive"></div>
-            <div class="field"><label>Insurance Expiry</label><input id="coInsuranceExpiry" type="date"></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Policy #</label><input id="coInsurancePolicyNum" placeholder="Policy Number"></div>
-            <div class="field"><label>Coverage</label><input id="coInsuranceCoverage" placeholder="$1,500,000"></div>
-          </div>
-          <div class="form-section">DOCUMENTS</div>
-          <div class="field-row">
-            <div class="field"><label>W-9 Form</label>
-              <div class="upload-box" onclick="document.getElementById('coW9File').click()">
-                <div id="coW9Placeholder" style="font-size:12px;color:var(--muted);">📄 W-9</div>
+
+          <!-- Local / TCP Vendor-only fields — irrelevant to a pure affiliate/
+               partner, so an affiliate never needs to touch TCP/insurance/
+               compliance data to save. Hidden, never deleted: saving while
+               this block is hidden omits these keys from the payload
+               entirely (see getCompanyFormData()), so an existing vendor's
+               data survives an affiliate-mode edit untouched. -->
+          <div id="coVendorFields" style="display:none;">
+            <div class="field"><label>DBA / Trade Name</label><input id="coDba" placeholder="e.g. Smith Limo"></div>
+            <div class="field-row">
+              <div class="field"><label>Business Type</label>
+                <select id="coType">
+                  <option value="">Select Type</option>
+                  <option>Sole Proprietorship</option><option>LLC</option>
+                  <option>S-Corp</option><option>C-Corp</option>
+                  <option>Partnership</option><option>Non-Profit</option><option>Other</option>
+                </select>
               </div>
-              <input type="file" id="coW9File" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coW9','','coW9Placeholder','coW9Url')">
-              <input type="hidden" id="coW9Url">
+              <div class="field"><label>EIN / Tax ID</label><input id="coEin" placeholder="XX-XXXXXXX"></div>
             </div>
-            <div class="field"><label>TCP License Doc</label>
-              <div class="upload-box" onclick="document.getElementById('coTcpFile').click()">
-                <div id="coTcpPlaceholder" style="font-size:12px;color:var(--muted);">📄 TCP</div>
+            <div class="field-row">
+              <div class="field"><label>State of Formation</label><input id="coStateOfFormation" placeholder="California"></div>
+              <div class="field"><label>Date Formed</label><input id="coDateFormed" type="date"></div>
+            </div>
+            <div class="form-section">ADDRESS</div>
+            <div class="field"><label>Business Address</label><input id="coAddress" placeholder="Street, City, State, ZIP"></div>
+            <div class="field"><label>Mailing Address (if different)</label><input id="coMailingAddress" placeholder="Leave blank if same"></div>
+            <div class="form-section">LINKED DRIVERS</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Select team members affiliated with this company:</div>
+            <div id="coDriverCheckboxes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;"></div>
+            <div class="form-section">LICENSES & COMPLIANCE</div>
+            <div class="field-row">
+              <div class="field"><label>TCP License #</label><input id="coTcpNumber" placeholder="PSG0049661"></div>
+              <div class="field"><label>TCP Expiry</label><input id="coTcpExpiry" type="date"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Business License #</label><input id="coBizLicenseNumber" placeholder="License Number"></div>
+              <div class="field"><label>Biz License Expiry</label><input id="coBizLicenseExpiry" type="date"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Insurance Provider</label><input id="coInsuranceProvider" placeholder="Progressive"></div>
+              <div class="field"><label>Insurance Expiry</label><input id="coInsuranceExpiry" type="date"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Policy #</label><input id="coInsurancePolicyNum" placeholder="Policy Number"></div>
+              <div class="field"><label>Coverage</label><input id="coInsuranceCoverage" placeholder="$1,500,000"></div>
+            </div>
+            <div class="form-section">DOCUMENTS</div>
+            <div class="field-row">
+              <div class="field"><label>W-9 Form</label>
+                <div class="upload-box" onclick="document.getElementById('coW9File').click()">
+                  <div id="coW9Placeholder" style="font-size:12px;color:var(--muted);">📄 W-9</div>
+                </div>
+                <input type="file" id="coW9File" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coW9','','coW9Placeholder','coW9Url')">
+                <input type="hidden" id="coW9Url">
               </div>
-              <input type="file" id="coTcpFile" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coTcp','','coTcpPlaceholder','coTcpUrl')">
-              <input type="hidden" id="coTcpUrl">
-            </div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Certificate of Formation</label>
-              <div class="upload-box" onclick="document.getElementById('coArticlesFile').click()">
-                <div id="coArticlesPlaceholder" style="font-size:12px;color:var(--muted);">📄 Articles</div>
+              <div class="field"><label>TCP License Doc</label>
+                <div class="upload-box" onclick="document.getElementById('coTcpFile').click()">
+                  <div id="coTcpPlaceholder" style="font-size:12px;color:var(--muted);">📄 TCP</div>
+                </div>
+                <input type="file" id="coTcpFile" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coTcp','','coTcpPlaceholder','coTcpUrl')">
+                <input type="hidden" id="coTcpUrl">
               </div>
-              <input type="file" id="coArticlesFile" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coArticles','','coArticlesPlaceholder','coArticlesUrl')">
-              <input type="hidden" id="coArticlesUrl">
             </div>
-            <div class="field"><label>Business License Doc</label>
-              <div class="upload-box" onclick="document.getElementById('coBizLicFile').click()">
-                <div id="coBizLicPlaceholder" style="font-size:12px;color:var(--muted);">📄 Biz Lic</div>
+            <div class="field-row">
+              <div class="field"><label>Certificate of Formation</label>
+                <div class="upload-box" onclick="document.getElementById('coArticlesFile').click()">
+                  <div id="coArticlesPlaceholder" style="font-size:12px;color:var(--muted);">📄 Articles</div>
+                </div>
+                <input type="file" id="coArticlesFile" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coArticles','','coArticlesPlaceholder','coArticlesUrl')">
+                <input type="hidden" id="coArticlesUrl">
               </div>
-              <input type="file" id="coBizLicFile" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coBizLic','','coBizLicPlaceholder','coBizLicUrl')">
-              <input type="hidden" id="coBizLicUrl">
+              <div class="field"><label>Business License Doc</label>
+                <div class="upload-box" onclick="document.getElementById('coBizLicFile').click()">
+                  <div id="coBizLicPlaceholder" style="font-size:12px;color:var(--muted);">📄 Biz Lic</div>
+                </div>
+                <input type="file" id="coBizLicFile" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coBizLic','','coBizLicPlaceholder','coBizLicUrl')">
+                <input type="hidden" id="coBizLicUrl">
+              </div>
             </div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Insurance COI</label>
+            <div class="field">
+              <label>Insurance COI</label>
               <div class="upload-box" onclick="document.getElementById('coCoiFile').click()">
                 <div id="coCoiPlaceholder" style="font-size:12px;color:var(--muted);">🛡 COI</div>
               </div>
               <input type="file" id="coCoiFile" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'coCoi','','coCoiPlaceholder','coCoiUrl')">
               <input type="hidden" id="coCoiUrl">
             </div>
-            <div class="field"><label>Logo</label>
-              <div class="upload-box" onclick="document.getElementById('coLogoFile').click()">
-                <img id="coLogoPreview" src="" style="display:none;width:100%;height:50px;object-fit:contain;border-radius:6px;">
-                <div id="coLogoPlaceholder" style="font-size:12px;color:var(--muted);">🏢 Logo</div>
-              </div>
-              <input type="file" id="coLogoFile" accept="image/*" style="display:none" onchange="handleFileUpload(this,'coLogo','coLogoPreview','coLogoPlaceholder','coLogoUrl')">
-              <input type="hidden" id="coLogoUrl">
+          </div>
+          <!-- /coVendorFields -->
+
+          <div class="form-section">RESPONSIBLE PERSON</div>
+          <div class="field"><label>Contact Person / Representative</label><input id="coResponsibleName" placeholder="Owner / Officer Name"></div>
+          <div id="coResponsibleTitleWrap" class="field"><label>Title</label><input id="coResponsibleTitle" placeholder="e.g. Owner, President"></div>
+          <div class="field-row">
+            <div class="field"><label>Phone</label><input id="coResponsiblePhone" placeholder="(310) 000-0000"></div>
+            <div class="field"><label>Email</label><input id="coResponsibleEmail" placeholder="owner@co.com"></div>
+          </div>
+
+          <!-- Affiliate/Partner-only fields — irrelevant to a pure local/TCP
+               vendor. Same hide-and-omit-from-payload rule as coVendorFields
+               above: an existing affiliate's data survives a vendor-mode
+               edit untouched. -->
+          <div id="coAffiliateFields" style="display:block;">
+            <div class="field-row">
+              <div class="field"><label>WhatsApp</label><input id="coWhatsapp" placeholder="+62 812-3456-7890"></div>
+              <div class="field"><label>Website / Social</label><input id="coWebsite" placeholder="https://..."></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Country</label><input id="coCountry" placeholder="e.g. Indonesia"></div>
+              <div class="field"><label>City</label><input id="coCity" placeholder="e.g. Jakarta"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>Source Event / Referral Source</label><input id="coSourceEvent" placeholder="e.g. Indonesia Travel Expo 2026"></div>
+              <div class="field"><label>Affiliate Since</label><input id="coAffiliateStartDate" type="date"></div>
             </div>
           </div>
-          <div class="form-section">AFFILIATE AGREEMENT</div>
+          <!-- /coAffiliateFields -->
+
+          <div class="field">
+            <label>Logo</label>
+            <div class="upload-box" onclick="document.getElementById('coLogoFile').click()">
+              <img id="coLogoPreview" src="" style="display:none;width:100%;height:50px;object-fit:contain;border-radius:6px;">
+              <div id="coLogoPlaceholder" style="font-size:12px;color:var(--muted);">🏢 Logo</div>
+            </div>
+            <input type="file" id="coLogoFile" accept="image/*" style="display:none" onchange="handleFileUpload(this,'coLogo','coLogoPreview','coLogoPlaceholder','coLogoUrl')">
+            <input type="hidden" id="coLogoUrl">
+          </div>
+
+          <div class="form-section">COMMISSION</div>
           <div class="field-row">
             <div class="field"><label>Commission Rate (%)</label><input id="coCommissionRate" type="number" min="0" max="100" step="0.1" placeholder="10"></div>
             <div class="field"><label>Payment Terms</label>
@@ -2310,6 +2346,11 @@ function generateRefCode() {
 }
 function getEl(id){return document.getElementById(id);}
 function getValue(id){const el=getEl(id);return el?el.value.trim():"";}
+// For optional DATE/TIMESTAMP columns only — Postgres rejects "" with
+// "invalid input syntax for type date", so a blank date input must become
+// NULL, never an empty string. Never use this for text fields (an empty
+// string is a valid value there).
+function dateOrNull(id){const v=getValue(id);return v?v:null;}
 function setValue(id,val){
   const dateFields=["teamDob","teamDlNumber","teamDriverLicenseExpiry","teamWorkPermitExpiry",
     "vehicleRegistrationExpiry","vehicleInsuranceExpiry",
@@ -3525,7 +3566,7 @@ async function saveJob() {
     booking_mode:bookingMode,
     agent_name: bookingMode==="agent" ? getValue("agentName") : null,
     agent_ref_num: bookingMode==="agent" ? getValue("agentRefNum") : null,
-    agent_invoice_due: bookingMode==="agent" ? getValue("agentInvoiceDue") : null,
+    agent_invoice_due: bookingMode==="agent" ? dateOrNull("agentInvoiceDue") : null,
     agent_num_days: bookingMode==="agent" ? (num(getValue("agentNumDays"))||null) : null,
     agent_deposit_amt: bookingMode==="agent" ? (num(getValue("agentDepositAmt"))||null) : null
   };
@@ -6620,8 +6661,8 @@ function getMemberFormData() {
     /* ssn_last_4 not in DB — stored in notes instead */
     work_permit_or_green_card_id:getValue("teamWorkPermitId"),
     dl_number:                   getValue("teamDlNumber"),
-    driver_license_expiry:       getValue("teamDriverLicenseExpiry"),
-    work_permit_expiry:          getValue("teamWorkPermitExpiry"),
+    driver_license_expiry:       dateOrNull("teamDriverLicenseExpiry"),
+    work_permit_expiry:          dateOrNull("teamWorkPermitExpiry"),
     id_photo_url:                getValue("teamIdPhoto"),
     professional_photo_url:      getValue("teamProfessionalPhoto"),
     dl_file_url:                 getValue("teamDlFileUrl"),
@@ -6648,8 +6689,8 @@ function getVehicleFormData() {
     color:                   getValue("vehicleColor"),
     plate:                   getValue("vehiclePlate"),
     seats:                   getValue("vehicleSeats"),
-    registration_expiry:     getValue("vehicleRegistrationExpiry"),
-    insurance_expiry:        getValue("vehicleInsuranceExpiry"),
+    registration_expiry:     dateOrNull("vehicleRegistrationExpiry"),
+    insurance_expiry:        dateOrNull("vehicleInsuranceExpiry"),
     registration_photo_url:  getValue("vehicleRegistrationPhoto"),
     insurance_photo_url:     getValue("vehicleInsurancePhoto"),
     vehicle_front_photo_url: getValue("vehicleFrontPhoto"),
@@ -7162,43 +7203,89 @@ function getSelectedDriverIds() {
   return Array.from(boxes).map(b => b.value);
 }
 
+// ── Company form mode (Affiliate/Partner vs Local/TCP Vendor) ────────────────
+// The companies table serves two conceptually different workflows. Rather
+// than duplicate the table or the save path, the form shows only the fields
+// relevant to whichever mode is active; saving OMITS the other mode's field
+// keys from the payload entirely (not "" / null — omitted), so upsert()
+// never touches those columns and an existing record's data in the other
+// category survives untouched. is_affiliate/is_local_vendor are only ever
+// force-set to their own mode's true on a brand-new record — editing an
+// existing record only ever sets its own mode's flag, never clears the
+// other, so a company can legitimately be both.
+let companyFormMode = "affiliate";
+
+function setCompanyFormMode(mode) {
+  companyFormMode = mode;
+  const isAffiliate = mode === "affiliate";
+  const affBtn = getEl("cft-affiliate"), vendBtn = getEl("cft-vendor");
+  if (affBtn)  affBtn.classList.toggle("active", isAffiliate);
+  if (vendBtn) vendBtn.classList.toggle("active", !isAffiliate);
+  const affFields = getEl("coAffiliateFields"), vendFields = getEl("coVendorFields");
+  if (affFields)  affFields.style.display = isAffiliate ? "block" : "none";
+  if (vendFields) vendFields.style.display = isAffiliate ? "none" : "block";
+  const statusLabel = getEl("coStatusLabel");
+  if (statusLabel) statusLabel.textContent = isAffiliate ? "Affiliate Status" : "Status";
+  // Only drive the title for a fresh Add — editCompany() sets its own
+  // "✏️ EDIT: <name>" title afterward, which must win over this.
+  const titleEl = getEl("companyFormTitle");
+  if (titleEl && !getValue("editingCompanyId")) {
+    titleEl.textContent = isAffiliate ? "➕ ADD AFFILIATE / PARTNER" : "➕ ADD LOCAL / TCP VENDOR";
+  }
+}
+
 // ── Form Data ─────────────────────────────────────────────────────────────────
 function getCompanyFormData() {
-  return {
+  const isNew = !getValue("editingCompanyId");
+  const data = {
     id:                    getValue("editingCompanyId") || null,
     legal_name:            getValue("coLegalName"),
-    dba:                   getValue("coDba"),
-    business_type:         getValue("coType"),
     status:                getValue("coStatus"),
-    ein:                   getValue("coEin"),
-    state_of_formation:    getValue("coStateOfFormation"),
-    date_formed:           getValue("coDateFormed"),
-    affiliate_start_date:  getValue("coAffiliateStartDate"),
     responsible_name:      getValue("coResponsibleName"),
     responsible_title:     getValue("coResponsibleTitle"),
     responsible_phone:     getValue("coResponsiblePhone"),
     responsible_email:     getValue("coResponsibleEmail"),
-    address:               getValue("coAddress"),
-    mailing_address:       getValue("coMailingAddress"),
-    linked_driver_ids:     getSelectedDriverIds(),
-    tcp_number:            getValue("coTcpNumber"),
-    tcp_expiry:            getValue("coTcpExpiry"),
-    biz_license_number:    getValue("coBizLicenseNumber"),
-    biz_license_expiry:    getValue("coBizLicenseExpiry"),
-    insurance_provider:    getValue("coInsuranceProvider"),
-    insurance_expiry:      getValue("coInsuranceExpiry"),
-    insurance_policy_num:  getValue("coInsurancePolicyNum"),
-    insurance_coverage:    getValue("coInsuranceCoverage") ? parseFloat(getValue("coInsuranceCoverage").replace(/[^0-9.]/g,"")) || null : null,
-    w9_url:                getValue("coW9Url"),
-    tcp_doc_url:           getValue("coTcpUrl"),
-    articles_url:          getValue("coArticlesUrl"),
-    biz_license_doc_url:   getValue("coBizLicUrl"),
-    coi_url:               getValue("coCoiUrl"),
     logo_url:              getValue("coLogoUrl"),
     commission_rate:       getValue("coCommissionRate") ? parseFloat(getValue("coCommissionRate").replace(/[^0-9.]/g,"")) || null : null,
     payment_terms:         getValue("coPaymentTerms"),
     notes:                 getValue("coNotes")
   };
+
+  if (companyFormMode === "affiliate") {
+    data.is_affiliate      = true;
+    data.whatsapp          = getValue("coWhatsapp");
+    data.website           = getValue("coWebsite");
+    data.country            = getValue("coCountry");
+    data.city               = getValue("coCity");
+    data.source_event       = getValue("coSourceEvent");
+    data.affiliate_start_date = dateOrNull("coAffiliateStartDate");
+    if (isNew) data.is_local_vendor = false; // new record's default until a vendor-mode edit says otherwise
+  } else {
+    data.is_local_vendor   = true;
+    data.dba                = getValue("coDba");
+    data.business_type      = getValue("coType");
+    data.ein                = getValue("coEin");
+    data.state_of_formation = getValue("coStateOfFormation");
+    data.date_formed        = dateOrNull("coDateFormed");
+    data.address             = getValue("coAddress");
+    data.mailing_address     = getValue("coMailingAddress");
+    data.linked_driver_ids   = getSelectedDriverIds();
+    data.tcp_number          = getValue("coTcpNumber");
+    data.tcp_expiry          = dateOrNull("coTcpExpiry");
+    data.biz_license_number  = getValue("coBizLicenseNumber");
+    data.biz_license_expiry  = dateOrNull("coBizLicenseExpiry");
+    data.insurance_provider  = getValue("coInsuranceProvider");
+    data.insurance_expiry    = dateOrNull("coInsuranceExpiry");
+    data.insurance_policy_num = getValue("coInsurancePolicyNum");
+    data.insurance_coverage  = getValue("coInsuranceCoverage") ? parseFloat(getValue("coInsuranceCoverage").replace(/[^0-9.]/g,"")) || null : null;
+    data.w9_url              = getValue("coW9Url");
+    data.tcp_doc_url         = getValue("coTcpUrl");
+    data.articles_url        = getValue("coArticlesUrl");
+    data.biz_license_doc_url = getValue("coBizLicUrl");
+    data.coi_url             = getValue("coCoiUrl");
+    if (isNew) data.is_affiliate = false; // new record's default until an affiliate-mode edit says otherwise
+  }
+  return data;
 }
 
 // ── Clear Form ────────────────────────────────────────────────────────────────
@@ -7209,7 +7296,8 @@ function clearCompanyForm() {
    "coTcpNumber","coTcpExpiry","coBizLicenseNumber","coBizLicenseExpiry",
    "coInsuranceProvider","coInsuranceExpiry","coInsurancePolicyNum","coInsuranceCoverage",
    "coW9Url","coTcpUrl","coArticlesUrl","coBizLicUrl","coCoiUrl","coLogoUrl",
-   "coCommissionRate","coPaymentTerms","coNotes","editingCompanyId"
+   "coCommissionRate","coPaymentTerms","coNotes","editingCompanyId",
+   "coWhatsapp","coWebsite","coCountry","coCity","coSourceEvent"
   ].forEach(id => setValue(id, ""));
   setValue("coStatus", "Active");
   // Reset upload placeholders
@@ -7221,13 +7309,14 @@ function clearCompanyForm() {
   Object.entries(resets).forEach(([id, txt]) => { const el=getEl(id); if(el){el.textContent=txt;el.style.display="";} });
   const logoImg = getEl("coLogoPreview"); if(logoImg){logoImg.src="";logoImg.style.display="none";}
   document.querySelectorAll("#coDriverCheckboxes input[type=checkbox]").forEach(c => c.checked = false);
-  getEl("companyFormTitle").textContent = "➕ ADD COMPANY";
+  setCompanyFormMode("affiliate"); // default mode for a fresh Add — also sets the title
 }
 
 // ── Validate ──────────────────────────────────────────────────────────────────
 function validateCompany(data) {
-  if (!data.legal_name) { alert("Legal Business Name is required."); return false; }
-  if (!data.business_type) { alert("Business Type is required."); return false; }
+  if (!data.legal_name) { alert("Company Name is required."); return false; }
+  // Business Type only applies (and is only collected/shown) in Vendor mode.
+  if (companyFormMode === "vendor" && !data.business_type) { alert("Business Type is required."); return false; }
   return true;
 }
 
@@ -7272,9 +7361,19 @@ function editCompany(id) {
     coCoiUrl: c.coi_url,           coLogoUrl: c.logo_url,
     coCommissionRate: c.commission_rate,
     coPaymentTerms: c.payment_terms,
-    coNotes: c.notes
+    coNotes: c.notes,
+    coWhatsapp: c.whatsapp,        coWebsite: c.website,
+    coCountry: c.country,          coCity: c.city,
+    coSourceEvent: c.source_event
   };
   Object.entries(fieldMap).forEach(([k,v]) => setValue(k, v));
+
+  // Editing from People -> Affiliates -> Companies is affiliate-context, so
+  // default to the Affiliate form for any company flagged is_affiliate
+  // (including dual-role ones) - the admin can still switch to the Vendor
+  // tab with one click if they need TCP/insurance fields, and that switch
+  // never discards data either way (see getCompanyFormData()).
+  setCompanyFormMode(c.is_affiliate ? "affiliate" : "vendor");
 
   // Restore logo
   if (c.logo_url) {
@@ -7914,15 +8013,16 @@ function convertLeadToCompany(leadId) {
   }
 
   clearCompanyForm();
+  setCompanyFormMode("affiliate"); // Make Affiliate always opens the Affiliate form, never the Local/TCP Vendor one
   toggleFormPanel("company-form", true);
   setValue("coLegalName", lead.company_name || "");
   setValue("coResponsibleName", lead.full_name || "");
   setValue("coResponsiblePhone", lead.phone || "");
   setValue("coResponsibleEmail", lead.email || "");
+  setValue("coCountry", lead.country || "");
+  setValue("coSourceEvent", row.event_source || "");
   setValue("coNotes",
-    `Sourced from event lead${row.event_source ? " — " + row.event_source : ""}` +
-    `${lead.country ? " (" + lead.country + ")" : ""}` +
-    `${row.registered_at ? ", registered " + new Date(row.registered_at).toLocaleDateString() : ""}.`
+    `Sourced from event lead${row.registered_at ? ", registered " + new Date(row.registered_at).toLocaleDateString() : ""}.`
   );
   getEl("companyFormCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
