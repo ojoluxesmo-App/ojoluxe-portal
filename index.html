@@ -836,6 +836,11 @@ window.addEventListener("unhandledrejection", function(e) {
           </div>
         </div>
 
+        <!-- Parking slot for the (single, shared) Affiliate field in Standard
+             mode — relocateAffiliateField() moves the real #affiliateFieldWrap
+             node here or into the Agent/Corporate section, it never clones it. -->
+        <div id="affiliateFieldStandardSlot"></div>
+
         <div class="field-row">
           <div class="field">
             <label>Pickup Date</label>
@@ -973,13 +978,16 @@ window.addEventListener("unhandledrejection", function(e) {
             <label>Agent / Company Name</label>
             <input id="agentName" placeholder="e.g. Globetrotter Travel Agency">
           </div>
-          <div class="field">
+          <!-- Single shared Affiliate field (also lives in the Standard-mode
+               slot above #affiliateFieldStandardSlot) — relocateAffiliateField()
+               moves this same node in/out, so this is just its home markup. -->
+          <div class="field" id="affiliateFieldWrap">
             <label>Affiliate / Referral Source <span style="color:#555;font-weight:400;">(optional)</span></label>
             <select id="jobAffiliateCompanyId" data-autofilled="true" onchange="this.dataset.autofilled='false'">
               <option value="">No Affiliate / Direct Client</option>
             </select>
           </div>
-          <div class="field-row">
+          <div class="field-row" id="agentPoInvoiceRow">
             <div class="field">
               <label>PO / Reference #</label>
               <input id="agentRefNum" placeholder="e.g. PO-2025-001">
@@ -5917,6 +5925,7 @@ document.addEventListener("DOMContentLoaded", async function() {
   await loadClientsFromSupabase();
   updateClientAutocomplete();
   updateJobAffiliateOptions();
+  setBookingMode("standard"); // ensures the Affiliate field starts in the Standard-mode slot on a cold page load
 
   // Render people data
   renderTeamAlerts();
@@ -6090,9 +6099,27 @@ function calculateCommissionAmount(total, type, value) {
 // ── Booking Mode (Standard / Agent-Corporate) ──────────────────────────────
 let currentBookingMode = "standard";
 
+// Moves the ONE #affiliateFieldWrap node between the Standard-mode slot and
+// its home inside Agent/Corporate Details — never clones it, so there is
+// exactly one jobAffiliateCompanyId select in the DOM at any time and its
+// current value/dataset survive the move untouched (a DOM move preserves
+// element state; it isn't a re-render).
+function relocateAffiliateField(mode) {
+  const wrap = getEl("affiliateFieldWrap");
+  if (!wrap) return;
+  if (mode === "agent") {
+    const poRow = getEl("agentPoInvoiceRow");
+    if (poRow && poRow.parentElement) poRow.parentElement.insertBefore(wrap, poRow);
+  } else {
+    const slot = getEl("affiliateFieldStandardSlot");
+    if (slot) slot.appendChild(wrap);
+  }
+}
+
 function setBookingMode(mode) {
   currentBookingMode = mode;
   const isAgent = mode === "agent";
+  relocateAffiliateField(mode);
 
   // Toggle button styles
   const btnStd   = getEl("bmt-standard");
