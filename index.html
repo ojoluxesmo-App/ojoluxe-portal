@@ -7893,6 +7893,45 @@ function eventRegistrationCount(code) {
   return allLeads.filter(r => r.event_source === code).length;
 }
 
+// ── Delete Event ─────────────────────────────────────────────────────────────
+// events has no FK to lead_events (event_source is free text — see the note
+// atop this module), so "registrations for this event" can only be verified
+// by asking the admin-token-gated /api/leads endpoint, the same one the Leads
+// tab uses. Never cascades: if any registrations match this event's code,
+// deletion is blocked outright rather than deleting them along with it.
+async function deleteEvent(id) {
+  const ev = allEvents.find(e => e.id === id);
+  if (!ev) return;
+
+  if (!getAdminToken()) {
+    alert("Enter your admin token in the Leads tab first — registration counts must be verified before an event can be deleted.");
+    return;
+  }
+
+  // Refresh leads so the count reflects the live database, not whatever was
+  // last cached (which could be empty if the Leads tab was never opened).
+  await loadLeadsFromSupabase();
+  if (leadsLoadError) {
+    alert("Could not verify registrations for this event (" + leadsLoadError + "). Delete cancelled.");
+    return;
+  }
+
+  const count = eventRegistrationCount(ev.code);
+  if (count > 0) {
+    alert(`This event has ${count} registration${count === 1 ? "" : "s"} associated with it.\n\nThe event cannot be deleted until its registrations are removed or reassigned.`);
+    return;
+  }
+
+  if (!confirm(`Delete "${ev.display_name}"?\n\nThis event has no registrations.\n\nThis action cannot be undone.`)) return;
+
+  const { error } = await db.from("events").delete().eq("id", id);
+  if (error) { alert("Failed to delete event: " + error.message); return; }
+
+  await loadEventsFromSupabase();
+  renderEvents();
+  alert(`"${ev.display_name}" deleted.`);
+}
+
 // Returns null (never a Preview/admin hostname) until PARTNER_BASE_URL is
 // configured — see the comment on that constant above.
 function eventRegistrationLink(code) {
@@ -7964,9 +8003,10 @@ function renderEvents() {
       </div>
       ${(ev.start_date || ev.end_date) ? `<div style="font-size:12px;color:#888;margin-top:6px;">📅 ${escapeHtml(ev.start_date || "?")} – ${escapeHtml(ev.end_date || "?")}</div>` : ""}
       <div style="font-size:11px;color:#555;margin-top:8px;word-break:break-all;">${link ? escapeHtml(link) : "⚠️ PARTNER_BASE_URL not configured"}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;">
         <button class="small-btn secondary-btn" onclick="copyEventLink('${ev.code}')">📋 Copy Link</button>
         <button class="small-btn secondary-btn" onclick="toggleEventQR('${ev.code}')">▦ Show QR</button>
+        <button class="small-btn danger-btn" onclick="deleteEvent('${ev.id}')">🗑 Delete Event</button>
       </div>
       <div id="${qrId}" style="display:none;margin-top:10px;"></div>
     </div>`;
