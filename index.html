@@ -260,13 +260,36 @@ input,select,textarea,button{font-family:var(--font-ui);}
   flex:1;min-width:70px;padding:9px 12px;
   border-radius:var(--radius-sm);font-size:12px;font-weight:700;
   cursor:pointer;border:none;transition:opacity .12s;
-  font-family:var(--font-ui);
+  font-family:var(--font-ui);white-space:nowrap;
 }
 .btn:active{opacity:.75;}
 .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border2);}
 .btn-gold{background:var(--gold);color:#000;}
 .btn-danger{background:#2a1111;color:var(--red);border:1px solid #5c1a1a;}
 .btn-full{width:100%;flex:none;margin-top:6px;}
+.btn-auto{flex:0 0 auto;}
+
+/* ─── SMALL ACTION BUTTONS (Companies / Leads / Registrations / Vehicles) ── */
+/* Shared class system: .small-btn is the base (size/shape/interaction);
+   pair it with one variant — .secondary-btn / .btn-edit / .danger-btn /
+   .btn-danger-severe / .btn-promote — for the color treatment. */
+.small-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  height:32px;padding:0 12px;
+  border-radius:var(--radius-sm);
+  font-size:12px;font-weight:700;white-space:nowrap;
+  cursor:pointer;border:1px solid transparent;
+  font-family:var(--font-ui);
+  transition:filter .12s,background .12s,opacity .12s,transform .1s;
+}
+.small-btn:active{transform:scale(.97);}
+.small-btn:hover{filter:brightness(1.18);}
+.small-btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+.secondary-btn{background:var(--surface2);color:var(--text);border-color:var(--border2);}
+.btn-edit{background:#2563eb;color:#fff;border-color:#2563eb;}
+.danger-btn{background:#dc2626;color:#fff;border-color:#dc2626;}
+.btn-danger-severe{background:#7f1d1d;color:#fff;border-color:#f87171;}
+.btn-promote{background:#1a1405;color:var(--gold);border-color:var(--gold-dim);}
 
 /* Empty state */
 .empty-state{
@@ -1455,6 +1478,7 @@ window.addEventListener("unhandledrejection", function(e) {
         <button class="sec-btn active" onclick="setAffiliatesSubTab('companies')" id="aft-companies">🏢 Companies</button>
         <button class="sec-btn" onclick="setAffiliatesSubTab('leads')" id="aft-leads">📋 Leads</button>
         <button class="sec-btn" onclick="setAffiliatesSubTab('events')" id="aft-events">🎫 Events</button>
+        <button class="sec-btn" onclick="setAffiliatesSubTab('performance')" id="aft-performance">📊 Performance</button>
       </div>
 
       <!-- Companies sub-view -->
@@ -1607,9 +1631,9 @@ window.addEventListener("unhandledrejection", function(e) {
             <label>Country</label>
             <select id="leadFilterCountry" onchange="renderLeads()"><option value="">All Countries</option></select>
           </div>
-          <button class="btn btn-sec" type="button" onclick="loadLeadsFromSupabase().then(renderLeads)" style="height:38px;">↻ Refresh</button>
-          <button class="btn btn-sec" type="button" onclick="exportLeadsCSV()" style="height:38px;">⬇ Export CSV</button>
-          <button class="btn btn-sec" type="button" onclick="forgetAdminToken()" style="height:38px;">🔓 Forget Admin Token</button>
+          <button class="btn btn-sec btn-auto" type="button" onclick="loadLeadsFromSupabase().then(renderLeads)" style="height:38px;">↻ Refresh</button>
+          <button class="btn btn-sec btn-auto" type="button" onclick="exportLeadsCSV()" style="height:38px;">⬇ Export CSV</button>
+          <button class="btn btn-sec btn-auto" type="button" onclick="forgetAdminToken()" style="height:38px;">🔓 Forget Admin Token</button>
         </div>
         <div id="leadsSummaryCards" style="margin-bottom:12px;"></div>
         <div id="lead-edit-form" style="display:none;margin-bottom:12px;">
@@ -1666,6 +1690,22 @@ window.addEventListener("unhandledrejection", function(e) {
         <div id="eventsList"></div>
       </div>
       <!-- /Events sub-view -->
+
+      <!-- Performance sub-view -->
+      <div id="af-performance" style="display:none;">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px;">
+          <div class="field" style="flex:1;min-width:140px;margin-bottom:0;">
+            <label>Year</label>
+            <select id="perfFilterYear" onchange="renderAffiliatePerformance()"><option value="">All Years</option></select>
+          </div>
+          <div class="field" style="flex:1;min-width:160px;margin-bottom:0;">
+            <label>Affiliate</label>
+            <select id="perfFilterAffiliate" onchange="renderAffiliatePerformance()"><option value="">All Affiliates</option></select>
+          </div>
+        </div>
+        <div id="performanceList"></div>
+      </div>
+      <!-- /Performance sub-view -->
     </div>
 
     <!-- Clients sub-view -->
@@ -1703,6 +1743,65 @@ window.addEventListener("unhandledrejection", function(e) {
             <input type="checkbox" id="clIsVip" style="width:auto;margin:0;accent-color:var(--gold);">
             <label for="clIsVip" style="font-size:13px;font-weight:700;color:var(--gold);margin:0;cursor:pointer;">⭐ VIP Client</label>
           </div>
+
+          <div class="form-section">AFFILIATE ATTRIBUTION</div>
+          <div class="field">
+            <label>Referred by Affiliate</label>
+            <select id="clReferringCompanyId" onchange="onClientReferringCompanyChange()"><option value="">None</option></select>
+          </div>
+          <div id="clReferringCompanyInfo" style="display:none;font-size:12px;color:#888;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;padding:8px 10px;margin-bottom:14px;"></div>
+          <div class="field-row">
+            <div class="field">
+              <label>Referral Date</label>
+              <input id="clReferralDate" type="date">
+            </div>
+            <div class="field">
+              <label>Referral Source</label>
+              <select id="clReferralSourceSelect" onchange="onReferralSourceChange()">
+                <option value="">Select…</option>
+                <option value="Direct">Direct</option>
+                <option value="Website">Website</option>
+                <option value="__other__">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" id="clReferralSourceOtherWrap" style="display:none;">
+            <label>Referral Source (specify)</label>
+            <input id="clReferralSourceOther" placeholder="e.g. Partner intro call">
+          </div>
+
+          <div class="form-section">COMMISSION (ARCHITECTURE ONLY — NOT PAID OUT YET)</div>
+          <div class="field-row">
+            <div class="field">
+              <label>Commission Rate Override (%)</label>
+              <input id="clCommissionRateOverride" type="number" step="0.01" placeholder="Leave blank to use affiliate's default rate" oninput="updateEffectiveCommissionDisplay()">
+            </div>
+            <div class="field">
+              <label>Commission Term</label>
+              <select id="clCommissionTerm">
+                <option value="">—</option>
+                <option value="first_booking">First Booking</option>
+                <option value="12_months">12 Months</option>
+                <option value="lifetime">Lifetime</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Commission Status</label>
+              <select id="clCommissionStatus">
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Commission Effective Date</label>
+              <input id="clCommissionEffectiveDate" type="date">
+            </div>
+          </div>
+          <div id="clEffectiveCommissionDisplay" style="font-size:12px;color:#888;margin-bottom:14px;"></div>
+
           <div class="field">
             <label>Notes</label>
             <textarea id="clNotes" placeholder="Preferences, special requests, internal notes..."></textarea>
@@ -2301,7 +2400,7 @@ function setPeopleTab(tab) {
   if(tab==="affiliates") { setAffiliatesSubTab("companies"); }
   if(tab==="drivers") { renderMembers(); renderTeamAlerts(); }
   if(tab==="fleet") { renderVehicles(); renderTeamAlerts(); populateAssignedMemberDropdown(); }
-  if(tab==="clients") { renderClients(); }
+  if(tab==="clients") { renderClients(); populateClientAffiliateFields(); loadEventsFromSupabase().then(populateClientAffiliateFields); }
 }
 
 // ── Finance Tab Navigation ────────────────────────────────────────────────────
@@ -2733,13 +2832,15 @@ function renderJobs() {
     const pricing = calculateJobPrice(j);
     const icon    = status==="Completed"?"✅":status==="Offer"?"🏷":status==="Cancelled"?"❌":status==="Voided"?"🚫":"🚘";
     const agentBadge = j.booking_mode==="agent" ? '<span class="badge-agent">🤝 Agent</span> ' : "";
+    const jcAffiliateCompany = j.referred_affiliate_company_id ? (allCompanies || []).find(c => c.id === j.referred_affiliate_company_id) : null;
+    const affiliateBadge = jcAffiliateCompany ? `<span class="badge-agent" style="border-color:#2e7d32;color:#87e18b;">🎯 ${escapeHtml(jcAffiliateCompany.legal_name || jcAffiliateCompany.dba || "Affiliate")}</span> ` : "";
 
     html+=`<div class="job-card">
       <div class="jc-header" onclick="toggleJobCard('${jid}')">
         <div class="jc-avatar">${icon}</div>
         <div class="jc-main">
           <div class="jc-client">${escapeHtml(j.client||"-")}</div>
-          <div class="jc-meta">${agentBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${escapeHtml(j.assigned_driver||"Unassigned")}</div>
+          <div class="jc-meta">${agentBadge}${affiliateBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${escapeHtml(j.assigned_driver||"Unassigned")}</div>
         </div>
         <div class="jc-right">
           <div class="jc-price">${money(pricing.grandTotal||pricing.totalPrice)}</div>
@@ -2781,6 +2882,11 @@ function renderJobs() {
               ${j.client_phone?`<a href="tel:${escapeHtml(j.client_phone)}" style="font-size:13px;font-weight:700;color:var(--green);text-decoration:none;">📞 ${escapeHtml(j.client_phone)}</a>`:""}
               ${j.client_email?`<a href="mailto:${escapeHtml(j.client_email)}" style="font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;">✉️ ${escapeHtml(j.client_email)}</a>`:""}
             </span>
+          </div>`:""}
+          ${jcAffiliateCompany?`
+          <div class="driver-row" style="margin-bottom:12px;">
+            <span class="driver-lbl">AFFILIATE</span>
+            <span style="font-size:13px;font-weight:700;color:#87e18b;">🎯 ${escapeHtml(jcAffiliateCompany.legal_name||jcAffiliateCompany.dba||"-")}</span>
           </div>`:""}
           ${j.waybill_notes?`<div style="font-size:12px;color:var(--muted);padding:7px 10px;background:#0a0a0a;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;line-height:1.5;">🚘 ${escapeHtml(j.waybill_notes)}</div>`:""}
           ${j.internal_notes&&isAdminMode()?`<div style="font-size:12px;color:#c87a7a;padding:7px 10px;background:#110808;border-radius:8px;border:1px solid #3a1a1a;margin-bottom:12px;line-height:1.5;">🔒 ${escapeHtml(j.internal_notes)}</div>`:""}
@@ -3409,6 +3515,15 @@ async function saveJob() {
     agent_num_days: bookingMode==="agent" ? (num(getValue("agentNumDays"))||null) : null,
     agent_deposit_amt: bookingMode==="agent" ? (num(getValue("agentDepositAmt"))||null) : null
   };
+  // Snapshot affiliate attribution from the client ONLY on new-job creation —
+  // never on edits, so changing a client's affiliate later (or editing any
+  // other field on an existing job) can never rewrite historical attribution.
+  if (!editingId) {
+    const referredClient = (allClients || []).find(c => c.full_name && c.full_name.toLowerCase() === client.toLowerCase());
+    if (referredClient && referredClient.referring_company_id) {
+      payload.referred_affiliate_company_id = referredClient.referring_company_id;
+    }
+  }
   // Merge airport terminal/airline into extras JSONB
   const pickupTerminal  = getValue("pickup_terminal")||"";
   const pickupAirline   = getValue("pickup_airline")||"";
@@ -7299,6 +7414,29 @@ function renderCompanies() {
           </div>
         </div>` : ""}
 
+        <!-- Affiliate performance: referred clients, jobs, gross revenue.
+             Read-only, computed from already-loaded clients/jobs — Gross
+             Revenue = SUM(total_price) for Completed/Released jobs, matching
+             this portal's existing Finance/Completed-Jobs export convention. -->
+        ${(() => {
+          const referredClients = (allClients || []).filter(cl => cl.referring_company_id === c.id);
+          const affiliateJobs = (allJobs || []).filter(j => j.referred_affiliate_company_id === c.id);
+          if (!referredClients.length && !affiliateJobs.length) return "";
+          const grossRevenue = affiliateJobs
+            .filter(j => ["Completed", "Released"].includes(j.status || ""))
+            .reduce((s, j) => s + (parseFloat(j.total_price) || 0), 0);
+          return `
+        <div style="padding:10px 12px;background:#0a0a0a;border-radius:8px;border:1px solid #1e1e1e;margin-bottom:10px;">
+          <div style="font-size:9px;font-weight:700;color:#444;letter-spacing:.1em;margin-bottom:8px;">AFFILIATE PERFORMANCE</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;${referredClients.length ? "margin-bottom:8px;" : ""}">
+            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${referredClients.length}</div><div style="font-size:9px;color:#666;">CLIENTS</div></div>
+            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${affiliateJobs.length}</div><div style="font-size:9px;color:#666;">JOBS</div></div>
+            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${money(grossRevenue)}</div><div style="font-size:9px;color:#666;">GROSS REVENUE</div></div>
+          </div>
+          ${referredClients.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;">${referredClients.map(cl => `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #333;color:#89c2ff;background:#0d1520;">${escapeHtml(cl.full_name)}</span>`).join("")}</div>` : ""}
+        </div>`;
+        })()}
+
         <!-- Documents -->
         ${docsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">${docsHtml}</div>` : ""}
 
@@ -7314,6 +7452,65 @@ function renderCompanies() {
   }).join("") + '</div>'; // close section-body
 }
 
+// ── Affiliate performance report ─────────────────────────────────────────────
+// Read-only, computed from already-loaded allCompanies/allClients/allJobs —
+// no new queries. Gross Revenue matches the same Completed/Released
+// convention used in the Companies detail view and this portal's existing
+// Finance exports. No profit/ROI/commission-earned math here.
+function renderAffiliatePerformance() {
+  const list = getEl("performanceList");
+  if (!list) return;
+
+  const yearSel = getEl("perfFilterYear"), affSel = getEl("perfFilterAffiliate");
+  const years = [...new Set((allJobs || []).map(j => j.date && j.date.slice(0, 4)).filter(Boolean))].sort().reverse();
+  if (yearSel) {
+    const cur = yearSel.value;
+    yearSel.innerHTML = '<option value="">All Years</option>' + years.map(y => `<option ${y === cur ? "selected" : ""}>${escapeHtml(y)}</option>`).join("");
+  }
+  if (affSel) {
+    const cur = affSel.value;
+    affSel.innerHTML = '<option value="">All Affiliates</option>' +
+      (allCompanies || []).slice().sort((a, b) => (a.legal_name || "").localeCompare(b.legal_name || ""))
+        .map(c => `<option value="${escapeHtml(c.id)}" ${c.id === cur ? "selected" : ""}>${escapeHtml(c.legal_name || c.dba || "Unnamed")}</option>`).join("");
+  }
+
+  const fYear = yearSel ? yearSel.value : "";
+  const fAffiliate = affSel ? affSel.value : "";
+  const companies = (allCompanies || []).filter(c => !fAffiliate || c.id === fAffiliate);
+
+  const rows = companies.map(c => {
+    const referredClients = (allClients || []).filter(cl => cl.referring_company_id === c.id);
+    const affiliateJobs = (allJobs || []).filter(j => j.referred_affiliate_company_id === c.id && (!fYear || (j.date || "").slice(0, 4) === fYear));
+    const grossRevenue = affiliateJobs
+      .filter(j => ["Completed", "Released"].includes(j.status || ""))
+      .reduce((s, j) => s + (parseFloat(j.total_price) || 0), 0);
+    return { company: c, clientCount: referredClients.length, jobCount: affiliateJobs.length, grossRevenue };
+  }).filter(r => r.clientCount || r.jobCount);
+
+  if (!rows.length) {
+    list.innerHTML = '<div class="card"><div class="job-meta">No affiliate activity yet for the selected filters.</div></div>';
+    return;
+  }
+
+  rows.sort((a, b) => b.grossRevenue - a.grossRevenue);
+  const totalRevenue = rows.reduce((s, r) => s + r.grossRevenue, 0);
+
+  list.innerHTML =
+    '<div class="sh-title" style="margin-bottom:10px;">📊 Affiliate Performance (' + rows.length + ')</div>' +
+    rows.map(r => `
+      <div class="card" style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:15px;font-weight:800;color:#f4f4f4;">${escapeHtml(r.company.legal_name || r.company.dba || "-")}</div>
+          <div style="font-size:15px;font-weight:800;color:var(--gold);">${money(r.grossRevenue)}</div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:6px;">
+          <div style="font-size:12px;color:#888;">👥 ${r.clientCount} client${r.clientCount === 1 ? "" : "s"}</div>
+          <div style="font-size:12px;color:#888;">📋 ${r.jobCount} job${r.jobCount === 1 ? "" : "s"}</div>
+        </div>
+      </div>`).join("") +
+    `<div class="card" style="margin-top:4px;background:#0a0a0a;"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;"><span style="color:#888;">TOTAL GROSS REVENUE</span><span style="color:var(--gold);">${money(totalRevenue)}</span></div></div>`;
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function initCompaniesModule() {
   await loadCompaniesFromSupabase();
@@ -7322,17 +7519,20 @@ async function initCompaniesModule() {
 
 // ── Affiliates sub-tabs (Companies / Leads) ─────────────────────────────────────
 function setAffiliatesSubTab(tab) {
-  const companiesBtn = getEl("aft-companies"), leadsBtn = getEl("aft-leads"), eventsBtn = getEl("aft-events");
-  const companiesView = getEl("af-companies"), leadsView = getEl("af-leads"), eventsView = getEl("af-events");
+  const companiesBtn = getEl("aft-companies"), leadsBtn = getEl("aft-leads"), eventsBtn = getEl("aft-events"), perfBtn = getEl("aft-performance");
+  const companiesView = getEl("af-companies"), leadsView = getEl("af-leads"), eventsView = getEl("af-events"), perfView = getEl("af-performance");
   if (companiesBtn) companiesBtn.classList.toggle("active", tab === "companies");
   if (leadsBtn) leadsBtn.classList.toggle("active", tab === "leads");
   if (eventsBtn) eventsBtn.classList.toggle("active", tab === "events");
+  if (perfBtn) perfBtn.classList.toggle("active", tab === "performance");
   if (companiesView) companiesView.style.display = tab === "companies" ? "block" : "none";
   if (leadsView) leadsView.style.display = tab === "leads" ? "block" : "none";
   if (eventsView) eventsView.style.display = tab === "events" ? "block" : "none";
+  if (perfView) perfView.style.display = tab === "performance" ? "block" : "none";
   if (tab === "companies") { renderCompanies(); renderCompanyAlerts(); populateDriverCheckboxes([]); }
   if (tab === "leads") { loadLeadsFromSupabase().then(renderLeads); }
   if (tab === "events") { loadEventsFromSupabase().then(renderEvents); if (!allLeads.length) loadLeadsFromSupabase().then(renderEvents); }
+  if (tab === "performance") { renderAffiliatePerformance(); }
 }
 
 // ── Trade Show Leads (Phase 1) ───────────────────────────────────────────────────
@@ -7464,10 +7664,11 @@ function renderLeads() {
           <div style="font-size:12px;color:#888;">🌍 ${escapeHtml(lead.country || "-")}</div>
           <div style="font-size:12px;color:#888;">🕒 ${escapeHtml(when)}</div>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
-          <button class="small-btn secondary-btn" onclick="openEditLead('${lead.id}')">✏️ Edit</button>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;">
+          <button class="small-btn btn-edit" onclick="openEditLead('${lead.id}')">✏️ Edit</button>
+          <button class="small-btn btn-promote" onclick="convertLeadToCompany('${lead.id}')">🏢 Make Affiliate</button>
           <button class="small-btn danger-btn" onclick="deleteLeadEventRow('${r.id}')">🗑 Delete Registration</button>
-          <button class="small-btn danger-btn" style="opacity:.7;" onclick="deleteLeadCompletely('${lead.id}')">⚠️ Delete Lead Completely</button>
+          <button class="small-btn btn-danger-severe" onclick="deleteLeadCompletely('${lead.id}')">⚠️ Delete Lead Completely</button>
         </div>
       </div>`;
     }).join("");
@@ -7557,6 +7758,52 @@ async function deleteLeadCompletely(leadId) {
   const name = eventRows[0] ? eventRows[0].leads.full_name : "this lead";
   if (!confirm(`⚠️ Delete "${name}" COMPLETELY?\n\nThis removes the lead and ALL ${eventRows.length} of their event registration(s) across every event. This cannot be undone.`)) return;
   await deleteViaLeadsApi("lead", leadId);
+}
+
+// ── Lead → Affiliate promotion ───────────────────────────────────────────────
+// Pre-fills the existing Add/Edit Company form from an event lead's contact
+// info so an admin can review it and save it as a real affiliate — this is
+// the missing link between event registrations and the Phase 2B
+// Company -> Client -> Job attribution chain. Never auto-saves and never
+// touches the lead itself; the admin still fills in required fields
+// (Business Type, commission rate, etc.) and clicks Save Company, exactly
+// like adding any other affiliate.
+function convertLeadToCompany(leadId) {
+  const row = allLeads.find(r => r.leads && r.leads.id === leadId);
+  const lead = row && row.leads;
+  if (!lead) return;
+
+  setAffiliatesSubTab("companies");
+
+  // Dedup guard: if a company already exists under this name, offer to open
+  // it instead of creating a duplicate affiliate record.
+  const nameNorm = (lead.company_name || "").trim().toLowerCase();
+  const existing = nameNorm
+    ? (allCompanies || []).find(c =>
+        (c.legal_name || "").trim().toLowerCase() === nameNorm ||
+        (c.dba || "").trim().toLowerCase() === nameNorm)
+    : null;
+  if (existing) {
+    const openExisting = confirm(
+      `A company named "${existing.legal_name || existing.dba}" already exists.\n\n` +
+      `OK — open that existing company (avoid a duplicate)\n` +
+      `Cancel — create a new company anyway`
+    );
+    if (openExisting) { editCompany(existing.id); return; }
+  }
+
+  clearCompanyForm();
+  toggleFormPanel("company-form", true);
+  setValue("coLegalName", lead.company_name || "");
+  setValue("coResponsibleName", lead.full_name || "");
+  setValue("coResponsiblePhone", lead.phone || "");
+  setValue("coResponsibleEmail", lead.email || "");
+  setValue("coNotes",
+    `Sourced from event lead${row.event_source ? " — " + row.event_source : ""}` +
+    `${lead.country ? " (" + lead.country + ")" : ""}` +
+    `${row.registered_at ? ", registered " + new Date(row.registered_at).toLocaleDateString() : ""}.`
+  );
+  getEl("companyFormCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ── Export CSV ────────────────────────────────────────────────────────────────
@@ -7766,6 +8013,8 @@ async function deleteClientFromSupabase(id) {
 
 // ── Form Data ─────────────────────────────────────────────────────────────────
 function getClientFormData() {
+  const sourceSel = getValue("clReferralSourceSelect");
+  const referral_source = sourceSel === "__other__" ? getValue("clReferralSourceOther") : sourceSel;
   return {
     id:        getValue("editingClientId") || null,
     full_name: getValue("clFullName"),
@@ -7774,15 +8023,28 @@ function getClientFormData() {
     company:   getValue("clCompany"),
     address:   getValue("clAddress"),
     is_vip:    getEl("clIsVip") ? getEl("clIsVip").checked : false,
+    referring_company_id:     getValue("clReferringCompanyId") || null,
+    referral_date:            getValue("clReferralDate") || null,
+    referral_source:          referral_source || null,
+    commission_rate_override: getValue("clCommissionRateOverride") ? num(getValue("clCommissionRateOverride")) : null,
+    commission_term:          getValue("clCommissionTerm") || null,
+    commission_status:        getValue("clCommissionStatus") || "Active",
+    commission_effective_date: getValue("clCommissionEffectiveDate") || null,
     notes:     getValue("clNotes")
   };
 }
 
 // ── Clear Form ────────────────────────────────────────────────────────────────
 function clearClientForm() {
-  ["editingClientId","clFullName","clPhone","clEmail","clCompany","clAddress","clNotes"]
+  ["editingClientId","clFullName","clPhone","clEmail","clCompany","clAddress","clNotes",
+   "clReferringCompanyId","clReferralDate","clReferralSourceSelect","clReferralSourceOther",
+   "clCommissionRateOverride","clCommissionTerm","clCommissionEffectiveDate"]
     .forEach(id => setValue(id, ""));
   const vip = getEl("clIsVip"); if (vip) vip.checked = false;
+  setValue("clCommissionStatus", "Active");
+  const otherWrap = getEl("clReferralSourceOtherWrap"); if (otherWrap) otherWrap.style.display = "none";
+  const info = getEl("clReferringCompanyInfo"); if (info) { info.style.display = "none"; info.innerHTML = ""; }
+  const eff = getEl("clEffectiveCommissionDisplay"); if (eff) eff.innerHTML = "";
   const title = getEl("clientFormTitle"); if (title) title.textContent = "➕ ADD CLIENT";
 }
 
@@ -7806,6 +8068,7 @@ async function saveClient() {
 function editClient(id) {
   const item = allClients.find(c => c.id === id);
   if (!item) return;
+  populateClientAffiliateFields();
   setValue("editingClientId", item.id);
   setValue("clFullName",  item.full_name);
   setValue("clPhone",     item.phone || "");
@@ -7814,11 +8077,91 @@ function editClient(id) {
   setValue("clAddress",   item.address || "");
   setValue("clNotes",     item.notes || "");
   const vip = getEl("clIsVip"); if (vip) vip.checked = !!(item.is_vip);
+
+  setValue("clReferringCompanyId", item.referring_company_id || "");
+  onClientReferringCompanyChange();
+  setValue("clReferralDate", item.referral_date || "");
+
+  const fixedSources = ["Direct", "Website"];
+  const src = item.referral_source || "";
+  if (!src) {
+    setValue("clReferralSourceSelect", "");
+  } else if (fixedSources.includes(src) || (allEvents || []).some(ev => ev.display_name === src)) {
+    setValue("clReferralSourceSelect", src);
+  } else {
+    setValue("clReferralSourceSelect", "__other__");
+    setValue("clReferralSourceOther", src);
+  }
+  onReferralSourceChange();
+
+  setValue("clCommissionRateOverride", item.commission_rate_override != null ? item.commission_rate_override : "");
+  setValue("clCommissionTerm", item.commission_term || "");
+  setValue("clCommissionStatus", item.commission_status || "Active");
+  setValue("clCommissionEffectiveDate", item.commission_effective_date || "");
+  updateEffectiveCommissionDisplay();
+
   const title = getEl("clientFormTitle");
   if (title) title.textContent = "✏️ EDIT: " + item.full_name;
   setPeopleTab("clients");
   toggleFormPanel("client-form", true);
   getEl("clientFormCard").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+// ── Affiliate attribution fields (Client form) ───────────────────────────────
+function populateClientAffiliateFields() {
+  const companySel = getEl("clReferringCompanyId");
+  if (companySel) {
+    const cur = companySel.value;
+    companySel.innerHTML = '<option value="">None</option>' +
+      (allCompanies || []).slice().sort((a, b) => (a.legal_name || "").localeCompare(b.legal_name || ""))
+        .map(c => `<option value="${escapeHtml(c.id)}" ${c.id === cur ? "selected" : ""}>${escapeHtml(c.legal_name || c.dba || "Unnamed")}</option>`)
+        .join("");
+  }
+  const sourceSel = getEl("clReferralSourceSelect");
+  if (sourceSel) {
+    const cur = sourceSel.value;
+    const eventOptions = (allEvents || []).map(ev => `<option ${ev.display_name === cur ? "selected" : ""}>${escapeHtml(ev.display_name)}</option>`).join("");
+    sourceSel.innerHTML =
+      '<option value="">Select…</option>' +
+      `<option value="Direct" ${cur === "Direct" ? "selected" : ""}>Direct</option>` +
+      `<option value="Website" ${cur === "Website" ? "selected" : ""}>Website</option>` +
+      eventOptions +
+      `<option value="__other__" ${cur === "__other__" ? "selected" : ""}>Other</option>`;
+  }
+}
+
+function onClientReferringCompanyChange() {
+  const id = getValue("clReferringCompanyId");
+  const info = getEl("clReferringCompanyInfo");
+  if (!info) return;
+  const company = id ? (allCompanies || []).find(c => c.id === id) : null;
+  if (!company) { info.style.display = "none"; info.innerHTML = ""; updateEffectiveCommissionDisplay(); return; }
+  info.style.display = "block";
+  info.innerHTML =
+    `<div style="font-weight:700;color:#ccc;">${escapeHtml(company.legal_name || "-")}${company.dba ? " (" + escapeHtml(company.dba) + ")" : ""}</div>` +
+    `<div>${escapeHtml(company.status || "-")}${company.responsible_name ? " · " + escapeHtml(company.responsible_name) : ""}${company.responsible_phone ? " · " + escapeHtml(company.responsible_phone) : ""}</div>` +
+    (company.commission_rate != null ? `<div>Default commission rate: ${escapeHtml(String(company.commission_rate))}%</div>` : "");
+  updateEffectiveCommissionDisplay();
+}
+
+function onReferralSourceChange() {
+  const wrap = getEl("clReferralSourceOtherWrap");
+  if (wrap) wrap.style.display = getValue("clReferralSourceSelect") === "__other__" ? "block" : "none";
+}
+
+// Display-only — effective rate = per-client override if present, else the
+// affiliate's default commission_rate. No commission-earned/payout math here.
+function updateEffectiveCommissionDisplay() {
+  const el = getEl("clEffectiveCommissionDisplay");
+  if (!el) return;
+  const companyId = getValue("clReferringCompanyId");
+  if (!companyId) { el.innerHTML = ""; return; }
+  const company = (allCompanies || []).find(c => c.id === companyId);
+  const overrideVal = getValue("clCommissionRateOverride");
+  const effective = overrideVal !== "" ? num(overrideVal) : (company && company.commission_rate != null ? company.commission_rate : null);
+  el.innerHTML = effective != null
+    ? `Effective commission rate: <strong style="color:var(--gold);">${escapeHtml(String(effective))}%</strong>${overrideVal !== "" ? " (client override)" : " (affiliate default)"}`
+    : "No commission rate set on this client or the affiliate.";
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -7863,6 +8206,7 @@ function renderClients() {
     const jobCount = allJobs.filter(j =>
       j.client && c.full_name && j.client.toLowerCase() === c.full_name.toLowerCase()
     ).length;
+    const referringCompany = c.referring_company_id ? (allCompanies || []).find(co => co.id === c.referring_company_id) : null;
 
     return `
     <div class="p-card" style="margin-bottom:8px;">
@@ -7877,6 +8221,7 @@ function renderClients() {
             ${c.company ? `<span style="font-size:11px;color:var(--muted);">🏢 ${escapeHtml(c.company)}</span>` : ""}
             ${jobCount ? `<span style="font-size:11px;color:var(--blue);">📋 ${jobCount} job${jobCount>1?"s":""}</span>` : ""}
           </div>
+          ${referringCompany ? `<div style="font-size:11px;color:#87e18b;margin-top:3px;">🤝 Referred by: ${escapeHtml(referringCompany.legal_name || referringCompany.dba || "-")}</div>` : ""}
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-bottom:10px;">
