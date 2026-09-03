@@ -260,13 +260,36 @@ input,select,textarea,button{font-family:var(--font-ui);}
   flex:1;min-width:70px;padding:9px 12px;
   border-radius:var(--radius-sm);font-size:12px;font-weight:700;
   cursor:pointer;border:none;transition:opacity .12s;
-  font-family:var(--font-ui);
+  font-family:var(--font-ui);white-space:nowrap;
 }
 .btn:active{opacity:.75;}
 .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border2);}
 .btn-gold{background:var(--gold);color:#000;}
 .btn-danger{background:#2a1111;color:var(--red);border:1px solid #5c1a1a;}
 .btn-full{width:100%;flex:none;margin-top:6px;}
+.btn-auto{flex:0 0 auto;}
+
+/* ─── SMALL ACTION BUTTONS (Companies / Leads / Registrations / Vehicles) ── */
+/* Shared class system: .small-btn is the base (size/shape/interaction);
+   pair it with one variant — .secondary-btn / .btn-edit / .danger-btn /
+   .btn-danger-severe / .btn-promote — for the color treatment. */
+.small-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  height:32px;padding:0 12px;
+  border-radius:var(--radius-sm);
+  font-size:12px;font-weight:700;white-space:nowrap;
+  cursor:pointer;border:1px solid transparent;
+  font-family:var(--font-ui);
+  transition:filter .12s,background .12s,opacity .12s,transform .1s;
+}
+.small-btn:active{transform:scale(.97);}
+.small-btn:hover{filter:brightness(1.18);}
+.small-btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+.secondary-btn{background:var(--surface2);color:var(--text);border-color:var(--border2);}
+.btn-edit{background:#2563eb;color:#fff;border-color:#2563eb;}
+.danger-btn{background:#dc2626;color:#fff;border-color:#dc2626;}
+.btn-danger-severe{background:#7f1d1d;color:#fff;border-color:#f87171;}
+.btn-promote{background:#1a1405;color:var(--gold);border-color:var(--gold-dim);}
 
 /* Empty state */
 .empty-state{
@@ -1608,9 +1631,9 @@ window.addEventListener("unhandledrejection", function(e) {
             <label>Country</label>
             <select id="leadFilterCountry" onchange="renderLeads()"><option value="">All Countries</option></select>
           </div>
-          <button class="btn btn-sec" type="button" onclick="loadLeadsFromSupabase().then(renderLeads)" style="height:38px;">↻ Refresh</button>
-          <button class="btn btn-sec" type="button" onclick="exportLeadsCSV()" style="height:38px;">⬇ Export CSV</button>
-          <button class="btn btn-sec" type="button" onclick="forgetAdminToken()" style="height:38px;">🔓 Forget Admin Token</button>
+          <button class="btn btn-sec btn-auto" type="button" onclick="loadLeadsFromSupabase().then(renderLeads)" style="height:38px;">↻ Refresh</button>
+          <button class="btn btn-sec btn-auto" type="button" onclick="exportLeadsCSV()" style="height:38px;">⬇ Export CSV</button>
+          <button class="btn btn-sec btn-auto" type="button" onclick="forgetAdminToken()" style="height:38px;">🔓 Forget Admin Token</button>
         </div>
         <div id="leadsSummaryCards" style="margin-bottom:12px;"></div>
         <div id="lead-edit-form" style="display:none;margin-bottom:12px;">
@@ -7641,10 +7664,11 @@ function renderLeads() {
           <div style="font-size:12px;color:#888;">🌍 ${escapeHtml(lead.country || "-")}</div>
           <div style="font-size:12px;color:#888;">🕒 ${escapeHtml(when)}</div>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
-          <button class="small-btn secondary-btn" onclick="openEditLead('${lead.id}')">✏️ Edit</button>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;">
+          <button class="small-btn btn-edit" onclick="openEditLead('${lead.id}')">✏️ Edit</button>
+          <button class="small-btn btn-promote" onclick="convertLeadToCompany('${lead.id}')">🏢 Make Affiliate</button>
           <button class="small-btn danger-btn" onclick="deleteLeadEventRow('${r.id}')">🗑 Delete Registration</button>
-          <button class="small-btn danger-btn" style="opacity:.7;" onclick="deleteLeadCompletely('${lead.id}')">⚠️ Delete Lead Completely</button>
+          <button class="small-btn btn-danger-severe" onclick="deleteLeadCompletely('${lead.id}')">⚠️ Delete Lead Completely</button>
         </div>
       </div>`;
     }).join("");
@@ -7734,6 +7758,52 @@ async function deleteLeadCompletely(leadId) {
   const name = eventRows[0] ? eventRows[0].leads.full_name : "this lead";
   if (!confirm(`⚠️ Delete "${name}" COMPLETELY?\n\nThis removes the lead and ALL ${eventRows.length} of their event registration(s) across every event. This cannot be undone.`)) return;
   await deleteViaLeadsApi("lead", leadId);
+}
+
+// ── Lead → Affiliate promotion ───────────────────────────────────────────────
+// Pre-fills the existing Add/Edit Company form from an event lead's contact
+// info so an admin can review it and save it as a real affiliate — this is
+// the missing link between event registrations and the Phase 2B
+// Company -> Client -> Job attribution chain. Never auto-saves and never
+// touches the lead itself; the admin still fills in required fields
+// (Business Type, commission rate, etc.) and clicks Save Company, exactly
+// like adding any other affiliate.
+function convertLeadToCompany(leadId) {
+  const row = allLeads.find(r => r.leads && r.leads.id === leadId);
+  const lead = row && row.leads;
+  if (!lead) return;
+
+  setAffiliatesSubTab("companies");
+
+  // Dedup guard: if a company already exists under this name, offer to open
+  // it instead of creating a duplicate affiliate record.
+  const nameNorm = (lead.company_name || "").trim().toLowerCase();
+  const existing = nameNorm
+    ? (allCompanies || []).find(c =>
+        (c.legal_name || "").trim().toLowerCase() === nameNorm ||
+        (c.dba || "").trim().toLowerCase() === nameNorm)
+    : null;
+  if (existing) {
+    const openExisting = confirm(
+      `A company named "${existing.legal_name || existing.dba}" already exists.\n\n` +
+      `OK — open that existing company (avoid a duplicate)\n` +
+      `Cancel — create a new company anyway`
+    );
+    if (openExisting) { editCompany(existing.id); return; }
+  }
+
+  clearCompanyForm();
+  toggleFormPanel("company-form", true);
+  setValue("coLegalName", lead.company_name || "");
+  setValue("coResponsibleName", lead.full_name || "");
+  setValue("coResponsiblePhone", lead.phone || "");
+  setValue("coResponsibleEmail", lead.email || "");
+  setValue("coNotes",
+    `Sourced from event lead${row.event_source ? " — " + row.event_source : ""}` +
+    `${lead.country ? " (" + lead.country + ")" : ""}` +
+    `${row.registered_at ? ", registered " + new Date(row.registered_at).toLocaleDateString() : ""}.`
+  );
+  getEl("companyFormCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ── Export CSV ────────────────────────────────────────────────────────────────
