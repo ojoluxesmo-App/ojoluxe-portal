@@ -836,6 +836,13 @@ window.addEventListener("unhandledrejection", function(e) {
           </div>
         </div>
 
+        <div class="field">
+          <label>Affiliate / Referral Source <span style="color:#555;font-weight:400;">(optional)</span></label>
+          <select id="jobAffiliateCompanyId" data-autofilled="true" onchange="this.dataset.autofilled='false'">
+            <option value="">No Affiliate / Direct Client</option>
+          </select>
+        </div>
+
         <div class="field-row">
           <div class="field">
             <label>Pickup Date</label>
@@ -3515,15 +3522,14 @@ async function saveJob() {
     agent_num_days: bookingMode==="agent" ? (num(getValue("agentNumDays"))||null) : null,
     agent_deposit_amt: bookingMode==="agent" ? (num(getValue("agentDepositAmt"))||null) : null
   };
-  // Snapshot affiliate attribution from the client ONLY on new-job creation —
-  // never on edits, so changing a client's affiliate later (or editing any
-  // other field on an existing job) can never rewrite historical attribution.
-  if (!editingId) {
-    const referredClient = (allClients || []).find(c => c.full_name && c.full_name.toLowerCase() === client.toLowerCase());
-    if (referredClient && referredClient.referring_company_id) {
-      payload.referred_affiliate_company_id = referredClient.referring_company_id;
-    }
-  }
+  // Affiliate attribution is an explicit, editable form field (auto-suggested
+  // from the matched client by onClientNameInput(), prefilled from the job's
+  // own stored value on edit — see fillFormById()) rather than something
+  // silently re-derived from the client. It only ever changes here because
+  // the admin visibly set it in the form, so editing an existing job for an
+  // unrelated reason can never accidentally rewrite its historical
+  // attribution — saving just reproduces whatever the field already showed.
+  payload.referred_affiliate_company_id = getValue("jobAffiliateCompanyId") || null;
   // Merge airport terminal/airline into extras JSONB
   const pickupTerminal  = getValue("pickup_terminal")||"";
   const pickupAirline   = getValue("pickup_airline")||"";
@@ -4119,10 +4125,11 @@ function checkAirportFields() {
 
 function clearForm(){
   ["name","pickup_from","to","driverNotes","internalNotes","assignedDriver","postedBy","miles","hours","manualPrice",
-   "clientPhone","clientEmail",
+   "clientPhone","clientEmail","jobAffiliateCompanyId",
    "agentName","agentRefNum","agentInvoiceDue","agentNumDays","agentDepositAmt","tourTotalAmount",
    "pickup_terminal","pickup_airline","dropoff_terminal","dropoff_airline"
   ].forEach(id=>setValue(id,""));
+  const affSel = getEl("jobAffiliateCompanyId"); if (affSel) affSel.dataset.autofilled = "true";
   clearDriverNotes();
   // Reset OT rule to defaults
   setValue("tourOtThreshold","10");
@@ -4153,9 +4160,13 @@ function fillFormById(id) {
     tourOtThreshold:j.ot_threshold??10,tourOtRate:j.ot_rate??75,
     agentName:j.agent_name||"", agentRefNum:j.agent_ref_num||"",
     agentInvoiceDue:j.agent_invoice_due||"", agentNumDays:j.agent_num_days||"",
-    agentDepositAmt:j.agent_deposit_amt||""
+    agentDepositAmt:j.agent_deposit_amt||"",
+    jobAffiliateCompanyId:j.referred_affiliate_company_id||""
   };
   Object.entries(map).forEach(([k,v])=>setValue(k,v));
+  // Lock auto-suggest so it can't clobber the job's own stored affiliate —
+  // the admin sees exactly what's saved and must explicitly change it.
+  const affSel = getEl("jobAffiliateCompanyId"); if (affSel) affSel.dataset.autofilled = "false";
   setClientName(j.client);  // split stored "Mr. John Smith" → title dropdown + name
   parseDriverNotes(j.waybill_notes||"");
   // Restore airport detail fields if present
@@ -5906,6 +5917,7 @@ document.addEventListener("DOMContentLoaded", async function() {
   await loadCompaniesFromSupabase();
   await loadClientsFromSupabase();
   updateClientAutocomplete();
+  updateJobAffiliateOptions();
 
   // Render people data
   renderTeamAlerts();
@@ -7419,21 +7431,21 @@ function renderCompanies() {
              Revenue = SUM(total_price) for Completed/Released jobs, matching
              this portal's existing Finance/Completed-Jobs export convention. -->
         ${(() => {
-          const referredClients = (allClients || []).filter(cl => cl.referring_company_id === c.id);
-          const affiliateJobs = (allJobs || []).filter(j => j.referred_affiliate_company_id === c.id);
-          if (!referredClients.length && !affiliateJobs.length) return "";
-          const grossRevenue = affiliateJobs
-            .filter(j => ["Completed", "Released"].includes(j.status || ""))
-            .reduce((s, j) => s + (parseFloat(j.total_price) || 0), 0);
+          const r = computeAffiliateStats(c);
+          if (!r.clientCount && !r.jobCount) return "";
           return `
         <div style="padding:10px 12px;background:#0a0a0a;border-radius:8px;border:1px solid #1e1e1e;margin-bottom:10px;">
           <div style="font-size:9px;font-weight:700;color:#444;letter-spacing:.1em;margin-bottom:8px;">AFFILIATE PERFORMANCE</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;${referredClients.length ? "margin-bottom:8px;" : ""}">
-            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${referredClients.length}</div><div style="font-size:9px;color:#666;">CLIENTS</div></div>
-            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${affiliateJobs.length}</div><div style="font-size:9px;color:#666;">JOBS</div></div>
-            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${money(grossRevenue)}</div><div style="font-size:9px;color:#666;">GROSS REVENUE</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${r.clientCount}</div><div style="font-size:9px;color:#666;">CLIENTS</div></div>
+            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${r.jobCount}</div><div style="font-size:9px;color:#666;">JOBS</div></div>
+            <div><div style="font-size:16px;font-weight:800;color:var(--gold);">${money(r.completedRevenue)}</div><div style="font-size:9px;color:#666;">REVENUE</div></div>
           </div>
-          ${referredClients.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;">${referredClients.map(cl => `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #333;color:#89c2ff;background:#0d1520;">${escapeHtml(cl.full_name)}</span>`).join("")}</div>` : ""}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;${r.referredClients.length ? "margin-bottom:8px;" : ""}">
+            <div><div style="font-size:14px;font-weight:800;color:#87e18b;">${money(r.commissionDue)}</div><div style="font-size:9px;color:#666;">CALC. COMMISSION</div></div>
+            <div><div style="font-size:14px;font-weight:800;color:#aaa;">${r.lastBooking ? escapeHtml(r.lastBooking) : "—"}</div><div style="font-size:9px;color:#666;">LAST BOOKING</div></div>
+          </div>
+          ${r.referredClients.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;">${r.referredClients.map(cl => `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #333;color:#89c2ff;background:#0d1520;">${escapeHtml(cl.full_name)}</span>`).join("")}</div>` : ""}
         </div>`;
         })()}
 
@@ -7450,6 +7462,64 @@ function renderCompanies() {
         ${c.notes ? `<div style="margin-top:8px;font-size:12px;color:#555;padding:6px 8px;background:#0a0a0a;border-radius:7px;border:1px solid #1a1a1a;">${escapeHtml(c.notes)}</div>` : ""}
       </div>`;
   }).join("") + '</div>'; // close section-body
+}
+
+// ── Affiliate stats (shared by the Companies card + Performance tab) ────────
+// Everything here is computed client-side from already-loaded
+// allCompanies/allClients/allJobs — no extra queries, no new columns.
+// Booked Revenue = SUM(total_price) for attributed jobs, excluding
+// Cancelled/Voided (a job that never happened isn't booked revenue).
+// Completed Revenue = SUM(total_price) for Completed/Released only, matching
+// this portal's existing Finance/Completed-Jobs convention.
+// Calculated Commission sums, over completed jobs only, total_price × the
+// referring client's effective rate (their commission_rate_override, else
+// the affiliate's default companies.commission_rate — same "override or
+// default" rule already shown on the Client form), gated by that client's
+// Phase 2B commission_status/commission_term fields.
+function clientForJobName(clientName) {
+  const name = (clientName || "").trim().toLowerCase();
+  return name ? (allClients || []).find(cl => cl.full_name && cl.full_name.toLowerCase() === name) : null;
+}
+function effectiveCommissionRate(client, company) {
+  if (client && client.commission_rate_override != null && client.commission_rate_override !== "") return num(client.commission_rate_override);
+  return company && company.commission_rate != null ? num(company.commission_rate) : 0;
+}
+function isCommissionEligible(job, client) {
+  if (!client) return true; // no client match — still attribute revenue, just can't apply a term restriction
+  if (client.commission_status === "Inactive") return false;
+  const term = client.commission_term;
+  if (term === "12_months") {
+    const start = client.commission_effective_date || client.referral_date;
+    if (!start) return true; // no anchor date on record — don't silently zero it out
+    const startMs = new Date(start).getTime(), jobMs = new Date(job.date).getTime();
+    if (isNaN(startMs) || isNaN(jobMs)) return true;
+    return jobMs <= startMs + 365 * 24 * 60 * 60 * 1000;
+  }
+  if (term === "first_booking") {
+    const sameClientJobs = (allJobs || []).filter(j =>
+      j.referred_affiliate_company_id === job.referred_affiliate_company_id &&
+      (j.client || "").toLowerCase() === (client.full_name || "").toLowerCase());
+    const earliest = sameClientJobs.reduce((min, j) => (!min || (j.date || "") < (min.date || "")) ? j : min, null);
+    return !!earliest && earliest.id === job.id;
+  }
+  return true; // lifetime / custom / unset — no restriction
+}
+function computeAffiliateStats(company, opts) {
+  const fYear = opts && opts.year;
+  const referredClients = (allClients || []).filter(cl => cl.referring_company_id === company.id);
+  const jobs = (allJobs || []).filter(j => j.referred_affiliate_company_id === company.id && (!fYear || (j.date || "").slice(0, 4) === fYear));
+  const liveJobs = jobs.filter(j => !["Cancelled", "Voided"].includes(j.status || ""));
+  const bookedRevenue = liveJobs.reduce((s, j) => s + (parseFloat(j.total_price) || 0), 0);
+  const completedJobs = jobs.filter(j => ["Completed", "Released"].includes(j.status || ""));
+  const completedRevenue = completedJobs.reduce((s, j) => s + (parseFloat(j.total_price) || 0), 0);
+  let commissionDue = 0;
+  completedJobs.forEach(j => {
+    const cl = clientForJobName(j.client);
+    if (!isCommissionEligible(j, cl)) return;
+    commissionDue += (parseFloat(j.total_price) || 0) * (effectiveCommissionRate(cl, company) / 100);
+  });
+  const lastBooking = jobs.reduce((max, j) => (j.date && (!max || j.date > max)) ? j.date : max, "");
+  return { company, clientCount: referredClients.length, jobCount: jobs.length, bookedRevenue, completedRevenue, commissionDue, lastBooking, referredClients };
 }
 
 // ── Affiliate performance report ─────────────────────────────────────────────
@@ -7478,37 +7548,62 @@ function renderAffiliatePerformance() {
   const fAffiliate = affSel ? affSel.value : "";
   const companies = (allCompanies || []).filter(c => !fAffiliate || c.id === fAffiliate);
 
-  const rows = companies.map(c => {
-    const referredClients = (allClients || []).filter(cl => cl.referring_company_id === c.id);
-    const affiliateJobs = (allJobs || []).filter(j => j.referred_affiliate_company_id === c.id && (!fYear || (j.date || "").slice(0, 4) === fYear));
-    const grossRevenue = affiliateJobs
-      .filter(j => ["Completed", "Released"].includes(j.status || ""))
-      .reduce((s, j) => s + (parseFloat(j.total_price) || 0), 0);
-    return { company: c, clientCount: referredClients.length, jobCount: affiliateJobs.length, grossRevenue };
-  }).filter(r => r.clientCount || r.jobCount);
+  const rows = companies
+    .map(c => computeAffiliateStats(c, { year: fYear }))
+    .filter(r => r.clientCount || r.jobCount);
+
+  const summaryStat = (label, val) =>
+    `<div style="flex:1;min-width:110px;padding:10px 12px;background:#0a0a0a;border-radius:8px;border:1px solid #1e1e1e;text-align:center;">` +
+      `<div style="font-size:18px;font-weight:800;color:var(--gold);">${val}</div>` +
+      `<div style="font-size:9px;font-weight:700;color:#666;letter-spacing:.05em;margin-top:2px;">${label}</div>` +
+    `</div>`;
+  const totalBookings = rows.reduce((s, r) => s + r.jobCount, 0);
+  const totalClients = rows.reduce((s, r) => s + r.clientCount, 0);
+  const totalRevenue = rows.reduce((s, r) => s + r.completedRevenue, 0);
+  const totalCommission = rows.reduce((s, r) => s + r.commissionDue, 0);
+  const summaryHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">' +
+    summaryStat("TOTAL AFFILIATES", rows.length) +
+    summaryStat("REFERRED CLIENTS", totalClients) +
+    summaryStat("AFFILIATE BOOKINGS", totalBookings) +
+    summaryStat("AFFILIATE REVENUE", money(totalRevenue)) +
+    summaryStat("CALC. COMMISSION", money(totalCommission)) +
+  '</div>';
 
   if (!rows.length) {
-    list.innerHTML = '<div class="card"><div class="job-meta">No affiliate activity yet for the selected filters.</div></div>';
+    list.innerHTML = summaryHtml + '<div class="card"><div class="job-meta">No affiliate activity yet for the selected filters.</div></div>';
     return;
   }
 
-  rows.sort((a, b) => b.grossRevenue - a.grossRevenue);
-  const totalRevenue = rows.reduce((s, r) => s + r.grossRevenue, 0);
+  rows.sort((a, b) => b.completedRevenue - a.completedRevenue);
 
-  list.innerHTML =
+  list.innerHTML = summaryHtml +
     '<div class="sh-title" style="margin-bottom:10px;">📊 Affiliate Performance (' + rows.length + ')</div>' +
-    rows.map(r => `
+    rows.map(r => {
+      const rate = r.company.commission_rate != null ? r.company.commission_rate + "%" : "—";
+      return `
       <div class="card" style="margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div style="font-size:15px;font-weight:800;color:#f4f4f4;">${escapeHtml(r.company.legal_name || r.company.dba || "-")}</div>
-          <div style="font-size:15px;font-weight:800;color:var(--gold);">${money(r.grossRevenue)}</div>
+          <div style="font-size:15px;font-weight:800;color:var(--gold);">${money(r.completedRevenue)}</div>
         </div>
         <div style="display:flex;gap:16px;margin-top:6px;">
           <div style="font-size:12px;color:#888;">👥 ${r.clientCount} client${r.clientCount === 1 ? "" : "s"}</div>
-          <div style="font-size:12px;color:#888;">📋 ${r.jobCount} job${r.jobCount === 1 ? "" : "s"}</div>
+          <div style="font-size:12px;color:#888;">📋 ${r.jobCount} booking${r.jobCount === 1 ? "" : "s"}</div>
+          <div style="font-size:12px;color:#888;">💰 ${rate} rate</div>
         </div>
-      </div>`).join("") +
-    `<div class="card" style="margin-top:4px;background:#0a0a0a;"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;"><span style="color:#888;">TOTAL GROSS REVENUE</span><span style="color:var(--gold);">${money(totalRevenue)}</span></div></div>`;
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">
+          <div style="padding:6px 8px;background:#0a0a0a;border-radius:8px;border:1px solid #1e1e1e;">
+            <div style="font-size:9px;font-weight:700;color:#444;letter-spacing:.1em;">BOOKED REV.</div>
+            <div style="font-size:13px;font-weight:800;color:#aaa;">${money(r.bookedRevenue)}</div>
+          </div>
+          <div style="padding:6px 8px;background:#0a0a0a;border-radius:8px;border:1px solid #1e1e1e;">
+            <div style="font-size:9px;font-weight:700;color:#444;letter-spacing:.1em;">CALC. COMMISSION</div>
+            <div style="font-size:13px;font-weight:800;color:#87e18b;">${money(r.commissionDue)}</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#555;margin-top:6px;">🕒 Last booking: ${r.lastBooking ? escapeHtml(r.lastBooking) : "—"}</div>
+      </div>`;
+    }).join("");
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -8294,7 +8389,25 @@ function onClientNameInput() {
   if (match) {
     if (match.phone && !getValue("clientPhone")) setValue("clientPhone", match.phone);
     if (match.email && !getValue("clientEmail")) setValue("clientEmail", match.email);
+    // Suggest the matched client's affiliate, but only while the admin
+    // hasn't manually touched the field themselves (see the onchange lock
+    // on #jobAffiliateCompanyId) — they can always override or clear it.
+    const affSel = getEl("jobAffiliateCompanyId");
+    if (affSel && affSel.dataset.autofilled !== "false") {
+      affSel.value = match.referring_company_id || "";
+    }
   }
+}
+
+// Populates the Post Job form's Affiliate dropdown from allCompanies,
+// preserving whatever is currently selected.
+function updateJobAffiliateOptions() {
+  const sel = getEl("jobAffiliateCompanyId");
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">No Affiliate / Direct Client</option>' +
+    (allCompanies || []).slice().sort((a, b) => (a.legal_name || "").localeCompare(b.legal_name || ""))
+      .map(c => `<option value="${escapeHtml(c.id)}" ${c.id === cur ? "selected" : ""}>${escapeHtml(c.legal_name || c.dba || "Unnamed")}</option>`).join("");
 }
 
 // ── Bind buttons + init ───────────────────────────────────────────────────────
