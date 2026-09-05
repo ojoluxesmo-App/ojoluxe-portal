@@ -1956,7 +1956,10 @@ function dismissWhatsAppNotify() {
     _waNotifyDismissedJobId = currentJob.id;
     persistWaNotifyDismiss();
   }
-  document.getElementById("waNotifyPanel")?.remove();
+  // querySelectorAll (not getElementById) so this can never leave a stray
+  // duplicate panel behind unresponsive -- getElementById only ever finds
+  // the first match with a given id.
+  document.querySelectorAll("#waNotifyPanel").forEach(function (el) { el.remove(); });
 }
 
 function reopenWhatsAppNotify() {
@@ -2117,6 +2120,18 @@ function openVehicleCheckin() {
 }
 
 init();
+
+// iOS Safari (and other WebKit browsers) very often restore a "reopened"
+// job link from the back-forward cache (bfcache) instead of performing a
+// fresh navigation -- when that happens, none of this file's top-level
+// script (including init()/routeCheckinEntry()) runs again, so the page
+// just shows whatever was on screen when the driver last left it, and the
+// last-4 verification gate never gets a chance to fire. Re-running init()
+// specifically on a bfcache restore (event.persisted) fixes that without
+// affecting a normal fresh page load, where persisted is always false.
+window.addEventListener("pageshow", function (event) {
+  if (event.persisted) init();
+});
 </script>
 <!-- Waybill Modal -->
 <div id="waybillOverlay" class="overlay" onclick="if(event.target===this)closeWaybill()">
