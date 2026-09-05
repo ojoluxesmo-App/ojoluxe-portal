@@ -1771,8 +1771,22 @@ window.addEventListener("unhandledrejection", function(e) {
             <div class="action-row">
               <button class="btn btn-gold" type="button" style="flex:2;" onclick="printFlyer()">🖨️ Print / Save as PDF</button>
               <button class="btn btn-sec" type="button" onclick="downloadFlyerPNG()">⬇ Download PNG</button>
+              <button class="btn btn-sec" type="button" onclick="openFlyerShare()">📤 Share</button>
               <button class="btn btn-sec" type="button" onclick="closeFlyerGenerator()">Close</button>
             </div>
+          </div>
+        </div>
+        <div id="flyer-share-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this) closeFlyerShare()">
+          <div class="form-card" style="max-width:320px;width:90%;position:relative;">
+            <button type="button" onclick="closeFlyerShare()" style="position:absolute;top:6px;right:8px;background:none;border:none;color:#888;font-size:20px;line-height:1;cursor:pointer;padding:4px 8px;">✕</button>
+            <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:14px;">📤 SHARE FLYER</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button class="btn btn-sec" type="button" onclick="shareFlyerViaWhatsApp()">💬 WhatsApp</button>
+              <button class="btn btn-sec" type="button" onclick="shareFlyerViaEmail()">✉️ Email</button>
+              <button class="btn btn-sec" type="button" onclick="shareFlyerPNG()">📤 Share PNG</button>
+              <button class="btn btn-sec" type="button" onclick="copyFlyerLink()">🔗 Copy Registration Link</button>
+            </div>
+            <div id="flyerShareStatus" style="display:none;margin-top:10px;font-size:12px;color:#87e18b;text-align:center;"></div>
           </div>
         </div>
       </div>
@@ -8516,6 +8530,54 @@ function eventFlyerUrl(code) {
   return FLYER_PARTNER_ORIGIN + "/partner?event=" + encodeURIComponent(code);
 }
 
+// Measured directly from the template: the gold QR-box border's outer edge
+// ends at y≈1090, and the icon row (GROW TOGETHER, etc.) starts at y≈1145 --
+// a fixed 55px gap. The caption is laid out top-down inside that exact gap
+// so it can never touch the border above or the icons below.
+const FLYER_CAPTION_TOP = 1096;
+const FLYER_CAPTION_BOTTOM = 1142;
+const FLYER_CAPTION_MAX_WIDTH = 860;
+
+function formatFlyerDate(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Wraps text to at most maxLines, measuring against the canvas's currently
+// set font. Overflow on the last allowed line is ellipsized rather than
+// letting it run past maxWidth.
+function wrapCanvasLines(ctx, text, maxWidth, maxLines) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  for (let i = 0; i < words.length; i++) {
+    const test = current ? current + " " + words[i] : words[i];
+    if (ctx.measureText(test).width <= maxWidth || !current) {
+      current = test;
+    } else {
+      lines.push(current);
+      current = words[i];
+      if (lines.length === maxLines - 1) {
+        // Last allowed line: absorb every remaining word, then ellipsize
+        // only if that combined remainder still overflows maxWidth.
+        let rest = [current].concat(words.slice(i + 1)).join(" ");
+        if (ctx.measureText(rest).width > maxWidth) {
+          while (rest.length > 1 && ctx.measureText(rest + "…").width > maxWidth) {
+            rest = rest.slice(0, -1);
+          }
+          rest = rest.replace(/\s+$/, "") + "…";
+        }
+        lines.push(rest);
+        return lines;
+      }
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 function loadImage(src, crossOrigin) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -8565,18 +8627,38 @@ async function drawFlyer(ev) {
   const y = FLYER_QR_BOX.centerY - side / 2;
   ctx.drawImage(qrImg, x, y, side, side);
 
-  // Small, optional event label in the gap below the QR box -- the master
-  // artwork file itself is never touched, only this runtime copy.
-  if (ev.display_name) {
-    ctx.font = "600 26px 'Space Grotesk', sans-serif";
-    ctx.fillStyle = "#C9A84C";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    let label = ev.display_name + (ev.start_date ? "  ·  " + ev.start_date : "");
-    if (ctx.measureText(label).width > 900) label = ev.display_name; // drop the date if the combined label doesn't fit
-    if (ctx.measureText(label).width <= 900) {
-      ctx.fillText(label, canvas.width / 2, FLYER_QR_BOX.centerY + side / 2 + 34);
-    }
+  // Dedicated caption area in the fixed gap below the QR box (see
+  // FLYER_CAPTION_TOP/BOTTOM above) -- name and date on separate lines,
+  // never overlapping the QR/gold border above or the icon row below. The
+  // master artwork file itself is never touched, only this runtime copy.
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(201,168,76,0.85)"; // subtle gold, not the vivid brand gold used elsewhere
+  ctx.textBaseline = "middle";
+
+  const dateText = formatFlyerDate(ev.start_date);
+  let nameFont = "700 18px 'Space Grotesk', sans-serif";
+  let nameLineHeight = 19;
+  ctx.font = nameFont;
+  let nameLines = ev.display_name ? wrapCanvasLines(ctx, ev.display_name, FLYER_CAPTION_MAX_WIDTH, 2) : [];
+  if (nameLines.length > 1) {
+    // Long name needed 2 lines -- tighten everything slightly so name (x2) +
+    // date (x1) = 3 lines still fits inside the fixed caption gap.
+    nameFont = "700 16px 'Space Grotesk', sans-serif";
+    nameLineHeight = 16;
+    ctx.font = nameFont;
+    nameLines = wrapCanvasLines(ctx, ev.display_name, FLYER_CAPTION_MAX_WIDTH, 2);
+  }
+
+  let captionY = FLYER_CAPTION_TOP;
+  ctx.font = nameFont;
+  nameLines.forEach(line => {
+    ctx.fillText(line, canvas.width / 2, captionY);
+    captionY += nameLineHeight;
+  });
+
+  if (dateText) {
+    ctx.font = nameLines.length > 1 ? "500 13px 'Space Grotesk', sans-serif" : "500 15px 'Space Grotesk', sans-serif";
+    if (captionY <= FLYER_CAPTION_BOTTOM) ctx.fillText(dateText, canvas.width / 2, captionY);
   }
 }
 
@@ -8627,6 +8709,102 @@ function downloadFlyerPNG() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, "image/png");
+}
+
+// ── Flyer share popup ────────────────────────────────────────────────────────
+// Small overlay with 4 share actions, all reading from the same
+// flyerCurrentEvent set by openFlyerGenerator(). No recipient is ever
+// hardcoded for WhatsApp -- opens the share/send flow so the admin picks who
+// to send it to, same convention already used by shareLeadViaWhatsApp() in
+// the Leads tab.
+function flyerShareMessageText(ev) {
+  const dateLine = formatFlyerDate(ev.start_date);
+  return "OJO Luxe Partner Registration\n" + ev.display_name +
+    (dateLine ? "\n" + dateLine : "") +
+    "\n\nRegister here:\n" + eventFlyerUrl(ev.code);
+}
+
+function openFlyerShare() {
+  if (!flyerCurrentEvent) return;
+  const status = getEl("flyerShareStatus");
+  if (status) { status.style.display = "none"; status.textContent = ""; }
+  const overlay = getEl("flyer-share-overlay");
+  if (overlay) overlay.style.display = "flex";
+}
+
+function closeFlyerShare() {
+  const overlay = getEl("flyer-share-overlay");
+  if (overlay) overlay.style.display = "none";
+}
+
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape") return;
+  const overlay = getEl("flyer-share-overlay");
+  if (overlay && overlay.style.display !== "none") closeFlyerShare();
+});
+
+function shareFlyerViaWhatsApp() {
+  if (!flyerCurrentEvent) return;
+  window.open("https://wa.me/?text=" + encodeURIComponent(flyerShareMessageText(flyerCurrentEvent)), "_blank");
+}
+
+function shareFlyerViaEmail() {
+  if (!flyerCurrentEvent) return;
+  const ev = flyerCurrentEvent;
+  const subject = "OJO Luxe Partner Registration - " + ev.display_name;
+  const body = flyerShareMessageText(ev);
+  window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+}
+
+// Uses the already-generated flyer canvas -- no server upload of any kind.
+// Prefers the native device share sheet (file sharing) where supported;
+// falls back to a normal PNG download with a short explanation otherwise.
+function shareFlyerPNG() {
+  const canvas = getEl("flyerCanvas");
+  const status = getEl("flyerShareStatus");
+  if (!canvas || !flyerCurrentEvent) return;
+
+  canvas.toBlob(async function (blob) {
+    if (!blob) { alert("Failed to export PNG."); return; }
+    const filename = "ojo-luxe-flyer-" + flyerCurrentEvent.code.replace(/[^a-z0-9_-]/gi, "_") + ".png";
+    const file = new File([blob], filename, { type: "image/png" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "OJO Luxe Partner Flyer", text: flyerCurrentEvent.display_name });
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return; // admin cancelled the native share sheet -- not a failure
+        // any other error falls through to the download fallback below
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    if (status) {
+      status.textContent = "PNG downloaded — attach it manually in WhatsApp, Email, or Messages.";
+      status.style.display = "block";
+    }
+  }, "image/png");
+}
+
+function copyFlyerLink() {
+  if (!flyerCurrentEvent) return;
+  const link = eventFlyerUrl(flyerCurrentEvent.code);
+  const status = getEl("flyerShareStatus");
+  const showCopied = () => { if (status) { status.textContent = "Copied!"; status.style.display = "block"; } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(showCopied, () => prompt("Copy this link:", link));
+  } else {
+    prompt("Copy this link:", link);
+  }
 }
 
 document.getElementById("saveCompanyBtn")?.addEventListener("click", saveCompany);
