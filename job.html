@@ -918,11 +918,15 @@ function render(job) {
     } else if (status === "Accepted") {
       // Stage B (vehicle check-in) is still pending -- advancing past this
       // point must only ever happen through the verified gate/vehicle
-      // check-in flow (routeCheckinEntry/openVehicleCheckin), never a
-      // generic "next status" button that would skip the last-4 gate and
-      // photo/vehicle capture entirely.
+      // check-in flow, never a generic "next status" button that would
+      // skip the last-4 gate and photo/vehicle capture entirely. This
+      // button re-enters that same flow (gate first, unless already
+      // passed this session) rather than being a status-skip shortcut --
+      // it's a manual way back in if the automatic on-load prompt was
+      // missed or dismissed, not a bypass.
       statusHtml = `
-        <div class="status-cancelled-badge">🚗 Reopen this link to finish your vehicle check-in.</div>
+        <div class="status-cancelled-badge">🚗 Vehicle check-in still needed to complete this job.</div>
+        <button class="status-next" onclick="continueVehicleCheckin()">🚗 Continue Vehicle Check-In</button>
         <button class="status-cancel" onclick="doStatus('Cancelled')">✕ Cancel Job</button>`;
     } else {
       const btnLabel = NEXT_LABEL[status] || ("→ " + next);
@@ -1958,8 +1962,22 @@ function showWhatsAppNotifyPanel(message, force) {
     if (stageIdx > acceptedIdx) return; // past Accepted/Checked-In — no longer relevant
   }
   _lastOfferMessage = message;
-  document.getElementById("waNotifyPanel")?.remove();
+  _removeWaNotifyDom();
   const waUrl = "https://wa.me/?text=" + encodeURIComponent(message);
+
+  // Full-screen backdrop behind the panel: without one, this panel is a
+  // bare position:fixed strip pinned to the very bottom safe-area edge,
+  // where iOS Safari's own dynamically-appearing bottom toolbar can overlap
+  // it and intercept taps before they ever reach our Dismiss button. The
+  // backdrop sits at a lower z-index than the panel, is itself click-to-
+  // dismiss, and (being full-screen rather than edge-pinned) isn't subject
+  // to that same browser-chrome overlap.
+  const backdrop = document.createElement("div");
+  backdrop.id = "waNotifyBackdrop";
+  backdrop.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:499;";
+  backdrop.onclick = dismissWhatsAppNotify;
+  document.body.appendChild(backdrop);
+
   const panel = document.createElement("div");
   panel.id = "waNotifyPanel";
   panel.style.cssText = "position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom, 0px));z-index:500;"
@@ -1976,15 +1994,22 @@ function showWhatsAppNotifyPanel(message, force) {
   document.body.appendChild(panel);
 }
 
+// Shared, side-effect-free DOM cleanup -- used both by an explicit Dismiss
+// and before creating a fresh instance, so repeated
+// check-ins/notifications can never stack duplicate panels or backdrops.
+// querySelectorAll (not getElementById) so it can never leave a stray
+// duplicate behind unresponsive -- getElementById only ever finds the
+// first match for a given id.
+function _removeWaNotifyDom() {
+  document.querySelectorAll("#waNotifyPanel, #waNotifyBackdrop").forEach(function (el) { el.remove(); });
+}
+
 function dismissWhatsAppNotify() {
   if (currentJob) {
     _waNotifyDismissedJobId = currentJob.id;
     persistWaNotifyDismiss();
   }
-  // querySelectorAll (not getElementById) so this can never leave a stray
-  // duplicate panel behind unresponsive -- getElementById only ever finds
-  // the first match with a given id.
-  document.querySelectorAll("#waNotifyPanel").forEach(function (el) { el.remove(); });
+  _removeWaNotifyDom();
 }
 
 function reopenWhatsAppNotify() {
@@ -2110,6 +2135,24 @@ function routeCheckinEntry(job) {
     openVehicleCheckin();
     return;
   }
+  promptCheckinGate(ex);
+}
+
+// Manual re-entry into the same gate/Stage-B flow, for the "Accepted"
+// status-section button -- covers the case where the automatic on-load
+// prompt (above) was missed, cancelled, or the page was left mid-flow.
+// Still requires passing the last-4 gate if not already passed this
+// session, so this is not a bypass, just a way back in.
+function continueVehicleCheckin() {
+  if (!currentJob) return;
+  if (localStorage.getItem("ojo_gate_" + currentJob.id) === "1") {
+    openVehicleCheckin();
+    return;
+  }
+  const rawExtras = currentJob.extras;
+  const ex = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
   promptCheckinGate(ex);
 }
 
