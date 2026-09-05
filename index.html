@@ -1761,6 +1761,34 @@ window.addEventListener("unhandledrejection", function(e) {
           </div>
         </div>
         <div id="eventsList"></div>
+        <div id="flyer-generator-panel" style="display:none;margin-bottom:12px;">
+          <div class="form-card">
+            <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:4px;">🖼️ EVENT FLYER</div>
+            <div id="flyerEventLabel" style="font-size:12px;color:#888;margin-bottom:14px;word-break:break-all;"></div>
+            <div style="text-align:center;background:#0a0a0a;border-radius:8px;padding:10px;margin-bottom:14px;">
+              <canvas id="flyerCanvas" style="max-width:100%;height:auto;border-radius:4px;"></canvas>
+            </div>
+            <div class="action-row">
+              <button class="btn btn-gold" type="button" style="flex:2;" onclick="printFlyer()">🖨️ Print / Save as PDF</button>
+              <button class="btn btn-sec" type="button" onclick="downloadFlyerPNG()">⬇ Download PNG</button>
+              <button class="btn btn-sec" type="button" onclick="openFlyerShare()">📤 Share</button>
+              <button class="btn btn-sec" type="button" onclick="closeFlyerGenerator()">Close</button>
+            </div>
+          </div>
+        </div>
+        <div id="flyer-share-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;" onclick="if(event.target===this) closeFlyerShare()">
+          <div class="form-card" style="max-width:320px;width:90%;position:relative;">
+            <button type="button" onclick="closeFlyerShare()" style="position:absolute;top:6px;right:8px;background:none;border:none;color:#888;font-size:20px;line-height:1;cursor:pointer;padding:4px 8px;">✕</button>
+            <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:14px;">📤 SHARE FLYER</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button class="btn btn-gold" type="button" onclick="shareFlyerPNG()">📤 Share Flyer Image</button>
+              <button class="btn btn-sec" type="button" onclick="shareFlyerViaWhatsApp()">💬 WhatsApp Registration Link</button>
+              <button class="btn btn-sec" type="button" onclick="shareFlyerViaEmail()">✉ Email Registration Link</button>
+              <button class="btn btn-sec" type="button" onclick="copyFlyerLink()">🔗 Copy Registration Link</button>
+            </div>
+            <div id="flyerShareStatus" style="display:none;margin-top:10px;font-size:12px;color:#87e18b;text-align:center;"></div>
+          </div>
+        </div>
       </div>
       <!-- /Events sub-view -->
 
@@ -8474,11 +8502,340 @@ function renderEvents() {
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;">
         <button class="small-btn secondary-btn" onclick="copyEventLink('${ev.code}')">📋 Copy Link</button>
         <button class="small-btn secondary-btn" onclick="toggleEventQR('${ev.code}')">▦ Show QR</button>
+        <button class="small-btn secondary-btn" onclick="openFlyerGenerator('${ev.id}')">🖼️ Generate Flyer</button>
         <button class="small-btn danger-btn" onclick="deleteEvent('${ev.id}')">🗑 Delete Event</button>
       </div>
       <div id="${qrId}" style="display:none;margin-top:10px;"></div>
     </div>`;
   }).join("");
+}
+
+// ── Event Flyer Generator ────────────────────────────────────────────────────
+// Composes the fixed master template (assets/OJO-Luxe-Partner-QR-Template.png)
+// with a programmatically-generated QR code for this event's public
+// registration URL. The template file itself is never modified -- this only
+// draws a copy onto a <canvas> at runtime. Deliberately independent of
+// PARTNER_BASE_URL/PARTNER_PATH (used elsewhere for the Vercel-hosted link);
+// printed flyers always point at the live ojoluxe.com domain.
+const FLYER_TEMPLATE_URL = "/assets/OJO-Luxe-Partner-QR-Template.png";
+const FLYER_PARTNER_ORIGIN = "https://ojoluxe.com";
+// Measured directly from the 1024x1536 template's white placeholder box
+// (rounded rect at x:300-724, y:672-1072); inset a safe margin so the QR
+// (plus its own quiet zone) never touches the gold border or rounded corners.
+const FLYER_QR_BOX = { centerX: 512, centerY: 872, side: 370 };
+
+let flyerCurrentEvent = null;
+
+function eventFlyerUrl(code) {
+  return FLYER_PARTNER_ORIGIN + "/partner?event=" + encodeURIComponent(code);
+}
+
+// Measured directly from the template: the gold QR-box border's outer edge
+// ends at y≈1090, and the icon row (GROW TOGETHER, etc.) starts at y≈1145 --
+// a fixed 55px gap. The caption is laid out top-down inside that exact gap
+// so it can never touch the border above or the icons below.
+const FLYER_CAPTION_TOP = 1096;
+const FLYER_CAPTION_BOTTOM = 1142;
+const FLYER_CAPTION_MAX_WIDTH = 860;
+
+function formatFlyerDate(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Wraps text to at most maxLines, measuring against the canvas's currently
+// set font. Overflow on the last allowed line is ellipsized rather than
+// letting it run past maxWidth.
+function wrapCanvasLines(ctx, text, maxWidth, maxLines) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  for (let i = 0; i < words.length; i++) {
+    const test = current ? current + " " + words[i] : words[i];
+    if (ctx.measureText(test).width <= maxWidth || !current) {
+      current = test;
+    } else {
+      lines.push(current);
+      current = words[i];
+      if (lines.length === maxLines - 1) {
+        // Last allowed line: absorb every remaining word, then ellipsize
+        // only if that combined remainder still overflows maxWidth.
+        let rest = [current].concat(words.slice(i + 1)).join(" ");
+        if (ctx.measureText(rest).width > maxWidth) {
+          while (rest.length > 1 && ctx.measureText(rest + "…").width > maxWidth) {
+            rest = rest.slice(0, -1);
+          }
+          rest = rest.replace(/\s+$/, "") + "…";
+        }
+        lines.push(rest);
+        return lines;
+      }
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function loadImage(src, crossOrigin) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    if (crossOrigin) img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not load " + src));
+    img.src = src;
+  });
+}
+
+async function drawFlyer(ev) {
+  const canvas = getEl("flyerCanvas");
+  if (!canvas) return;
+
+  let templateImg;
+  try {
+    templateImg = await loadImage(FLYER_TEMPLATE_URL);
+  } catch (err) {
+    alert("Failed to load the flyer template image (" + FLYER_TEMPLATE_URL + "). Check that the file exists and try again.");
+    return;
+  }
+
+  canvas.width = templateImg.naturalWidth || 1024;
+  canvas.height = templateImg.naturalHeight || 1536;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+
+  // Same QR generation service already used by the existing "Show QR"
+  // feature (toggleEventQR(), via api.qrserver.com) -- reused here instead
+  // of a second QR mechanism. That service sends
+  // Access-Control-Allow-Origin: * (verified), so loading it with
+  // crossOrigin set does not taint the canvas -- PNG export and print both
+  // keep working. size=800 renders well above the 370px draw target for a
+  // crisp downscale; qzone=1 keeps an explicit quiet zone on top of the
+  // template's own white padding around the box.
+  const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=800x800&qzone=1&data=" + encodeURIComponent(eventFlyerUrl(ev.code));
+  let qrImg;
+  try {
+    qrImg = await loadImage(qrUrl, true);
+  } catch (err) {
+    alert("Failed to load the QR code image. Check your connection and try again.");
+    return;
+  }
+
+  const side = FLYER_QR_BOX.side;
+  const x = FLYER_QR_BOX.centerX - side / 2;
+  const y = FLYER_QR_BOX.centerY - side / 2;
+  ctx.drawImage(qrImg, x, y, side, side);
+
+  // Dedicated caption area in the fixed gap below the QR box (see
+  // FLYER_CAPTION_TOP/BOTTOM above) -- name and date on separate lines,
+  // never overlapping the QR/gold border above or the icon row below. The
+  // master artwork file itself is never touched, only this runtime copy.
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(201,168,76,0.85)"; // subtle gold, not the vivid brand gold used elsewhere
+  ctx.textBaseline = "middle";
+
+  const dateText = formatFlyerDate(ev.start_date);
+  let nameFont = "700 18px 'Space Grotesk', sans-serif";
+  let nameLineHeight = 19;
+  ctx.font = nameFont;
+  let nameLines = ev.display_name ? wrapCanvasLines(ctx, ev.display_name, FLYER_CAPTION_MAX_WIDTH, 2) : [];
+  if (nameLines.length > 1) {
+    // Long name needed 2 lines -- tighten everything slightly so name (x2) +
+    // date (x1) = 3 lines still fits inside the fixed caption gap.
+    nameFont = "700 16px 'Space Grotesk', sans-serif";
+    nameLineHeight = 16;
+    ctx.font = nameFont;
+    nameLines = wrapCanvasLines(ctx, ev.display_name, FLYER_CAPTION_MAX_WIDTH, 2);
+  }
+
+  let captionY = FLYER_CAPTION_TOP;
+  ctx.font = nameFont;
+  nameLines.forEach(line => {
+    ctx.fillText(line, canvas.width / 2, captionY);
+    captionY += nameLineHeight;
+  });
+
+  if (dateText) {
+    ctx.font = nameLines.length > 1 ? "500 13px 'Space Grotesk', sans-serif" : "500 15px 'Space Grotesk', sans-serif";
+    if (captionY <= FLYER_CAPTION_BOTTOM) ctx.fillText(dateText, canvas.width / 2, captionY);
+  }
+}
+
+async function openFlyerGenerator(eventId) {
+  const ev = allEvents.find(e => e.id === eventId);
+  if (!ev) return;
+  flyerCurrentEvent = ev;
+
+  const panel = getEl("flyer-generator-panel");
+  const label = getEl("flyerEventLabel");
+  if (label) label.textContent = ev.display_name + " — " + eventFlyerUrl(ev.code);
+  if (panel) { panel.style.display = "block"; panel.scrollIntoView({ behavior: "smooth", block: "start" }); }
+
+  await drawFlyer(ev);
+}
+
+function closeFlyerGenerator() {
+  const panel = getEl("flyer-generator-panel");
+  if (panel) panel.style.display = "none";
+  flyerCurrentEvent = null;
+}
+
+// Dedicated print document containing ONLY the flattened flyer image -- no
+// admin UI/CRM chrome of any kind. The previous version scaled the image to
+// width:100% with height:auto: on a portrait Letter/A4 page (narrower than
+// tall), a 1024x1536 image scaled to full page WIDTH computes to a height
+// taller than the page itself, so the excess spilled onto a 2nd page.
+// Constraining the <img> to both 100% width AND 100% height (with
+// object-fit:contain preserving aspect ratio) guarantees it always fits
+// within exactly one page, at any paper size the print dialog uses
+// (size:auto defers to whatever the user picks -- Letter, A4, either
+// orientation) -- never a fixed physical size we'd have to guess.
+function printFlyer() {
+  const canvas = getEl("flyerCanvas");
+  if (!canvas) return;
+  const dataUrl = canvas.toDataURL("image/png");
+  const w = window.open("", "_blank");
+  if (!w) { alert("Please allow pop-ups to print the flyer."); return; }
+  w.document.write(
+    '<!DOCTYPE html><html><head><title>OJO Luxe Partner Flyer</title>' +
+    '<style>' +
+      '@page{size:auto;margin:0;}' +
+      'html,body{margin:0;padding:0;height:100%;}' +
+      'img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;page-break-inside:avoid;break-inside:avoid;}' +
+    '</style></head>' +
+    '<body><img src="' + dataUrl + '" onload="window.print()"></body></html>'
+  );
+  w.document.close();
+}
+
+// e.g. "Indonesia Travel Jakarta Event" -> "OJO-Luxe-Indonesia-Travel-Jakarta-Event.png"
+function flyerFilename(ev) {
+  const slug = (ev.display_name || ev.code).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return "OJO-Luxe-" + (slug || ev.code) + ".png";
+}
+
+function downloadFlyerPNG() {
+  const canvas = getEl("flyerCanvas");
+  if (!canvas || !flyerCurrentEvent) return;
+  canvas.toBlob(function (blob) {
+    if (!blob) { alert("Failed to export PNG."); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = flyerFilename(flyerCurrentEvent);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
+// ── Flyer share popup ────────────────────────────────────────────────────────
+// Small overlay with 4 share actions, all reading from the same
+// flyerCurrentEvent set by openFlyerGenerator(). No recipient is ever
+// hardcoded for WhatsApp -- opens the share/send flow so the admin picks who
+// to send it to, same convention already used by shareLeadViaWhatsApp() in
+// the Leads tab.
+function flyerShareMessageText(ev) {
+  const dateLine = formatFlyerDate(ev.start_date);
+  return "OJO Luxe Partner Registration\n" + ev.display_name +
+    (dateLine ? "\n" + dateLine : "") +
+    "\n\nRegister here:\n" + eventFlyerUrl(ev.code);
+}
+
+function openFlyerShare() {
+  if (!flyerCurrentEvent) return;
+  const status = getEl("flyerShareStatus");
+  if (status) { status.style.display = "none"; status.textContent = ""; }
+  const overlay = getEl("flyer-share-overlay");
+  if (overlay) overlay.style.display = "flex";
+}
+
+function closeFlyerShare() {
+  const overlay = getEl("flyer-share-overlay");
+  if (overlay) overlay.style.display = "none";
+}
+
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape") return;
+  const overlay = getEl("flyer-share-overlay");
+  if (overlay && overlay.style.display !== "none") closeFlyerShare();
+});
+
+function shareFlyerViaWhatsApp() {
+  if (!flyerCurrentEvent) return;
+  window.open("https://wa.me/?text=" + encodeURIComponent(flyerShareMessageText(flyerCurrentEvent)), "_blank");
+}
+
+function shareFlyerViaEmail() {
+  if (!flyerCurrentEvent) return;
+  const ev = flyerCurrentEvent;
+  const subject = "OJO Luxe Partner Registration - " + ev.display_name;
+  const body = flyerShareMessageText(ev);
+  window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+}
+
+// The actual generated flyer PNG -- not just the registration link. Uses
+// the already-composed flyer canvas, no server upload of any kind. Prefers
+// the native OS share sheet (file sharing) where supported -- this is what
+// lets WhatsApp/Mail/Messages/AirDrop etc. receive the real image as an
+// attachment, which a plain wa.me/mailto link can never do. Falls back to a
+// normal PNG download with a clear explanation on desktop browsers that
+// don't support sharing files.
+async function shareFlyerPNG() {
+  const canvas = getEl("flyerCanvas");
+  const status = getEl("flyerShareStatus");
+  if (!canvas || !flyerCurrentEvent) return;
+  const ev = flyerCurrentEvent;
+
+  canvas.toBlob(async function (blob) {
+    if (!blob) { alert("Failed to export PNG."); return; }
+    const filename = flyerFilename(ev);
+    const file = new File([blob], filename, { type: "image/png" });
+    const dateLine = formatFlyerDate(ev.start_date);
+    const shareText = ev.display_name + (dateLine ? "\n" + dateLine : "") +
+      "\n\nScan the QR code on the attached flyer to register.";
+
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "OJO Luxe Partner Registration", text: shareText });
+        return;
+      } catch (err) {
+        if (err && err.name === "AbortError") return; // admin cancelled the native share sheet -- not a failure
+        // any other error falls through to the download fallback below
+      }
+    }
+
+    // Desktop / unsupported browser fallback: download the actual PNG file
+    // (never just the link) and point the admin at the two link-only
+    // buttons below if they also want to send a quick message.
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    if (status) {
+      status.textContent = "Flyer downloaded. Please attach the PNG manually in WhatsApp or Email — or use \"WhatsApp Registration Link\" / \"Email Registration Link\" below to send just the link.";
+      status.style.display = "block";
+    }
+  }, "image/png");
+}
+
+function copyFlyerLink() {
+  if (!flyerCurrentEvent) return;
+  const link = eventFlyerUrl(flyerCurrentEvent.code);
+  const status = getEl("flyerShareStatus");
+  const showCopied = () => { if (status) { status.textContent = "Copied!"; status.style.display = "block"; } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(showCopied, () => prompt("Copy this link:", link));
+  } else {
+    prompt("Copy this link:", link);
+  }
 }
 
 document.getElementById("saveCompanyBtn")?.addEventListener("click", saveCompany);
