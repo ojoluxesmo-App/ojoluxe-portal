@@ -8681,6 +8681,16 @@ function closeFlyerGenerator() {
   flyerCurrentEvent = null;
 }
 
+// Dedicated print document containing ONLY the flattened flyer image -- no
+// admin UI/CRM chrome of any kind. The previous version scaled the image to
+// width:100% with height:auto: on a portrait Letter/A4 page (narrower than
+// tall), a 1024x1536 image scaled to full page WIDTH computes to a height
+// taller than the page itself, so the excess spilled onto a 2nd page.
+// Constraining the <img> to both 100% width AND 100% height (with
+// object-fit:contain preserving aspect ratio) guarantees it always fits
+// within exactly one page, at any paper size the print dialog uses
+// (size:auto defers to whatever the user picks -- Letter, A4, either
+// orientation) -- never a fixed physical size we'd have to guess.
 function printFlyer() {
   const canvas = getEl("flyerCanvas");
   if (!canvas) return;
@@ -8688,9 +8698,13 @@ function printFlyer() {
   const w = window.open("", "_blank");
   if (!w) { alert("Please allow pop-ups to print the flyer."); return; }
   w.document.write(
-    '<html><head><title>OJO Luxe Partner Flyer</title>' +
-    '<style>@page{margin:0;}html,body{margin:0;padding:0;}img{width:100%;height:auto;display:block;}</style>' +
-    '</head><body><img src="' + dataUrl + '" onload="window.print()"></body></html>'
+    '<!DOCTYPE html><html><head><title>OJO Luxe Partner Flyer</title>' +
+    '<style>' +
+      '@page{size:auto;margin:0;}' +
+      'html,body{margin:0;padding:0;height:100%;}' +
+      'img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;page-break-inside:avoid;break-inside:avoid;}' +
+    '</style></head>' +
+    '<body><img src="' + dataUrl + '" onload="window.print()"></body></html>'
   );
   w.document.close();
 }
