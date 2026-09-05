@@ -1685,6 +1685,14 @@ window.addEventListener("unhandledrejection", function(e) {
           <button class="btn btn-sec btn-auto" type="button" onclick="exportLeadsCSV()" style="height:38px;">⬇ Export CSV</button>
           <button class="btn btn-sec btn-auto" type="button" onclick="forgetAdminToken()" style="height:38px;">🔓 Forget Admin Token</button>
         </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#ccc;cursor:pointer;">
+            <input type="checkbox" id="selectAllFilteredLeads" onchange="toggleSelectAllFiltered(this.checked)" style="width:16px;height:16px;">
+            Select All Filtered
+          </label>
+          <span id="leadSelectionCount" style="font-size:12px;color:#888;">0 selected</span>
+          <button class="btn btn-gold btn-auto" type="button" id="composeEmailBtn" onclick="openComposeEmail()" style="height:34px;" disabled>✉️ Compose Email</button>
+        </div>
         <div id="leadsSummaryCards" style="margin-bottom:12px;"></div>
         <div id="lead-edit-form" style="display:none;margin-bottom:12px;">
           <div class="form-card">
@@ -1701,6 +1709,21 @@ window.addEventListener("unhandledrejection", function(e) {
             <div class="action-row">
               <button class="btn btn-gold" type="button" style="flex:2;" onclick="saveEditLead()">Save</button>
               <button class="btn btn-sec" type="button" onclick="closeEditLead()">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div id="compose-email-panel" style="display:none;margin-bottom:12px;">
+          <div class="form-card">
+            <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:4px;">✉️ COMPOSE EMAIL</div>
+            <div id="composeRecipientCount" style="font-size:12px;color:#888;margin-bottom:14px;"></div>
+            <div class="field"><label>Subject</label><input id="composeSubject" placeholder="Subject"></div>
+            <div class="field"><label>Body</label><textarea id="composeBody" rows="6" placeholder="Message..."></textarea></div>
+            <div class="field"><label>Link (optional — brochure/product URL)</label><input id="composeLink" placeholder="https://..."></div>
+            <div id="composeError" style="display:none;font-size:12px;color:#ff8b8b;margin-bottom:10px;"></div>
+            <div id="composeResult" style="display:none;font-size:12px;margin-bottom:10px;"></div>
+            <div class="action-row">
+              <button class="btn btn-gold" type="button" style="flex:2;" id="composeSendBtn" onclick="submitBroadcastEmail()">Send Email</button>
+              <button class="btn btn-sec" type="button" onclick="closeComposeEmail()">Cancel</button>
             </div>
           </div>
         </div>
@@ -7803,6 +7826,8 @@ function setAffiliatesSubTab(tab) {
 // and the anon key that's already public in this file shouldn't gain read
 // access to it either.
 let allLeads = [];
+let selectedLeadIds = new Set();
+let currentFilteredLeadIds = [];
 
 let leadsLoadError = null;
 
@@ -7870,6 +7895,10 @@ function renderLeads() {
     (!fEvent || r.event_source === fEvent) &&
     (!fCountry || (r.leads && r.leads.country) === fCountry)
   );
+  // Drives Select All Filtered / the selected-count indicator below -- does
+  // not change what rows/filters compute, just records which lead ids are
+  // currently visible.
+  currentFilteredLeadIds = [...new Set(rows.map(r => r.leads && r.leads.id).filter(Boolean))];
 
   // Summary cards for the currently filtered Event/Country selection.
   // "New" vs "Repeat" is based on each lead's TOTAL registration count across
@@ -7910,12 +7939,16 @@ function renderLeads() {
     rows.map(r => {
       const lead = r.leads || {};
       const when = r.registered_at ? new Date(r.registered_at).toLocaleString() : "-";
+      const isSelected = !!(lead.id && selectedLeadIds.has(lead.id));
       return `
       <div class="card" style="margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-          <div>
-            <div style="font-size:15px;font-weight:800;color:#f4f4f4;">${escapeHtml(lead.full_name || "-")}</div>
-            <div style="font-size:12px;color:#888;">${escapeHtml(lead.company_name || "-")}${lead.position ? " · " + escapeHtml(lead.position) : ""}</div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <input type="checkbox" ${isSelected ? "checked" : ""} ${lead.id ? "" : "disabled"} onchange="toggleLeadSelection('${lead.id}', this.checked)" style="margin-top:4px;width:16px;height:16px;flex-shrink:0;">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:#f4f4f4;">${escapeHtml(lead.full_name || "-")}</div>
+              <div style="font-size:12px;color:#888;">${escapeHtml(lead.company_name || "-")}${lead.position ? " · " + escapeHtml(lead.position) : ""}</div>
+            </div>
           </div>
           ${r.event_source ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #333;color:#f2cf63;background:#111;white-space:nowrap;">${escapeHtml(r.event_source)}</span>` : ""}
         </div>
@@ -7927,12 +7960,16 @@ function renderLeads() {
         </div>
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;">
           <button class="small-btn btn-edit" onclick="openEditLead('${lead.id}')">✏️ Edit</button>
+          <button class="small-btn secondary-btn" onclick="shareLeadViaEmail('${r.id}')" title="Share this contact internally by email">✉ Email</button>
+          <button class="small-btn secondary-btn" onclick="shareLeadViaWhatsApp('${r.id}')" title="Share this contact internally by WhatsApp">💬 WhatsApp</button>
           <button class="small-btn btn-promote" onclick="convertLeadToCompany('${lead.id}')">🏢 Make Affiliate</button>
           <button class="small-btn danger-btn" onclick="deleteLeadEventRow('${r.id}')">🗑 Delete Registration</button>
           <button class="small-btn btn-danger-severe" onclick="deleteLeadCompletely('${lead.id}')">⚠️ Delete Lead Completely</button>
         </div>
       </div>`;
     }).join("");
+
+  updateLeadSelectionBar();
 }
 
 // ── Lead edit / delete ───────────────────────────────────────────────────────
@@ -8068,6 +8105,47 @@ function convertLeadToCompany(leadId) {
   getEl("companyFormCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+// ── Individual contact sharing (client-side only, no backend) ───────────────
+// For sharing one partner's contact details internally to OJO Luxe sales
+// staff for follow-up -- NOT for emailing/WhatsApping the partner directly.
+// Never alters lead data; purely builds a text block and hands it to the
+// browser's own mailto:/wa.me share flow.
+function buildLeadContactBlock(lead, eventSource) {
+  const lines = [
+    `Full Name: ${lead.full_name || "-"}`,
+    `Company: ${lead.company_name || "-"}`,
+    `Position: ${lead.position || "-"}`,
+    `Email: ${lead.email || "-"}`,
+    `Phone / WhatsApp: ${lead.phone || "-"}`,
+  ];
+  if (eventSource) lines.push(`Event Source: ${eventSource}`);
+  return lines.join("\n");
+}
+
+// Opens the admin's own default mail client via a mailto: link, prefilled
+// with subject + body -- never sends automatically, and never talks to any
+// backend. Looks up by lead_events row id (not lead id), matching
+// deleteLeadEventRow()'s pattern, so the correct event_source for THIS
+// registration is used.
+function shareLeadViaEmail(eventRowId) {
+  const row = allLeads.find(r => r.id === eventRowId);
+  const lead = row && row.leads;
+  if (!lead) return;
+  const block = buildLeadContactBlock(lead, row.event_source);
+  const subject = `OJO Luxe Partner Contact - ${lead.full_name || ""}`;
+  window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(block)}`;
+}
+
+// Opens WhatsApp's own share flow (wa.me with no phone number) so the admin
+// picks the sales contact/group themselves -- no recipient is hardcoded.
+function shareLeadViaWhatsApp(eventRowId) {
+  const row = allLeads.find(r => r.id === eventRowId);
+  const lead = row && row.leads;
+  if (!lead) return;
+  const block = buildLeadContactBlock(lead, row.event_source);
+  window.open(`https://wa.me/?text=${encodeURIComponent(block)}`, "_blank");
+}
+
 // ── Export CSV ────────────────────────────────────────────────────────────────
 function exportLeadsCSV() {
   const eventSel = getEl("leadFilterEvent"), countrySel = getEl("leadFilterCountry");
@@ -8097,6 +8175,134 @@ function exportLeadsCSV() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ── Broadcast email compose ───────────────────────────────────────────────────
+// Selection lives in a plain Set of lead ids (selectedLeadIds), independent of
+// allLeads/rows, so it survives a renderLeads() re-render (e.g. a filter
+// change) without any change to the existing filtering logic in
+// renderLeads()/exportLeadsCSV() above.
+function toggleLeadSelection(leadId, checked) {
+  if (!leadId) return;
+  if (checked) selectedLeadIds.add(leadId); else selectedLeadIds.delete(leadId);
+  updateLeadSelectionBar();
+}
+
+// Selects/deselects only the leads currently visible under the active
+// Event/Country filters (currentFilteredLeadIds, populated by renderLeads()) —
+// leads hidden by the current filter are never touched. Re-renders the list
+// so every visible checkbox reflects the new state (checkboxes are plain
+// HTML strings, not bound DOM nodes, so a re-render is how their `checked`
+// state gets updated in bulk).
+function toggleSelectAllFiltered(checked) {
+  currentFilteredLeadIds.forEach(id => { if (checked) selectedLeadIds.add(id); else selectedLeadIds.delete(id); });
+  renderLeads();
+}
+
+function updateLeadSelectionBar() {
+  const count = selectedLeadIds.size;
+  const countEl = getEl("leadSelectionCount");
+  if (countEl) countEl.textContent = `${count} selected`;
+  const composeBtn = getEl("composeEmailBtn");
+  if (composeBtn) composeBtn.disabled = count === 0;
+  const selectAllEl = getEl("selectAllFilteredLeads");
+  if (selectAllEl) {
+    selectAllEl.checked = currentFilteredLeadIds.length > 0 && currentFilteredLeadIds.every(id => selectedLeadIds.has(id));
+  }
+}
+
+function openComposeEmail() {
+  if (!selectedLeadIds.size) return;
+  const countEl = getEl("composeRecipientCount");
+  if (countEl) countEl.textContent = `Sending to ${selectedLeadIds.size} selected lead${selectedLeadIds.size === 1 ? "" : "s"}.`;
+  const errEl = getEl("composeError"); if (errEl) errEl.style.display = "none";
+  const resEl = getEl("composeResult"); if (resEl) { resEl.style.display = "none"; resEl.innerHTML = ""; }
+  const panel = getEl("compose-email-panel");
+  if (panel) { panel.style.display = "block"; panel.scrollIntoView({ behavior: "smooth", block: "start" }); }
+}
+
+function closeComposeEmail() {
+  const panel = getEl("compose-email-panel");
+  if (panel) panel.style.display = "none";
+}
+
+function showComposeError(msg) {
+  const errEl = getEl("composeError");
+  if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; }
+}
+
+async function submitBroadcastEmail() {
+  const errEl = getEl("composeError"); if (errEl) errEl.style.display = "none";
+  const resEl = getEl("composeResult"); if (resEl) { resEl.style.display = "none"; resEl.innerHTML = ""; }
+
+  const subject = (getValue("composeSubject") || "").trim();
+  const bodyText = (getValue("composeBody") || "").trim();
+  const link = (getValue("composeLink") || "").trim();
+
+  if (!subject) return showComposeError("Subject is required.");
+  if (!bodyText) return showComposeError("Body is required.");
+  if (link && !/^https?:\/\//i.test(link)) return showComposeError("Link must start with http:// or https://.");
+  if (!selectedLeadIds.size) return showComposeError("No recipients selected.");
+
+  const btn = getEl("composeSendBtn");
+  if (btn) {
+    if (btn.disabled) return; // already sending -- ignore a double-click
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+  }
+
+  try {
+    const r = await fetch("/api/broadcast-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin-token": getAdminToken() },
+      body: JSON.stringify({
+        lead_ids: [...selectedLeadIds],
+        subject,
+        body: bodyText,
+        link: link || undefined,
+      }),
+    });
+
+    if (r.status === 401 || r.status === 403) {
+      showComposeError("Admin authorization failed — re-enter your admin token in the Leads tab.");
+      return;
+    }
+
+    const data = await r.json().catch(() => ({}));
+
+    if (r.status === 400) {
+      showComposeError(data.error || "Invalid request.");
+      return;
+    }
+    if (!r.ok) {
+      showComposeError("Send failed. Please try again.");
+      return;
+    }
+
+    if (resEl) {
+      const failed = (data.results || []).filter(x => x.status === "failed");
+      let html = `<div style="color:${data.failure_count ? "#f2cf63" : "#87e18b"};font-weight:700;">` +
+        (data.failure_count ? "⚠️ Broadcast sent with some failures" : "✅ Broadcast sent") +
+        `</div>` +
+        `<div style="color:#888;margin-top:4px;">Recipients: ${data.recipient_count} · Sent: ${data.success_count} · Failed: ${data.failure_count}</div>`;
+      if (failed.length) {
+        html += `<div style="margin-top:6px;color:#ff8b8b;">` +
+          failed.map(f => `${escapeHtml(f.email)} — ${escapeHtml(f.error_message || "failed")}`).join("<br>") +
+          `</div>`;
+      }
+      resEl.innerHTML = html;
+      resEl.style.display = "block";
+    }
+
+    // Clear the selection only after a completed send; the Event/Country
+    // filters themselves are left exactly as the admin set them.
+    selectedLeadIds.clear();
+    renderLeads();
+  } catch (err) {
+    showComposeError("Send failed. Please try again.");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Send Email"; }
+  }
 }
 
 // ── Event Manager ─────────────────────────────────────────────────────────────
