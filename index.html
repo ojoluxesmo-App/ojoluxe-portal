@@ -1781,9 +1781,9 @@ window.addEventListener("unhandledrejection", function(e) {
             <button type="button" onclick="closeFlyerShare()" style="position:absolute;top:6px;right:8px;background:none;border:none;color:#888;font-size:20px;line-height:1;cursor:pointer;padding:4px 8px;">✕</button>
             <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:14px;">📤 SHARE FLYER</div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <button class="btn btn-sec" type="button" onclick="shareFlyerViaWhatsApp()">💬 WhatsApp</button>
-              <button class="btn btn-sec" type="button" onclick="shareFlyerViaEmail()">✉️ Email</button>
-              <button class="btn btn-sec" type="button" onclick="shareFlyerPNG()">📤 Share PNG</button>
+              <button class="btn btn-gold" type="button" onclick="shareFlyerPNG()">📤 Share Flyer Image</button>
+              <button class="btn btn-sec" type="button" onclick="shareFlyerViaWhatsApp()">💬 WhatsApp Registration Link</button>
+              <button class="btn btn-sec" type="button" onclick="shareFlyerViaEmail()">✉ Email Registration Link</button>
               <button class="btn btn-sec" type="button" onclick="copyFlyerLink()">🔗 Copy Registration Link</button>
             </div>
             <div id="flyerShareStatus" style="display:none;margin-top:10px;font-size:12px;color:#87e18b;text-align:center;"></div>
@@ -8709,6 +8709,12 @@ function printFlyer() {
   w.document.close();
 }
 
+// e.g. "Indonesia Travel Jakarta Event" -> "OJO-Luxe-Indonesia-Travel-Jakarta-Event.png"
+function flyerFilename(ev) {
+  const slug = (ev.display_name || ev.code).replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return "OJO-Luxe-" + (slug || ev.code) + ".png";
+}
+
 function downloadFlyerPNG() {
   const canvas = getEl("flyerCanvas");
   if (!canvas || !flyerCurrentEvent) return;
@@ -8717,7 +8723,7 @@ function downloadFlyerPNG() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "ojo-luxe-flyer-" + flyerCurrentEvent.code.replace(/[^a-z0-9_-]/gi, "_") + ".png";
+    a.download = flyerFilename(flyerCurrentEvent);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -8770,22 +8776,30 @@ function shareFlyerViaEmail() {
   window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
 }
 
-// Uses the already-generated flyer canvas -- no server upload of any kind.
-// Prefers the native device share sheet (file sharing) where supported;
-// falls back to a normal PNG download with a short explanation otherwise.
-function shareFlyerPNG() {
+// The actual generated flyer PNG -- not just the registration link. Uses
+// the already-composed flyer canvas, no server upload of any kind. Prefers
+// the native OS share sheet (file sharing) where supported -- this is what
+// lets WhatsApp/Mail/Messages/AirDrop etc. receive the real image as an
+// attachment, which a plain wa.me/mailto link can never do. Falls back to a
+// normal PNG download with a clear explanation on desktop browsers that
+// don't support sharing files.
+async function shareFlyerPNG() {
   const canvas = getEl("flyerCanvas");
   const status = getEl("flyerShareStatus");
   if (!canvas || !flyerCurrentEvent) return;
+  const ev = flyerCurrentEvent;
 
   canvas.toBlob(async function (blob) {
     if (!blob) { alert("Failed to export PNG."); return; }
-    const filename = "ojo-luxe-flyer-" + flyerCurrentEvent.code.replace(/[^a-z0-9_-]/gi, "_") + ".png";
+    const filename = flyerFilename(ev);
     const file = new File([blob], filename, { type: "image/png" });
+    const dateLine = formatFlyerDate(ev.start_date);
+    const shareText = ev.display_name + (dateLine ? "\n" + dateLine : "") +
+      "\n\nScan the QR code on the attached flyer to register.";
 
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: "OJO Luxe Partner Flyer", text: flyerCurrentEvent.display_name });
+        await navigator.share({ files: [file], title: "OJO Luxe Partner Registration", text: shareText });
         return;
       } catch (err) {
         if (err && err.name === "AbortError") return; // admin cancelled the native share sheet -- not a failure
@@ -8793,6 +8807,9 @@ function shareFlyerPNG() {
       }
     }
 
+    // Desktop / unsupported browser fallback: download the actual PNG file
+    // (never just the link) and point the admin at the two link-only
+    // buttons below if they also want to send a quick message.
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -8803,7 +8820,7 @@ function shareFlyerPNG() {
     URL.revokeObjectURL(url);
 
     if (status) {
-      status.textContent = "PNG downloaded — attach it manually in WhatsApp, Email, or Messages.";
+      status.textContent = "Flyer downloaded. Please attach the PNG manually in WhatsApp or Email — or use \"WhatsApp Registration Link\" / \"Email Registration Link\" below to send just the link.";
       status.style.display = "block";
     }
   }, "image/png");
