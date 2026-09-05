@@ -6,7 +6,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>OJO Luxe Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
 <style>
 :root {
@@ -8517,9 +8516,10 @@ function eventFlyerUrl(code) {
   return FLYER_PARTNER_ORIGIN + "/partner?event=" + encodeURIComponent(code);
 }
 
-function loadImage(src) {
+function loadImage(src, crossOrigin) {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    if (crossOrigin) img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("Could not load " + src));
     img.src = src;
@@ -8529,46 +8529,54 @@ function loadImage(src) {
 async function drawFlyer(ev) {
   const canvas = getEl("flyerCanvas");
   if (!canvas) return;
-  if (typeof QRCode === "undefined") { alert("QR library failed to load -- check your connection and try again."); return; }
 
+  let templateImg;
   try {
-    const templateImg = await loadImage(FLYER_TEMPLATE_URL);
-    canvas.width = templateImg.naturalWidth || 1024;
-    canvas.height = templateImg.naturalHeight || 1536;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
-
-    // Generated on its own offscreen canvas -- programmatic, black on white,
-    // no logo. margin keeps a visible quiet zone even before the template's
-    // own white padding around the placeholder box.
-    const qrCanvas = document.createElement("canvas");
-    await QRCode.toCanvas(qrCanvas, eventFlyerUrl(ev.code), {
-      width: 700,
-      margin: 2,
-      color: { dark: "#000000", light: "#ffffff" },
-      errorCorrectionLevel: "M",
-    });
-
-    const side = FLYER_QR_BOX.side;
-    const x = FLYER_QR_BOX.centerX - side / 2;
-    const y = FLYER_QR_BOX.centerY - side / 2;
-    ctx.drawImage(qrCanvas, x, y, side, side);
-
-    // Small, optional event label in the gap below the QR box -- the master
-    // artwork file itself is never touched, only this runtime copy.
-    if (ev.display_name) {
-      ctx.font = "600 26px 'Space Grotesk', sans-serif";
-      ctx.fillStyle = "#C9A84C";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      let label = ev.display_name + (ev.start_date ? "  ·  " + ev.start_date : "");
-      if (ctx.measureText(label).width > 900) label = ev.display_name; // drop the date if the combined label doesn't fit
-      if (ctx.measureText(label).width <= 900) {
-        ctx.fillText(label, canvas.width / 2, FLYER_QR_BOX.centerY + side / 2 + 34);
-      }
-    }
+    templateImg = await loadImage(FLYER_TEMPLATE_URL);
   } catch (err) {
-    alert("Failed to generate flyer preview: " + err.message);
+    alert("Failed to load the flyer template image (" + FLYER_TEMPLATE_URL + "). Check that the file exists and try again.");
+    return;
+  }
+
+  canvas.width = templateImg.naturalWidth || 1024;
+  canvas.height = templateImg.naturalHeight || 1536;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+
+  // Same QR generation service already used by the existing "Show QR"
+  // feature (toggleEventQR(), via api.qrserver.com) -- reused here instead
+  // of a second QR mechanism. That service sends
+  // Access-Control-Allow-Origin: * (verified), so loading it with
+  // crossOrigin set does not taint the canvas -- PNG export and print both
+  // keep working. size=800 renders well above the 370px draw target for a
+  // crisp downscale; qzone=1 keeps an explicit quiet zone on top of the
+  // template's own white padding around the box.
+  const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=800x800&qzone=1&data=" + encodeURIComponent(eventFlyerUrl(ev.code));
+  let qrImg;
+  try {
+    qrImg = await loadImage(qrUrl, true);
+  } catch (err) {
+    alert("Failed to load the QR code image. Check your connection and try again.");
+    return;
+  }
+
+  const side = FLYER_QR_BOX.side;
+  const x = FLYER_QR_BOX.centerX - side / 2;
+  const y = FLYER_QR_BOX.centerY - side / 2;
+  ctx.drawImage(qrImg, x, y, side, side);
+
+  // Small, optional event label in the gap below the QR box -- the master
+  // artwork file itself is never touched, only this runtime copy.
+  if (ev.display_name) {
+    ctx.font = "600 26px 'Space Grotesk', sans-serif";
+    ctx.fillStyle = "#C9A84C";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    let label = ev.display_name + (ev.start_date ? "  ·  " + ev.start_date : "");
+    if (ctx.measureText(label).width > 900) label = ev.display_name; // drop the date if the combined label doesn't fit
+    if (ctx.measureText(label).width <= 900) {
+      ctx.fillText(label, canvas.width / 2, FLYER_QR_BOX.centerY + side / 2 + 34);
+    }
   }
 }
 
