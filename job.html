@@ -512,7 +512,7 @@
 <div id="checkinOverlay" class="checkin-overlay" style="display:none;">
   <div class="checkin-sheet">
     <div class="checkin-title">🚗 Driver Check-In</div>
-    <div class="checkin-sub">Please confirm your details before accepting this job.</div>
+    <div class="checkin-sub">Please confirm your name and phone to accept this job.</div>
     <div id="checkinAdminNote" style="display:none;" class="checkin-note">
       <div class="checkin-note-label">📋 Dispatcher Note</div>
       <div class="checkin-note-text" id="checkinNoteText"></div>
@@ -525,6 +525,14 @@
       <div class="checkin-label">Phone Number</div>
       <input class="checkin-input" id="ci_phone" type="tel" placeholder="e.g. (310) 555-0123" autocomplete="off">
     </div>
+    <button class="checkin-confirm" onclick="confirmAccept()">✅ Confirm & Accept Job</button>
+  </div>
+</div>
+
+<div id="vehicleCheckinOverlay" class="checkin-overlay" style="display:none;">
+  <div class="checkin-sheet">
+    <div class="checkin-title">🚗 Vehicle Check-In</div>
+    <div class="checkin-sub">Confirm your vehicle details and add photos to finish checking in.</div>
     <div class="checkin-field">
       <div class="checkin-label">Vehicle Type</div>
       <input class="checkin-input" id="ci_vehicle" type="text" placeholder="e.g. Black Cadillac Escalade" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
@@ -564,7 +572,7 @@
         </div>
       </div>
     </div>
-    <button class="checkin-confirm" onclick="confirmCheckin()">✅ Confirm & Accept Job</button>
+    <button class="checkin-confirm" onclick="confirmVehicleCheckin()">✅ Confirm & Accept Job</button>
     <div style="font-size:10px;color:#444;text-align:center;margin-top:8px;">All photos are required to complete check-in.</div>
   </div>
 </div>
@@ -1240,11 +1248,13 @@ async function confirmCancel() {
 function openCheckin() {
   const overlay = document.getElementById("checkinOverlay");
   // Pre-fill if driver already accepted before (name/phone captured at claim)
-  const nameEl    = document.getElementById("ci_name");
-  const phoneEl   = document.getElementById("ci_phone");
-  const vehicleEl = document.getElementById("ci_vehicle");
+  const nameEl  = document.getElementById("ci_name");
+  const phoneEl = document.getElementById("ci_phone");
   if (currentJob.assigned_driver && currentJob.assigned_driver !== "Unassigned" && currentJob.assigned_driver !== CLAIM_PENDING_LABEL) {
     nameEl.value = currentJob.assigned_driver;
+    nameEl.readOnly = true;
+  } else {
+    nameEl.readOnly = false;
   }
   const rawExtras = currentJob.extras;
   const ex = (typeof rawExtras === "string")
@@ -1265,7 +1275,7 @@ function openCheckin() {
   const waPanel = document.getElementById("waNotifyPanel");
   if (waPanel) { waPanel.style.top = "12px"; waPanel.style.bottom = "auto"; }
   overlay.style.display = "flex";
-  setTimeout(() => (nameEl.value ? vehicleEl : nameEl).focus(), 300);
+  setTimeout(() => (nameEl.value ? phoneEl : nameEl).focus(), 300);
 }
 
 // ── Photo uploads ─────────────────────────────────────────────────────────────
@@ -1600,15 +1610,57 @@ function _stopSelfieStream() {
   if (v) v.srcObject = null;
 }
 
-async function confirmCheckin() {
-  const name    = document.getElementById("ci_name").value.trim();
-  const phone   = document.getElementById("ci_phone").value.trim();
+async function confirmAccept() {
+  const name  = document.getElementById("ci_name").value.trim();
+  const phone = document.getElementById("ci_phone").value.trim();
+
+  if (!name)  { alert("Please enter your name."); document.getElementById("ci_name").focus(); return; }
+  if (!phone) { alert("Please enter your phone number."); document.getElementById("ci_phone").focus(); return; }
+
+  const btn = document.querySelector("#checkinOverlay .checkin-confirm");
+  btn.textContent = "⏳ Saving..."; btn.disabled = true;
+
+  const extras = Object.assign({}, currentJob.extras || {}, {
+    driver_checkin_name: name,
+    driver_checkin_phone: phone,
+    driver_phone_last4:  phone.replace(/\D/g, "").slice(-4),
+    driver_unverified:   true
+  });
+  // Normally check-in only adds confirmation data and advances status — it
+  // must NOT touch assigned_driver, so a late opener of this link can't take
+  // over a job that's already Assigned to someone else. The one exception is
+  // the claim-lock flow: assigned_driver is still the CLAIM_PENDING_LABEL
+  // placeholder set by claimOfferJob(), and this submit is what attaches the
+  // driver's real name to it for the first time.
+  const isClaimFlow = currentJob.assigned_driver === CLAIM_PENDING_LABEL;
+  const patch = isClaimFlow ? { extras, assigned_driver: name } : { extras };
+
+  await applyStatus(_pendingStatus || "Accepted", patch);
+  _pendingStatus = null;
+
+  document.getElementById("checkinOverlay").style.display = "none";
+  btn.textContent = "✅ Confirm & Accept Job"; btn.disabled = false;
+
+  // Grant local ownership on every successful Stage A completion — not just
+  // the offer-claim path — so the isMine gate resolves for legacy/
+  // admin-assigned jobs too, not only jobs claimed off the offer board.
+  localStorage.setItem("ojo_claim_" + currentJob.id, name);
+  render(currentJob);
+
+  if (isClaimFlow && currentJob.extras && currentJob.extras.driver_checkin_name === name) {
+    // applyStatus() already rendered with the real name in assigned_driver,
+    // but localStorage still held the placeholder at that moment — the
+    // unconditional render() above now covers that too. Only the offer-claim
+    // WhatsApp broadcast stays gated to this branch.
+    showWhatsAppNotifyPanel(buildOfferAcceptedMessage(currentJob, name));
+  }
+}
+
+async function confirmVehicleCheckin() {
   const vehicle = document.getElementById("ci_vehicle").value.trim().toUpperCase();
   const color   = document.getElementById("ci_color").value.trim().toUpperCase();
   const plate   = document.getElementById("ci_plate").value.trim().toUpperCase();
 
-  if (!name)    { alert("Please enter your name."); document.getElementById("ci_name").focus(); return; }
-  if (!phone)   { alert("Please enter your phone number."); document.getElementById("ci_phone").focus(); return; }
   if (!vehicle) { alert("Please enter your vehicle type."); document.getElementById("ci_vehicle").focus(); return; }
   if (!color)   { alert("Please enter your vehicle color."); document.getElementById("ci_color").focus(); return; }
   if (!plate)   { alert("Please enter your license plate."); document.getElementById("ci_plate").focus(); return; }
@@ -1623,7 +1675,7 @@ async function confirmCheckin() {
   if (!photoInterior) { alert("Please take the car interior photo before continuing."); return; }
   if (!photoSelfie)   { alert("Please take your selfie verification photo before continuing."); return; }
 
-  const btn = document.querySelector(".checkin-confirm");
+  const btn = document.querySelector("#vehicleCheckinOverlay .checkin-confirm");
   btn.textContent = "⏳ Uploading photos..."; btn.disabled = true;
   // Keep overlay open while uploading so file inputs stay accessible
 
@@ -1642,41 +1694,20 @@ async function confirmCheckin() {
   }
 
   // Now close overlay and reset button
-  document.getElementById("checkinOverlay").style.display = "none";
+  document.getElementById("vehicleCheckinOverlay").style.display = "none";
   btn.textContent = "✅ Confirm & Accept Job"; btn.disabled = false;
 
   const extras = Object.assign({}, currentJob.extras || {}, {
     driver_vehicle:      vehicle,
     driver_color:        color,
     driver_checkin_plate: plate,
-    driver_checkin_name: name,
-    driver_checkin_phone: phone,
-    driver_phone_last4:  phone.replace(/\D/g, "").slice(-4),
     photo_vehicle_front: urlVehicle  || null,
     photo_car_interior:  urlInterior || null,
     photo_selfie:        urlSelfie   || null,
     driver_unverified:   false
   });
-  // Normally check-in only adds confirmation data and advances status — it
-  // must NOT touch assigned_driver, so a late opener of this link can't take
-  // over a job that's already Assigned to someone else. The one exception is
-  // the claim-lock flow: assigned_driver is still the CLAIM_PENDING_LABEL
-  // placeholder set by claimOfferJob(), and this submit is what attaches the
-  // driver's real name to it for the first time.
-  const isClaimFlow = currentJob.assigned_driver === CLAIM_PENDING_LABEL;
-  const patch = isClaimFlow ? { extras, assigned_driver: name } : { extras };
 
-  await applyStatus(_pendingStatus || "Accepted", patch);
-  _pendingStatus = null;
-
-  if (isClaimFlow && currentJob.extras && currentJob.extras.driver_checkin_name === name) {
-    // applyStatus() already rendered with the real name in assigned_driver,
-    // but localStorage still held the placeholder at that moment — update it
-    // and re-render so the "isMine" gate doesn't briefly show the locked panel.
-    localStorage.setItem("ojo_claim_" + currentJob.id, name);
-    render(currentJob);
-    showWhatsAppNotifyPanel(buildOfferAcceptedMessage(currentJob, name));
-  }
+  await applyStatus("Checked In", { extras });
 }
 
 // ── Check-out / Expense Capture ──────────────────────────────────────────────
@@ -1794,7 +1825,7 @@ async function confirmCheckout() {
 // Locks the row the instant the button is tapped, using a placeholder driver
 // name — no prompts, no delay, so a 2nd/3rd tap gets blocked almost
 // immediately. The real name is captured once, in the check-in form that
-// opens right after (see confirmCheckin), which then replaces the
+// opens right after (see confirmAccept), which then replaces the
 // placeholder in assigned_driver.
 //
 // The WHERE clause is the race lock, not an assigned_driver equality check
@@ -1925,7 +1956,10 @@ function dismissWhatsAppNotify() {
     _waNotifyDismissedJobId = currentJob.id;
     persistWaNotifyDismiss();
   }
-  document.getElementById("waNotifyPanel")?.remove();
+  // querySelectorAll (not getElementById) so this can never leave a stray
+  // duplicate panel behind unresponsive -- getElementById only ever finds
+  // the first match with a given id.
+  document.querySelectorAll("#waNotifyPanel").forEach(function (el) { el.remove(); });
 }
 
 function reopenWhatsAppNotify() {
@@ -2016,14 +2050,88 @@ async function init() {
       document.getElementById("headerRef").textContent = "Not Found";
       return;
     }
-    render(job);
+    routeCheckinEntry(job);
   } catch(e) {
     renderError("Could not load job: " + e.message);
     document.getElementById("headerRef").textContent = "Error";
   }
 }
 
+// ── Check-in entry routing (last-4 gate) ─────────────────────────────────────
+// Runs once, on load, after the job is fetched — never from internal
+// re-renders. Routes by phone/plate presence in extras, not driver_unverified
+// (unreliable: false on never-checked-in jobs, null on others) or status
+// (Stage B keeps status "Accepted", so status alone can't tell done vs not-done).
+function routeCheckinEntry(job) {
+  render(job);
+
+  const status = job.status || "Offer";
+  if (status !== "Assigned" && status !== "Accepted") return;
+  if (!job.assigned_driver) return; // open/unclaimed — leave the offer-board atomic-claim button alone
+
+  const rawExtras = job.extras;
+  const ex = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+
+  const hasPhone = !!(ex.driver_phone_last4 || ex.driver_checkin_phone);
+  const hasPlate = !!ex.driver_checkin_plate;
+
+  if (hasPlate) return;                       // fully checked in — normal view, no gate
+  if (!hasPhone) { openCheckin(); return; }    // no phone on file — Stage A
+
+  // Phone present, no plate — gate, then Vehicle sheet
+  if (localStorage.getItem("ojo_gate_" + job.id) === "1") {
+    openVehicleCheckin();
+    return;
+  }
+  promptCheckinGate(ex);
+}
+
+function promptCheckinGate(ex) {
+  const typed = (prompt("Enter the last 4 digits of the phone number used to accept this job:") || "").trim();
+  if (!typed) return;
+  const storedLast4 = ex.driver_phone_last4 ||
+    (ex.driver_checkin_phone ? ex.driver_checkin_phone.replace(/\D/g, "").slice(-4) : "");
+  const typedDigits = typed.replace(/\D/g, "");
+  const phoneMatch = typedDigits.length >= 4 && !!storedLast4 && typedDigits.slice(-4) === storedLast4;
+  if (phoneMatch) {
+    localStorage.setItem("ojo_claim_" + currentJob.id, currentJob.assigned_driver);
+    localStorage.setItem("ojo_gate_" + currentJob.id, "1");
+    render(currentJob);
+    openVehicleCheckin();
+  } else {
+    alert("That doesn't match the phone number on file for this job. Please contact your dispatcher.");
+  }
+}
+
+function openVehicleCheckin() {
+  const overlay = document.getElementById("vehicleCheckinOverlay");
+  const rawExtras = currentJob.extras;
+  const ex = (typeof rawExtras === "string")
+    ? (() => { try { return JSON.parse(rawExtras || "{}"); } catch(e) { return {}; } })()
+    : (rawExtras && typeof rawExtras === "object" ? rawExtras : {});
+  const vehicleEl = document.getElementById("ci_vehicle");
+  const colorEl   = document.getElementById("ci_color");
+  if (ex.driver_vehicle) vehicleEl.value = ex.driver_vehicle;
+  if (ex.driver_color)   colorEl.value   = ex.driver_color;
+  overlay.style.display = "flex";
+  setTimeout(() => vehicleEl.focus(), 300);
+}
+
 init();
+
+// iOS Safari (and other WebKit browsers) very often restore a "reopened"
+// job link from the back-forward cache (bfcache) instead of performing a
+// fresh navigation -- when that happens, none of this file's top-level
+// script (including init()/routeCheckinEntry()) runs again, so the page
+// just shows whatever was on screen when the driver last left it, and the
+// last-4 verification gate never gets a chance to fire. Re-running init()
+// specifically on a bfcache restore (event.persisted) fixes that without
+// affecting a normal fresh page load, where persisted is always false.
+window.addEventListener("pageshow", function (event) {
+  if (event.persisted) init();
+});
 </script>
 <!-- Waybill Modal -->
 <div id="waybillOverlay" class="overlay" onclick="if(event.target===this)closeWaybill()">
