@@ -785,8 +785,8 @@ function calculateDriverNet(job) {
 }
 
 // ── Status flow (exact copy from portal) ─────────────────────────────────────
-const STATUS_FLOW = ["Offer","Assigned","Accepted","Heading to Pickup","Arrived","In Progress","Completed"];
-const OPEN_STATUSES = ["Offer","Assigned","Accepted","Heading to Pickup","Arrived","In Progress"];
+const STATUS_FLOW = ["Offer","Assigned","Accepted","Checked In","Heading to Pickup","Arrived","In Progress","Completed"];
+const OPEN_STATUSES = ["Offer","Assigned","Accepted","Checked In","Heading to Pickup","Arrived","In Progress"];
 
 function getNextStatus(current) {
   const idx = STATUS_FLOW.indexOf(current);
@@ -796,7 +796,7 @@ function getNextStatus(current) {
 
 const NEXT_LABEL = {
   "Assigned":         "✅ Accept Job",
-  "Accepted":         "🚗 Heading to Pickup",
+  "Checked In":       "🚗 Heading to Pickup",
   "Heading to Pickup":"📍 Arrived at Pickup",
   "Arrived":          "▶️ Start Job",
   "In Progress":      "✅ Complete Job",
@@ -915,6 +915,15 @@ function render(job) {
       statusHtml = `
         <div class="status-cancelled-badge">🔒 This job has already been accepted by ${escapeHtml(driverDisplayName(job))}. Thank you!</div>
         <button onclick="promptClaimRecovery()" style="width:100%;margin-top:8px;padding:9px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;">I am the assigned driver</button>${debugHtml}`;
+    } else if (status === "Accepted") {
+      // Stage B (vehicle check-in) is still pending -- advancing past this
+      // point must only ever happen through the verified gate/vehicle
+      // check-in flow (routeCheckinEntry/openVehicleCheckin), never a
+      // generic "next status" button that would skip the last-4 gate and
+      // photo/vehicle capture entirely.
+      statusHtml = `
+        <div class="status-cancelled-badge">🚗 Reopen this link to finish your vehicle check-in.</div>
+        <button class="status-cancel" onclick="doStatus('Cancelled')">✕ Cancel Job</button>`;
     } else {
       const btnLabel = NEXT_LABEL[status] || ("→ " + next);
       statusHtml = `
@@ -1169,6 +1178,15 @@ function doStatus(newStatus) {
   }
   if (newStatus === "Completed") {
     openCheckout();
+    return;
+  }
+  // Hard gate, not just a hidden button: vehicle check-in (Stage B) must
+  // complete through its own verified flow before the job can advance any
+  // further. Blocking here means this can't be bypassed even if invoked
+  // directly (e.g. from the console) rather than through the rendered UI.
+  // Cancelled is already handled above, so Cancel still works normally.
+  if (currentJob.status === "Accepted") {
+    alert("Please finish your vehicle check-in before continuing.");
     return;
   }
   const label = `Move to "${newStatus}"?`;
@@ -1617,13 +1635,20 @@ async function confirmAccept() {
   if (!name)  { alert("Please enter your name."); document.getElementById("ci_name").focus(); return; }
   if (!phone) { alert("Please enter your phone number."); document.getElementById("ci_phone").focus(); return; }
 
+  const phoneDigits = phone.replace(/\D/g, "");
+  if (phoneDigits.length < 4) {
+    alert("Please enter a valid phone number (at least 4 digits) -- it's needed to verify you if you reopen this link later.");
+    document.getElementById("ci_phone").focus();
+    return;
+  }
+
   const btn = document.querySelector("#checkinOverlay .checkin-confirm");
   btn.textContent = "⏳ Saving..."; btn.disabled = true;
 
   const extras = Object.assign({}, currentJob.extras || {}, {
     driver_checkin_name: name,
     driver_checkin_phone: phone,
-    driver_phone_last4:  phone.replace(/\D/g, "").slice(-4),
+    driver_phone_last4:  phoneDigits.slice(-4),
     driver_unverified:   true
   });
   // Normally check-in only adds confirmation data and advances status — it
