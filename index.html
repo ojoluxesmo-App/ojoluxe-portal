@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>OJO Luxe Portal</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
 <style>
 :root {
@@ -1761,6 +1762,20 @@ window.addEventListener("unhandledrejection", function(e) {
           </div>
         </div>
         <div id="eventsList"></div>
+        <div id="flyer-generator-panel" style="display:none;margin-bottom:12px;">
+          <div class="form-card">
+            <div style="font-size:13px;font-weight:800;color:var(--gold);margin-bottom:4px;">🖼️ EVENT FLYER</div>
+            <div id="flyerEventLabel" style="font-size:12px;color:#888;margin-bottom:14px;word-break:break-all;"></div>
+            <div style="text-align:center;background:#0a0a0a;border-radius:8px;padding:10px;margin-bottom:14px;">
+              <canvas id="flyerCanvas" style="max-width:100%;height:auto;border-radius:4px;"></canvas>
+            </div>
+            <div class="action-row">
+              <button class="btn btn-gold" type="button" style="flex:2;" onclick="printFlyer()">🖨️ Print / Save as PDF</button>
+              <button class="btn btn-sec" type="button" onclick="downloadFlyerPNG()">⬇ Download PNG</button>
+              <button class="btn btn-sec" type="button" onclick="closeFlyerGenerator()">Close</button>
+            </div>
+          </div>
+        </div>
       </div>
       <!-- /Events sub-view -->
 
@@ -8474,11 +8489,136 @@ function renderEvents() {
       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;">
         <button class="small-btn secondary-btn" onclick="copyEventLink('${ev.code}')">📋 Copy Link</button>
         <button class="small-btn secondary-btn" onclick="toggleEventQR('${ev.code}')">▦ Show QR</button>
+        <button class="small-btn secondary-btn" onclick="openFlyerGenerator('${ev.id}')">🖼️ Generate Flyer</button>
         <button class="small-btn danger-btn" onclick="deleteEvent('${ev.id}')">🗑 Delete Event</button>
       </div>
       <div id="${qrId}" style="display:none;margin-top:10px;"></div>
     </div>`;
   }).join("");
+}
+
+// ── Event Flyer Generator ────────────────────────────────────────────────────
+// Composes the fixed master template (assets/OJO-Luxe-Partner-QR-Template.png)
+// with a programmatically-generated QR code for this event's public
+// registration URL. The template file itself is never modified -- this only
+// draws a copy onto a <canvas> at runtime. Deliberately independent of
+// PARTNER_BASE_URL/PARTNER_PATH (used elsewhere for the Vercel-hosted link);
+// printed flyers always point at the live ojoluxe.com domain.
+const FLYER_TEMPLATE_URL = "/assets/OJO-Luxe-Partner-QR-Template.png";
+const FLYER_PARTNER_ORIGIN = "https://ojoluxe.com";
+// Measured directly from the 1024x1536 template's white placeholder box
+// (rounded rect at x:300-724, y:672-1072); inset a safe margin so the QR
+// (plus its own quiet zone) never touches the gold border or rounded corners.
+const FLYER_QR_BOX = { centerX: 512, centerY: 872, side: 370 };
+
+let flyerCurrentEvent = null;
+
+function eventFlyerUrl(code) {
+  return FLYER_PARTNER_ORIGIN + "/partner?event=" + encodeURIComponent(code);
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not load " + src));
+    img.src = src;
+  });
+}
+
+async function drawFlyer(ev) {
+  const canvas = getEl("flyerCanvas");
+  if (!canvas) return;
+  if (typeof QRCode === "undefined") { alert("QR library failed to load -- check your connection and try again."); return; }
+
+  try {
+    const templateImg = await loadImage(FLYER_TEMPLATE_URL);
+    canvas.width = templateImg.naturalWidth || 1024;
+    canvas.height = templateImg.naturalHeight || 1536;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+
+    // Generated on its own offscreen canvas -- programmatic, black on white,
+    // no logo. margin keeps a visible quiet zone even before the template's
+    // own white padding around the placeholder box.
+    const qrCanvas = document.createElement("canvas");
+    await QRCode.toCanvas(qrCanvas, eventFlyerUrl(ev.code), {
+      width: 700,
+      margin: 2,
+      color: { dark: "#000000", light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    });
+
+    const side = FLYER_QR_BOX.side;
+    const x = FLYER_QR_BOX.centerX - side / 2;
+    const y = FLYER_QR_BOX.centerY - side / 2;
+    ctx.drawImage(qrCanvas, x, y, side, side);
+
+    // Small, optional event label in the gap below the QR box -- the master
+    // artwork file itself is never touched, only this runtime copy.
+    if (ev.display_name) {
+      ctx.font = "600 26px 'Space Grotesk', sans-serif";
+      ctx.fillStyle = "#C9A84C";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      let label = ev.display_name + (ev.start_date ? "  ·  " + ev.start_date : "");
+      if (ctx.measureText(label).width > 900) label = ev.display_name; // drop the date if the combined label doesn't fit
+      if (ctx.measureText(label).width <= 900) {
+        ctx.fillText(label, canvas.width / 2, FLYER_QR_BOX.centerY + side / 2 + 34);
+      }
+    }
+  } catch (err) {
+    alert("Failed to generate flyer preview: " + err.message);
+  }
+}
+
+async function openFlyerGenerator(eventId) {
+  const ev = allEvents.find(e => e.id === eventId);
+  if (!ev) return;
+  flyerCurrentEvent = ev;
+
+  const panel = getEl("flyer-generator-panel");
+  const label = getEl("flyerEventLabel");
+  if (label) label.textContent = ev.display_name + " — " + eventFlyerUrl(ev.code);
+  if (panel) { panel.style.display = "block"; panel.scrollIntoView({ behavior: "smooth", block: "start" }); }
+
+  await drawFlyer(ev);
+}
+
+function closeFlyerGenerator() {
+  const panel = getEl("flyer-generator-panel");
+  if (panel) panel.style.display = "none";
+  flyerCurrentEvent = null;
+}
+
+function printFlyer() {
+  const canvas = getEl("flyerCanvas");
+  if (!canvas) return;
+  const dataUrl = canvas.toDataURL("image/png");
+  const w = window.open("", "_blank");
+  if (!w) { alert("Please allow pop-ups to print the flyer."); return; }
+  w.document.write(
+    '<html><head><title>OJO Luxe Partner Flyer</title>' +
+    '<style>@page{margin:0;}html,body{margin:0;padding:0;}img{width:100%;height:auto;display:block;}</style>' +
+    '</head><body><img src="' + dataUrl + '" onload="window.print()"></body></html>'
+  );
+  w.document.close();
+}
+
+function downloadFlyerPNG() {
+  const canvas = getEl("flyerCanvas");
+  if (!canvas || !flyerCurrentEvent) return;
+  canvas.toBlob(function (blob) {
+    if (!blob) { alert("Failed to export PNG."); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ojo-luxe-flyer-" + flyerCurrentEvent.code.replace(/[^a-z0-9_-]/gi, "_") + ".png";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, "image/png");
 }
 
 document.getElementById("saveCompanyBtn")?.addEventListener("click", saveCompany);
