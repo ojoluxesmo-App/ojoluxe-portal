@@ -16,6 +16,7 @@
 // Body: { lead_ids: string[], subject: string, body: string, link?: string }
 
 import { timingSafeEqual } from "crypto";
+import { buildOjoLuxeEmailFooterHtml, buildOjoLuxeEmailFooterText } from "../lib/email-footer.js";
 
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 
@@ -72,22 +73,63 @@ function sanitizeErrorMessage(reason) {
 }
 
 // Same Resend integration / env vars as api/trade-show-lead.js's
-// sendThankYouEmail() -- that file and its templates are untouched.
+// sendThankYouEmail(). Both now share the branded footer from
+// lib/email-footer.js -- registration/CRM/attribution logic in
+// trade-show-lead.js is untouched.
 async function sendBroadcastEmail(to, subject, bodyText, link) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.PARTNER_EMAIL_FROM;
   if (!apiKey || !from) return { sent: false, reason: "email not configured" };
 
-  const text = link ? `${bodyText}\n\n${link}` : bodyText;
+  const textLines = [bodyText];
+  if (link) textLines.push("", link);
+  textLines.push("", buildOjoLuxeEmailFooterText());
+  const text = textLines.join("\n");
   const htmlBody = escapeHtml(bodyText).replace(/\n/g, "<br>");
   const htmlLink = link
     ? `<p style="margin-top:20px;"><a href="${escapeHtml(link)}" style="color:#C9A84C;">${escapeHtml(link)}</a></p>`
     : "";
-  const html =
-    `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1A1712;line-height:1.5;">` +
-    `<div>${htmlBody}</div>${htmlLink}` +
-    `<p style="margin-top:24px;font-size:11px;color:#6B6150;">OJO Luxe &middot; Premium Transportation Services</p>` +
-    `</div>`;
+  // Same 600px-centered, media-query responsive shell as the partner
+  // thank-you email (api/trade-show-lead.js), so a wide desktop client
+  // doesn't stretch the message/footer edge-to-edge of the reading pane.
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+  table,td{mso-table-lspace:0pt;mso-table-rspace:0pt;}
+  body{margin:0;padding:0;width:100%!important;background:#f4f4f4;}
+  @media only screen and (max-width:600px){
+    .ojo-container{width:100%!important;}
+    .ojo-px{padding-left:24px!important;padding-right:24px!important;}
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f4;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;">
+<tr><td align="center" style="padding:32px 12px;">
+<!--[if mso]>
+<table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0"><tr><td>
+<![endif]-->
+<table role="presentation" class="ojo-container" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#ffffff;">
+  <tr>
+    <td class="ojo-px" style="padding:32px 40px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1A1712;line-height:1.5;">
+      <div>${htmlBody}</div>${htmlLink}
+    </td>
+  </tr>
+  <tr>
+    <td>
+      ${buildOjoLuxeEmailFooterHtml()}
+    </td>
+  </tr>
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td></tr>
+</table>
+</body>
+</html>`;
 
   try {
     const r = await fetch("https://api.resend.com/emails", {
