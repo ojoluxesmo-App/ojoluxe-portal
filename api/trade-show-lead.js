@@ -8,16 +8,148 @@ const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const DUPLICATE_COOLDOWN_MS = 60 * 1000; // block rapid double-submits of the same email
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ID_TEMPLATE = {
-  subject: "Terima kasih telah mendaftar - OJO Luxe",
-  body: (name) =>
-    `Halo ${name},\n\nTerima kasih telah mendaftar sebagai mitra OJO Luxe. Tim kami akan segera menghubungi Anda.\n\nSalam,\nOJO Luxe`,
+
+// Branded HTML thank-you email. Design-only upgrade from the old plain-text
+// send — registration/CRM/attribution logic elsewhere in this file is
+// untouched. English only — no dual-language support.
+const LOGO_URL = "https://ojoluxe-portal.vercel.app/assets/ojo-luxe-logo.png";
+const SITE_URL = "https://ojoluxe.com";
+const SUPPORT_PHONE_TEL = "+13104066692";
+const SUPPORT_PHONE_DISPLAY = "+1 (310) 406-6692";
+const EN_SUBJECT = "Welcome to the OJO Luxe Partner Network";
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+const COPY = {
+  heading: "Thank You for Connecting With OJO Luxe",
+  greeting: (name) => `Hi ${name},`,
+  intro: "Thank you for registering with OJO Luxe.",
+  eventLabel: "Registered through:",
+  whatsNext: "What Happens Next",
+  steps: [
+    "Our team will review your registration.",
+    "We may contact you to learn more about your business.",
+    "Approved partners can refer clients to OJO Luxe.",
+    "We look forward to building a long-term relationship together.",
+  ],
+  cta: "Visit OJO Luxe",
 };
-const EN_TEMPLATE = {
-  subject: "Thank you for registering - OJO Luxe",
-  body: (name) =>
-    `Hi ${name},\n\nThank you for registering as an OJO Luxe partner. Our team will be in touch shortly.\n\nBest,\nOJO Luxe`,
-};
+
+function buildThankYouHtml(name, eventName) {
+  const c = COPY;
+  const safeName = escapeHtml(name);
+  const eventRow = eventName
+    ? `<p style="margin:0 0 16px 0;"><strong style="color:#0C0B09;">${c.eventLabel}</strong> ${escapeHtml(eventName)}</p>`
+    : "";
+  const stepsHtml = c.steps.map((s, i) => `
+        <tr>
+          <td width="30" valign="top" style="padding:6px 10px 6px 0;">
+            <span style="display:inline-block;width:22px;height:22px;line-height:22px;border-radius:50%;background:#C9A84C;color:#0C0B09;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;text-align:center;">${i + 1}</span>
+          </td>
+          <td valign="top" style="padding:6px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#333333;">${escapeHtml(s)}</td>
+        </tr>`).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>${c.heading}</title>
+<style>
+  body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+  table,td{mso-table-lspace:0pt;mso-table-rspace:0pt;}
+  img{-ms-interpolation-mode:bicubic;border:0;height:auto;line-height:100%;outline:none;text-decoration:none;}
+  body{margin:0;padding:0;width:100%!important;background:#f4f4f4;}
+  @media only screen and (max-width:600px){
+    .ojo-container{width:100%!important;}
+    .ojo-px{padding-left:24px!important;padding-right:24px!important;}
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f4;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;">
+<tr><td align="center" style="padding:32px 12px;">
+<!--[if mso]>
+<table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0"><tr><td>
+<![endif]-->
+<table role="presentation" class="ojo-container" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#ffffff;">
+  <tr>
+    <td align="center" style="background:#ffffff;padding:36px 24px 28px 24px;">
+      <img src="${LOGO_URL}" width="200" alt="OJO Luxe" style="display:block;width:200px;max-width:60%;height:auto;">
+    </td>
+  </tr>
+  <tr>
+    <td class="ojo-px" style="padding:40px 40px 0 40px;background:#ffffff;">
+      <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.3;color:#0C0B09;text-align:center;">${c.heading}</h1>
+    </td>
+  </tr>
+  <tr>
+    <td class="ojo-px" style="padding:24px 40px 0 40px;background:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#333333;">
+      <p style="margin:0 0 16px 0;">${c.greeting(safeName)}</p>
+      <p style="margin:0 0 16px 0;">${c.intro}</p>
+      ${eventRow}
+    </td>
+  </tr>
+  <tr>
+    <td class="ojo-px" style="padding:8px 40px 0 40px;background:#ffffff;">
+      <h2 style="margin:0 0 14px 0;font-family:Georgia,'Times New Roman',serif;font-size:17px;color:#0C0B09;border-bottom:2px solid #C9A84C;padding-bottom:8px;">${c.whatsNext}</h2>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        ${stepsHtml}
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" class="ojo-px" style="padding:32px 40px 40px 40px;background:#ffffff;">
+      <table role="presentation" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center" style="border-radius:4px;background:#C9A84C;">
+            <a href="${SITE_URL}" style="display:inline-block;padding:14px 34px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;letter-spacing:1px;color:#0C0B09;text-decoration:none;">${c.cta.toUpperCase()}</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" style="background:#0C0B09;padding:28px 24px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.8;color:#cccccc;">
+      <p style="margin:0;color:#F0E8D5;font-weight:bold;letter-spacing:0.5px;">OJO LUXE LLC</p>
+      <p style="margin:2px 0 16px 0;">Open Journey On Demand Luxury</p>
+      <p style="margin:0 0 6px 0;">&#127760;&nbsp;<a href="${SITE_URL}" style="color:#C9A84C;text-decoration:none;">www.ojoluxe.com</a></p>
+      <p style="margin:0 0 6px 0;">&#9993;&nbsp;<a href="mailto:info@ojoluxe.com" style="color:#C9A84C;text-decoration:none;">info@ojoluxe.com</a></p>
+      <p style="margin:0 0 6px 0;">&#128222;&nbsp;<a href="tel:${SUPPORT_PHONE_TEL}" style="color:#C9A84C;text-decoration:none;">${SUPPORT_PHONE_DISPLAY}</a></p>
+      <p style="margin:0;">&#128248;&nbsp;<a href="https://instagram.com/ojo.luxe" style="color:#C9A84C;text-decoration:none;">@ojo.luxe</a></p>
+    </td>
+  </tr>
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function buildThankYouText(name, eventName) {
+  const c = COPY;
+  const lines = [c.greeting(name), "", c.intro];
+  if (eventName) lines.push(`${c.eventLabel} ${eventName}`);
+  lines.push("", c.whatsNext.toUpperCase());
+  c.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`));
+  lines.push(
+    "",
+    `${c.cta}: ${SITE_URL}`,
+    "",
+    "--",
+    "OJO LUXE LLC",
+    "Open Journey On Demand Luxury",
+    "Website: ojoluxe.com",
+    "Email: info@ojoluxe.com",
+    `Phone: ${SUPPORT_PHONE_DISPLAY}`,
+    "Instagram: @ojo.luxe"
+  );
+  return lines.join("\n");
+}
 
 function sbHeaders(serviceKey, extra) {
   return { "Content-Type": "application/json", "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}`, ...extra };
@@ -29,17 +161,19 @@ function setCors(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-async function sendThankYouEmail(to, name, lang) {
+async function sendThankYouEmail(to, name, eventName) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.PARTNER_EMAIL_FROM;
   if (!apiKey || !from) return { sent: false, reason: "email not configured" };
 
-  const tpl = lang === "id" ? ID_TEMPLATE : EN_TEMPLATE;
+  const subject = EN_SUBJECT;
+  const html = buildThankYouHtml(name, eventName);
+  const text = buildThankYouText(name, eventName);
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify({ from, to, subject: tpl.subject, text: tpl.body(name) }),
+      body: JSON.stringify({ from, to, subject, html, text }),
     });
     if (!r.ok) { const data = await r.json().catch(() => ({})); return { sent: false, reason: data.message || `send failed (${r.status})` }; }
     return { sent: true };
@@ -128,7 +262,20 @@ export default async function handler(req, res) {
     }
 
     const lang = country.toLowerCase() === "indonesia" ? "id" : "en";
-    const emailResult = await sendThankYouEmail(email, full_name, lang);
+
+    // Read-only lookup for the email's "Registered through:" row only — the
+    // raw event_source code below still goes into lead_events untouched, so
+    // attribution is unaffected whether or not a matching event row exists.
+    let eventDisplayName = null;
+    if (event_source) {
+      try {
+        const evRes = await fetch(`${SUPABASE_URL}/rest/v1/events?select=display_name&code=eq.${encodeURIComponent(event_source)}&limit=1`, { headers });
+        const evData = await evRes.json();
+        if (evRes.ok && Array.isArray(evData) && evData[0] && evData[0].display_name) eventDisplayName = evData[0].display_name;
+      } catch (_) { /* non-fatal: email just omits the event row */ }
+    }
+
+    const emailResult = await sendThankYouEmail(email, full_name, eventDisplayName);
 
     const eventRes = await fetch(`${SUPABASE_URL}/rest/v1/lead_events`, {
       method: "POST",
