@@ -4,6 +4,8 @@
 // the public page itself carries NO Supabase credentials of any kind.
 // Insert-only: this endpoint can never read companies/clients/jobs/leads.
 
+import { buildOjoLuxeEmailFooterHtml, buildOjoLuxeEmailFooterText } from "../lib/email-footer.js";
+
 const SUPABASE_URL = "https://aadlqagpxwshpdccxwto.supabase.co";
 const DUPLICATE_COOLDOWN_MS = 60 * 1000; // block rapid double-submits of the same email
 
@@ -14,8 +16,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // untouched. English only — no dual-language support.
 const LOGO_URL = "https://ojoluxe-portal.vercel.app/assets/ojo-luxe-logo.png";
 const SITE_URL = "https://ojoluxe.com";
-const SUPPORT_PHONE_TEL = "+13104066692";
-const SUPPORT_PHONE_DISPLAY = "+1 (310) 406-6692";
 const EN_SUBJECT = "Welcome to the OJO Luxe Partner Network";
 
 function escapeHtml(str) {
@@ -113,13 +113,8 @@ function buildThankYouHtml(name, eventName) {
     </td>
   </tr>
   <tr>
-    <td align="center" style="background:#0C0B09;padding:28px 24px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.8;color:#cccccc;">
-      <p style="margin:0;color:#F0E8D5;font-weight:bold;letter-spacing:0.5px;">OJO LUXE LLC</p>
-      <p style="margin:2px 0 16px 0;">Open Journey On Demand Luxury</p>
-      <p style="margin:0 0 6px 0;">&#127760;&nbsp;<a href="${SITE_URL}" style="color:#C9A84C;text-decoration:none;">www.ojoluxe.com</a></p>
-      <p style="margin:0 0 6px 0;">&#9993;&nbsp;<a href="mailto:info@ojoluxe.com" style="color:#C9A84C;text-decoration:none;">info@ojoluxe.com</a></p>
-      <p style="margin:0 0 6px 0;">&#128222;&nbsp;<a href="tel:${SUPPORT_PHONE_TEL}" style="color:#C9A84C;text-decoration:none;">${SUPPORT_PHONE_DISPLAY}</a></p>
-      <p style="margin:0;">&#128248;&nbsp;<a href="https://instagram.com/ojo.luxe" style="color:#C9A84C;text-decoration:none;">@ojo.luxe</a></p>
+    <td>
+      ${buildOjoLuxeEmailFooterHtml()}
     </td>
   </tr>
 </table>
@@ -136,18 +131,7 @@ function buildThankYouText(name, eventName) {
   if (eventName) lines.push(`${c.eventLabel} ${eventName}`);
   lines.push("", c.whatsNext.toUpperCase());
   c.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`));
-  lines.push(
-    "",
-    `${c.cta}: ${SITE_URL}`,
-    "",
-    "--",
-    "OJO LUXE LLC",
-    "Open Journey On Demand Luxury",
-    "Website: ojoluxe.com",
-    "Email: info@ojoluxe.com",
-    `Phone: ${SUPPORT_PHONE_DISPLAY}`,
-    "Instagram: @ojo.luxe"
-  );
+  lines.push("", `${c.cta}: ${SITE_URL}`, "", buildOjoLuxeEmailFooterText());
   return lines.join("\n");
 }
 
