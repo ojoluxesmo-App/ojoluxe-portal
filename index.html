@@ -7936,19 +7936,38 @@ function computeManagementReportData(f) {
   );
 
   const statsOpts = { dateFrom: f.from, dateTo: f.to, statusFilter: f.status };
+  // Per-agent Leads/Conversion Rate: the schema has no reliable direct
+  // lead -> affiliate/company link (a company's source_event is free text with
+  // no FK to lead_events -- see convertLeadToCompany()). Matching on that text
+  // would hand the SAME event's full lead count to every affiliate sourced
+  // from it, double-counting when more than one affiliate shares an event and
+  // overstating conversion for all of them. Until a real direct mapping
+  // exists, leave these unavailable ("—") rather than inferred. If a
+  // reliable direct mapping is ever added to a company/client record, wire it
+  // in here instead of reintroducing the source_event guess.
   const agentRows = companies
     .map(c => {
       const stats = computeAffiliateStats(c, statsOpts);
-      const leadRows = c.source_event ? (allLeads || []).filter(r => mgmtReportNorm(r.event_source) === mgmtReportNorm(c.source_event)) : [];
-      const leadCount = mgmtReportUniqueLeadIds(leadRows).length;
-      const conversionRate = leadCount ? (stats.clientCount / leadCount) * 100 : null;
+      const leadCount = null;
+      const conversionRate = null;
       const avgCompletedJobValue = stats.completedJobCount ? stats.completedRevenue / stats.completedJobCount : 0;
       return { ...stats, leadCount, conversionRate, avgCompletedJobValue };
     })
-    .filter(r => r.clientCount || r.jobCount || r.leadCount);
+    .filter(r => r.clientCount || r.jobCount);
 
-  // Event Performance: roll the same agent rows up by source_event.
-  const eventKeys = [...new Set(companies.map(c => c.source_event).filter(Boolean))];
+  // Event Performance: roll the same agent rows up by source_event, plus any
+  // real event registration that has no affiliate/company yet (e.g. a trade
+  // show that has leads but hasn't converted anyone) -- otherwise that event
+  // would be invisible here even though it has real leads. Skipped when a
+  // specific affiliate is selected, since a single-affiliate view should only
+  // show that affiliate's own event(s), not the full event list.
+  const companyEventKeys = companies.map(c => c.source_event).filter(Boolean);
+  const leadEventKeys = f.affiliateId ? [] : (allLeads || [])
+    .filter(r => !f.event || mgmtReportNorm(r.event_source) === mgmtReportNorm(f.event))
+    .filter(r => !f.country || mgmtReportNorm(r.leads && r.leads.country) === mgmtReportNorm(f.country))
+    .map(r => r.event_source)
+    .filter(Boolean);
+  const eventKeys = [...new Set([...companyEventKeys, ...leadEventKeys])];
   const eventRows = eventKeys.map(key => {
     const rowsForEvent = agentRows.filter(r => mgmtReportNorm(r.company.source_event) === mgmtReportNorm(key));
     const leadRows = (allLeads || []).filter(r => mgmtReportNorm(r.event_source) === mgmtReportNorm(key));
@@ -7959,10 +7978,15 @@ function computeManagementReportData(f) {
     const completedRevenue = rowsForEvent.reduce((s, r) => s + r.completedRevenue, 0);
     const commissionDue = rowsForEvent.reduce((s, r) => s + r.commissionDue, 0);
     const eventMeta = (allEvents || []).find(ev => mgmtReportNorm(ev.code) === mgmtReportNorm(key) || mgmtReportNorm(ev.display_name) === mgmtReportNorm(key));
+    // Same defensibility gap as per-agent above: clientCount here comes from
+    // companies matched to this event by the same unreliable source_event
+    // text, not a verified link to these specific leads, so a computed
+    // percentage here would carry the same false-precision risk. leadCount
+    // itself stays real (a direct count of this event's actual registrations).
     return {
       key, label: eventMeta ? eventMeta.display_name : key,
       leadCount, clientCount, bookedJobCount, completedJobCount, completedRevenue, commissionDue,
-      conversionRate: leadCount ? (clientCount / leadCount) * 100 : null,
+      conversionRate: null,
     };
   }).sort((a, b) => b.completedRevenue - a.completedRevenue);
 
@@ -7981,7 +8005,13 @@ function computeManagementReportData(f) {
   const totalCompletedRevenue = agentRows.reduce((s, r) => s + r.completedRevenue, 0);
   const totalCommission = agentRows.reduce((s, r) => s + r.commissionDue, 0);
   const avgCompletedJobValue = totalCompletedJobs ? totalCompletedRevenue / totalCompletedJobs : 0;
-  const conversionRate = totalLeads ? (totalConvertedClients / totalLeads) * 100 : null;
+  // totalConvertedClients (via companies.referring_company_id, a real link)
+  // and totalLeads (via lead_events, also real) are each individually
+  // accurate, but nothing in the schema proves these particular converted
+  // clients came from these particular filtered leads -- dividing one by the
+  // other would present an unverified funnel as a precise percentage. Left
+  // unavailable ("—") until a direct lead -> client/company link exists.
+  const conversionRate = null;
 
   const eligibleForRevenue = agentRows.filter(r => r.bookedJobCount || r.completedJobCount);
   const eligibleForConversion = agentRows.filter(r => r.leadCount);
@@ -8015,22 +8045,32 @@ function mgmtReportAgentName(company) {
 }
 
 function mgmtReportPct(v) { return v == null ? "—" : v.toFixed(1) + "%"; }
+function mgmtReportCount(v) { return v == null ? "—" : String(v); }
+const MGMT_REPORT_ATTRIBUTION_NOTE = "Per-agent lead conversion is shown only when direct attribution is available.";
 
 function renderManagementReport() {
   const body = getEl("mgmtReportBody");
   if (!body) return;
 
   // Populate filter dropdowns from currently loaded data, preserving selection.
+  // Event/Country include both affiliate-side values (companies.source_event /
+  // companies.country) and real lead-side values (lead_events.event_source /
+  // leads.country) -- otherwise an event or country that only has leads and no
+  // affiliate/company yet could never be selected here at all.
   const eventSel = getEl("mgmtRepEvent"), affSel = getEl("mgmtRepAffiliate"), countrySel = getEl("mgmtRepCountry");
   if (eventSel) {
     const cur = eventSel.value;
-    const events = [...new Set((allCompanies || []).map(c => c.source_event).filter(Boolean))].sort();
+    const companyEvents = (allCompanies || []).map(c => c.source_event).filter(Boolean);
+    const leadEvents = (allLeads || []).map(r => r.event_source).filter(Boolean);
+    const events = [...new Set([...companyEvents, ...leadEvents])].sort();
     eventSel.innerHTML = '<option value="">All Events</option>' + events.map(e => `<option ${e === cur ? "selected" : ""}>${escapeHtml(e)}</option>`).join("");
   }
   if (affSel) affSel.innerHTML = companyOptionsHtml(affSel.value, "All Affiliates");
   if (countrySel) {
     const cur = countrySel.value;
-    const countries = [...new Set((allCompanies || []).map(c => c.country).filter(Boolean))].sort();
+    const companyCountries = (allCompanies || []).map(c => c.country).filter(Boolean);
+    const leadCountries = (allLeads || []).map(r => r.leads && r.leads.country).filter(Boolean);
+    const countries = [...new Set([...companyCountries, ...leadCountries])].sort();
     countrySel.innerHTML = '<option value="">All Countries</option>' + countries.map(c => `<option ${c === cur ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
   }
 
@@ -8074,7 +8114,8 @@ function renderManagementReport() {
     : "";
 
   const agentTableHtml = data.agentRows.length
-    ? `<div class="sh-title" style="margin-bottom:8px;">Agent / Affiliate Performance (${data.agentRows.length})</div>` +
+    ? `<div class="sh-title" style="margin-bottom:4px;">Agent / Affiliate Performance (${data.agentRows.length})</div>` +
+      `<div style="font-size:11px;color:#666;margin-bottom:8px;">ℹ️ ${MGMT_REPORT_ATTRIBUTION_NOTE}</div>` +
       `<div style="overflow-x:auto;margin-bottom:16px;">` +
       `<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">` +
       `<thead><tr style="text-align:left;color:#666;font-size:10px;letter-spacing:.05em;">` +
@@ -8085,7 +8126,7 @@ function renderManagementReport() {
         `<td style="padding:6px 10px;color:#888;">${i + 1}</td>` +
         `<td style="padding:6px 10px;color:#f4f4f4;font-weight:700;">${escapeHtml(mgmtReportAgentName(r.company))}</td>` +
         `<td style="padding:6px 10px;color:#888;">${escapeHtml(r.company.source_event || "—")}</td>` +
-        `<td style="padding:6px 10px;color:#ccc;">${r.leadCount}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${mgmtReportCount(r.leadCount)}</td>` +
         `<td style="padding:6px 10px;color:#ccc;">${r.clientCount}</td>` +
         `<td style="padding:6px 10px;color:#ccc;">${mgmtReportPct(r.conversionRate)}</td>` +
         `<td style="padding:6px 10px;color:#ccc;">${r.bookedJobCount}</td>` +
@@ -8158,10 +8199,11 @@ function exportManagementReportCSV() {
   lines.push(csvRow([]));
 
   lines.push(csvRow(["AGENT / AFFILIATE PERFORMANCE"]));
+  lines.push(csvRow([MGMT_REPORT_ATTRIBUTION_NOTE]));
   lines.push(csvRow(["Rank","Agent/Affiliate","Company","Source Event","Leads","Converted Clients","Conversion Rate","Booked Jobs","Completed Jobs","Booked Revenue","Completed Revenue","Avg Completed Job Value","Calculated Commission"]));
   data.agentRows.forEach((r, i) => lines.push(csvRow([
     i + 1, mgmtReportAgentName(r.company), r.company.legal_name || "", r.company.source_event || "",
-    r.leadCount, r.clientCount, mgmtReportPct(r.conversionRate), r.bookedJobCount, r.completedJobCount,
+    mgmtReportCount(r.leadCount), r.clientCount, mgmtReportPct(r.conversionRate), r.bookedJobCount, r.completedJobCount,
     r.bookedRevenue.toFixed(2), r.completedRevenue.toFixed(2), r.avgCompletedJobValue.toFixed(2), r.commissionDue.toFixed(2)
   ])));
   lines.push(csvRow([]));
@@ -8222,7 +8264,7 @@ function printManagementReport() {
 
   const agentRowsHtml = data.agentRows.map((r, i) => `<tr>
     <td>${i + 1}</td><td>${escapeHtml(mgmtReportAgentName(r.company))}</td><td>${escapeHtml(r.company.source_event || "—")}</td>
-    <td>${r.leadCount}</td><td>${r.clientCount}</td><td>${mgmtReportPct(r.conversionRate)}</td>
+    <td>${mgmtReportCount(r.leadCount)}</td><td>${r.clientCount}</td><td>${mgmtReportPct(r.conversionRate)}</td>
     <td>${r.bookedJobCount}</td><td>${r.completedJobCount}</td>
     <td>${money(r.bookedRevenue)}</td><td class="gold">${money(r.completedRevenue)}</td>
     <td>${money(r.avgCompletedJobValue)}</td><td class="green">${money(r.commissionDue)}</td>
@@ -8247,6 +8289,7 @@ function printManagementReport() {
     h2 { font-size:15px; color:#0C0B09; border-left:4px solid #C9A84C; padding-left:8px; margin:22px 0 10px; }
     .period { font-size:13px; color:#333; margin-bottom:2px; }
     .filters { font-size:11px; color:#777; margin-bottom:14px; }
+    .note { font-size:10px; color:#888; margin-bottom:6px; }
     .kpis { display:flex; flex-wrap:wrap; gap:8px; }
     .kpi { flex:1; min-width:110px; border:1px solid #ddd; border-radius:6px; padding:8px 10px; text-align:center; }
     .kpi-val { font-size:16px; font-weight:800; color:#0C0B09; }
@@ -8291,6 +8334,7 @@ function printManagementReport() {
     </div>` : ""}
 
     <h2>Affiliate / Agent Ranking</h2>
+    <div class="note">ℹ️ ${escapeHtml(MGMT_REPORT_ATTRIBUTION_NOTE)}</div>
     <table><thead><tr><th>#</th><th>Agent/Affiliate</th><th>Source Event</th><th>Leads</th><th>Converted</th><th>Conv. Rate</th><th>Booked</th><th>Completed</th><th>Booked Rev.</th><th>Completed Rev.</th><th>Avg Value</th><th>Commission</th></tr></thead>
     <tbody>${agentRowsHtml || '<tr><td colspan="12">No affiliate activity for the selected filters.</td></tr>'}</tbody></table>
 
