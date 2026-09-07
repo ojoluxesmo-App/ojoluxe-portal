@@ -1805,6 +1805,57 @@ window.addEventListener("unhandledrejection", function(e) {
           </div>
         </div>
         <div id="performanceList"></div>
+
+        <div class="form-toggle" onclick="toggleFormPanel('mgmt-report-panel'); renderManagementReport();" style="margin-top:16px;">
+          <span>📊 Management Report</span><span>▼</span>
+        </div>
+        <div id="mgmt-report-panel" style="display:none;">
+          <div class="form-card" id="mgmtReportCard">
+            <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px;">
+              <div class="field" style="flex:1;min-width:130px;margin-bottom:0;">
+                <label>From</label>
+                <input type="date" id="mgmtRepFrom" onchange="renderManagementReport()">
+              </div>
+              <div class="field" style="flex:1;min-width:130px;margin-bottom:0;">
+                <label>To</label>
+                <input type="date" id="mgmtRepTo" onchange="renderManagementReport()">
+              </div>
+              <div class="field" style="flex:1;min-width:160px;margin-bottom:0;">
+                <label>Event</label>
+                <select id="mgmtRepEvent" onchange="renderManagementReport()"><option value="">All Events</option></select>
+              </div>
+              <div class="field" style="flex:1;min-width:160px;margin-bottom:0;">
+                <label>Affiliate / Agent</label>
+                <select id="mgmtRepAffiliate" onchange="renderManagementReport()"><option value="">All Affiliates</option></select>
+              </div>
+              <div class="field" style="flex:1;min-width:140px;margin-bottom:0;">
+                <label>Country</label>
+                <select id="mgmtRepCountry" onchange="renderManagementReport()"><option value="">All Countries</option></select>
+              </div>
+              <div class="field" style="flex:1;min-width:150px;margin-bottom:0;">
+                <label>Job Status</label>
+                <select id="mgmtRepStatus" onchange="renderManagementReport()">
+                  <option value="">All Statuses</option>
+                  <option value="Offer">Offer</option>
+                  <option value="Assigned">Assigned</option>
+                  <option value="Accepted">Accepted</option>
+                  <option value="Heading to Pickup">Heading to Pickup</option>
+                  <option value="Arrived">Arrived</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="Voided">Voided</option>
+                </select>
+              </div>
+              <button class="btn btn-sec btn-auto" type="button" onclick="resetManagementReportFilters()" style="height:38px;">↻ Reset</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+              <button class="btn btn-gold btn-auto" type="button" onclick="exportManagementReportCSV()">⬇ Export Data</button>
+              <button class="btn btn-sec btn-auto" type="button" onclick="printManagementReport()">🖨️ Print / PDF</button>
+            </div>
+            <div id="mgmtReportBody"></div>
+          </div>
+        </div>
       </div>
       <!-- /Performance sub-view -->
     </div>
@@ -7724,10 +7775,23 @@ function isCommissionEligible(job, client) {
   }
   return true; // lifetime / custom / unset — no restriction
 }
+// opts.year is the original Affiliate Performance filter (kept exactly as-is
+// for that call site). opts.dateFrom/dateTo/statusFilter are additive filters
+// used by the Management Report below — all optional/backward-compatible;
+// omitting them reproduces the original behavior exactly.
 function computeAffiliateStats(company, opts) {
   const fYear = opts && opts.year;
+  const fFrom = opts && opts.dateFrom;
+  const fTo = opts && opts.dateTo;
+  const fStatus = opts && opts.statusFilter;
   const referredClients = (allClients || []).filter(cl => cl.referring_company_id === company.id);
-  const jobs = (allJobs || []).filter(j => j.referred_affiliate_company_id === company.id && (!fYear || (j.date || "").slice(0, 4) === fYear));
+  const jobs = (allJobs || []).filter(j =>
+    j.referred_affiliate_company_id === company.id &&
+    (!fYear || (j.date || "").slice(0, 4) === fYear) &&
+    (!fFrom || (j.date || "") >= fFrom) &&
+    (!fTo || (j.date || "") <= fTo) &&
+    (!fStatus || (j.status || "") === fStatus)
+  );
   const liveJobs = jobs.filter(j => !["Cancelled", "Voided"].includes(j.status || ""));
   const bookedRevenue = liveJobs.reduce((s, j) => s + (parseFloat(j.total_price) || 0), 0);
   const completedJobs = jobs.filter(j => ["Completed", "Released"].includes(j.status || ""));
@@ -7739,7 +7803,11 @@ function computeAffiliateStats(company, opts) {
     commissionDue += (parseFloat(j.total_price) || 0) * (effectiveCommissionRate(cl, company) / 100);
   });
   const lastBooking = jobs.reduce((max, j) => (j.date && (!max || j.date > max)) ? j.date : max, "");
-  return { company, clientCount: referredClients.length, jobCount: jobs.length, bookedRevenue, completedRevenue, commissionDue, lastBooking, referredClients };
+  return {
+    company, clientCount: referredClients.length, jobCount: jobs.length,
+    bookedJobCount: liveJobs.length, completedJobCount: completedJobs.length,
+    bookedRevenue, completedRevenue, commissionDue, lastBooking, referredClients
+  };
 }
 
 // ── Affiliate performance report ─────────────────────────────────────────────
@@ -7823,6 +7891,424 @@ function renderAffiliatePerformance() {
     }).join("");
 }
 
+// ── Management Report (reporting/export layer) ──────────────────────────────
+// Pure aggregation on top of computeAffiliateStats() -- the same
+// Company -> Client -> Job -> Revenue -> Commission source of truth used by
+// the Affiliate Performance cards above -- plus the already-loaded
+// allLeads/allEvents data. No revenue/commission formula is duplicated here;
+// this only filters, groups, and totals numbers computed elsewhere.
+//
+// Event-linkage caveat: a lead's event_source and a company's source_event
+// are both free-text fields (see convertLeadToCompany()) with no FK between
+// them. Per-agent "Leads"/"Conversion Rate" below match a company's
+// source_event to lead_events.event_source -- i.e. "leads from the same
+// event this affiliate was sourced from", since this data model has no
+// literal per-affiliate lead assignment. Event Performance rows group by
+// that same source_event text (labeled with the matching Events-tab
+// display_name when one exists).
+function mgmtReportNorm(v) { return String(v || "").trim().toLowerCase(); }
+
+function mgmtReportUniqueLeadIds(rows) {
+  return [...new Set((rows || []).map(r => r.leads && r.leads.id).filter(Boolean))];
+}
+
+function mgmtReportFilters() {
+  return {
+    from: getValue("mgmtRepFrom") || "",
+    to: getValue("mgmtRepTo") || "",
+    event: getValue("mgmtRepEvent") || "",
+    affiliateId: getValue("mgmtRepAffiliate") || "",
+    country: getValue("mgmtRepCountry") || "",
+    status: getValue("mgmtRepStatus") || "",
+  };
+}
+
+function resetManagementReportFilters() {
+  ["mgmtRepFrom", "mgmtRepTo", "mgmtRepEvent", "mgmtRepAffiliate", "mgmtRepCountry", "mgmtRepStatus"].forEach(id => setValue(id, ""));
+  renderManagementReport();
+}
+
+function computeManagementReportData(f) {
+  const companies = (allCompanies || []).filter(c =>
+    (!f.affiliateId || c.id === f.affiliateId) &&
+    (!f.country || c.country === f.country) &&
+    (!f.event || mgmtReportNorm(c.source_event) === mgmtReportNorm(f.event))
+  );
+
+  const statsOpts = { dateFrom: f.from, dateTo: f.to, statusFilter: f.status };
+  const agentRows = companies
+    .map(c => {
+      const stats = computeAffiliateStats(c, statsOpts);
+      const leadRows = c.source_event ? (allLeads || []).filter(r => mgmtReportNorm(r.event_source) === mgmtReportNorm(c.source_event)) : [];
+      const leadCount = mgmtReportUniqueLeadIds(leadRows).length;
+      const conversionRate = leadCount ? (stats.clientCount / leadCount) * 100 : null;
+      const avgCompletedJobValue = stats.completedJobCount ? stats.completedRevenue / stats.completedJobCount : 0;
+      return { ...stats, leadCount, conversionRate, avgCompletedJobValue };
+    })
+    .filter(r => r.clientCount || r.jobCount || r.leadCount);
+
+  // Event Performance: roll the same agent rows up by source_event.
+  const eventKeys = [...new Set(companies.map(c => c.source_event).filter(Boolean))];
+  const eventRows = eventKeys.map(key => {
+    const rowsForEvent = agentRows.filter(r => mgmtReportNorm(r.company.source_event) === mgmtReportNorm(key));
+    const leadRows = (allLeads || []).filter(r => mgmtReportNorm(r.event_source) === mgmtReportNorm(key));
+    const leadCount = mgmtReportUniqueLeadIds(leadRows).length;
+    const clientCount = rowsForEvent.reduce((s, r) => s + r.clientCount, 0);
+    const bookedJobCount = rowsForEvent.reduce((s, r) => s + r.bookedJobCount, 0);
+    const completedJobCount = rowsForEvent.reduce((s, r) => s + r.completedJobCount, 0);
+    const completedRevenue = rowsForEvent.reduce((s, r) => s + r.completedRevenue, 0);
+    const commissionDue = rowsForEvent.reduce((s, r) => s + r.commissionDue, 0);
+    const eventMeta = (allEvents || []).find(ev => mgmtReportNorm(ev.code) === mgmtReportNorm(key) || mgmtReportNorm(ev.display_name) === mgmtReportNorm(key));
+    return {
+      key, label: eventMeta ? eventMeta.display_name : key,
+      leadCount, clientCount, bookedJobCount, completedJobCount, completedRevenue, commissionDue,
+      conversionRate: leadCount ? (clientCount / leadCount) * 100 : null,
+    };
+  }).sort((a, b) => b.completedRevenue - a.completedRevenue);
+
+  // Total Leads honors Event/Country filters independently of the affiliate
+  // list above, so it still reflects true event-registration volume even
+  // before a lead has been turned into an affiliate/company.
+  const leadRowsForSummary = (allLeads || []).filter(r =>
+    (!f.event || mgmtReportNorm(r.event_source) === mgmtReportNorm(f.event)) &&
+    (!f.country || mgmtReportNorm(r.leads && r.leads.country) === mgmtReportNorm(f.country))
+  );
+  const totalLeads = mgmtReportUniqueLeadIds(leadRowsForSummary).length;
+  const totalConvertedClients = agentRows.reduce((s, r) => s + r.clientCount, 0);
+  const totalBookedJobs = agentRows.reduce((s, r) => s + r.bookedJobCount, 0);
+  const totalCompletedJobs = agentRows.reduce((s, r) => s + r.completedJobCount, 0);
+  const totalBookedRevenue = agentRows.reduce((s, r) => s + r.bookedRevenue, 0);
+  const totalCompletedRevenue = agentRows.reduce((s, r) => s + r.completedRevenue, 0);
+  const totalCommission = agentRows.reduce((s, r) => s + r.commissionDue, 0);
+  const avgCompletedJobValue = totalCompletedJobs ? totalCompletedRevenue / totalCompletedJobs : 0;
+  const conversionRate = totalLeads ? (totalConvertedClients / totalLeads) * 100 : null;
+
+  const eligibleForRevenue = agentRows.filter(r => r.bookedJobCount || r.completedJobCount);
+  const eligibleForConversion = agentRows.filter(r => r.leadCount);
+  const eligibleForAvgValue = agentRows.filter(r => r.completedJobCount);
+  const topBy = (arr, sel) => arr.reduce((best, r) => (!best || sel(r) > sel(best)) ? r : best, null);
+  const callouts = {
+    topRevenue: topBy(eligibleForRevenue, r => r.completedRevenue),
+    topVolume: topBy(eligibleForRevenue, r => r.bookedJobCount),
+    topConversion: topBy(eligibleForConversion, r => r.conversionRate),
+    topAvgValue: topBy(eligibleForAvgValue, r => r.avgCompletedJobValue),
+  };
+
+  const rankedAgentRows = agentRows.slice().sort((a, b) => b.completedRevenue - a.completedRevenue);
+
+  return {
+    filters: f,
+    agentRows: rankedAgentRows,
+    eventRows,
+    summary: {
+      totalLeads, totalConvertedClients, conversionRate,
+      totalBookedJobs, totalCompletedJobs,
+      totalBookedRevenue, totalCompletedRevenue,
+      totalCommission, avgCompletedJobValue,
+    },
+    callouts,
+  };
+}
+
+function mgmtReportAgentName(company) {
+  return company.legal_name || company.dba || "Unnamed";
+}
+
+function mgmtReportPct(v) { return v == null ? "—" : v.toFixed(1) + "%"; }
+
+function renderManagementReport() {
+  const body = getEl("mgmtReportBody");
+  if (!body) return;
+
+  // Populate filter dropdowns from currently loaded data, preserving selection.
+  const eventSel = getEl("mgmtRepEvent"), affSel = getEl("mgmtRepAffiliate"), countrySel = getEl("mgmtRepCountry");
+  if (eventSel) {
+    const cur = eventSel.value;
+    const events = [...new Set((allCompanies || []).map(c => c.source_event).filter(Boolean))].sort();
+    eventSel.innerHTML = '<option value="">All Events</option>' + events.map(e => `<option ${e === cur ? "selected" : ""}>${escapeHtml(e)}</option>`).join("");
+  }
+  if (affSel) affSel.innerHTML = companyOptionsHtml(affSel.value, "All Affiliates");
+  if (countrySel) {
+    const cur = countrySel.value;
+    const countries = [...new Set((allCompanies || []).map(c => c.country).filter(Boolean))].sort();
+    countrySel.innerHTML = '<option value="">All Countries</option>' + countries.map(c => `<option ${c === cur ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
+  }
+
+  const f = mgmtReportFilters();
+  const data = computeManagementReportData(f);
+  window._mgmtReportData = data; // read by exportManagementReportCSV()/printManagementReport()
+
+  const s = data.summary;
+  const statTile = (label, val) =>
+    `<div style="flex:1;min-width:130px;padding:10px 12px;background:#0a0a0a;border-radius:8px;border:1px solid #1e1e1e;text-align:center;">` +
+      `<div style="font-size:17px;font-weight:800;color:var(--gold);">${val}</div>` +
+      `<div style="font-size:9px;font-weight:700;color:#666;letter-spacing:.05em;margin-top:2px;">${label}</div>` +
+    `</div>`;
+  const summaryHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' +
+    statTile("TOTAL LEADS", s.totalLeads) +
+    statTile("CONVERTED CLIENTS", s.totalConvertedClients) +
+    statTile("CONVERSION RATE", mgmtReportPct(s.conversionRate)) +
+    statTile("BOOKED JOBS", s.totalBookedJobs) +
+    statTile("COMPLETED JOBS", s.totalCompletedJobs) +
+    statTile("BOOKED REVENUE", money(s.totalBookedRevenue)) +
+    statTile("COMPLETED REVENUE", money(s.totalCompletedRevenue)) +
+    statTile("CALC. COMMISSION", money(s.totalCommission)) +
+    statTile("AVG COMPLETED JOB VALUE", money(s.avgCompletedJobValue)) +
+  '</div>';
+
+  const c = data.callouts;
+  const calloutCard = (label, row, valueHtml) => row
+    ? `<div style="flex:1;min-width:180px;padding:10px 12px;background:#12100a;border-radius:8px;border:1px solid #2a2314;">` +
+        `<div style="font-size:9px;font-weight:700;color:#c9a84c;letter-spacing:.08em;">${label}</div>` +
+        `<div style="font-size:14px;font-weight:800;color:#f4f4f4;margin-top:4px;">${escapeHtml(mgmtReportAgentName(row.company))}</div>` +
+        `<div style="font-size:12px;color:#87e18b;margin-top:2px;">${valueHtml}</div>` +
+      `</div>`
+    : "";
+  const calloutsHtml = (c.topRevenue || c.topVolume || c.topConversion || c.topAvgValue)
+    ? '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' +
+        calloutCard("🏆 TOP REVENUE AGENT", c.topRevenue, c.topRevenue ? money(c.topRevenue.completedRevenue) : "") +
+        calloutCard("📦 HIGHEST VOLUME AGENT", c.topVolume, c.topVolume ? c.topVolume.bookedJobCount + " booking" + (c.topVolume.bookedJobCount === 1 ? "" : "s") : "") +
+        calloutCard("🎯 BEST CONVERSION AGENT", c.topConversion, c.topConversion ? mgmtReportPct(c.topConversion.conversionRate) : "") +
+        calloutCard("💎 HIGHEST AVG BOOKING VALUE", c.topAvgValue, c.topAvgValue ? money(c.topAvgValue.avgCompletedJobValue) : "") +
+      '</div>'
+    : "";
+
+  const agentTableHtml = data.agentRows.length
+    ? `<div class="sh-title" style="margin-bottom:8px;">Agent / Affiliate Performance (${data.agentRows.length})</div>` +
+      `<div style="overflow-x:auto;margin-bottom:16px;">` +
+      `<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">` +
+      `<thead><tr style="text-align:left;color:#666;font-size:10px;letter-spacing:.05em;">` +
+        ['#','AGENT / AFFILIATE','SOURCE EVENT','LEADS','CONVERTED','CONV. RATE','BOOKED JOBS','COMPLETED JOBS','BOOKED REV.','COMPLETED REV.','AVG JOB VALUE','COMMISSION']
+          .map(h => `<th style="padding:6px 10px;border-bottom:1px solid #222;">${h}</th>`).join("") +
+      `</tr></thead><tbody>` +
+      data.agentRows.map((r, i) => `<tr style="border-bottom:1px solid #1a1a1a;">` +
+        `<td style="padding:6px 10px;color:#888;">${i + 1}</td>` +
+        `<td style="padding:6px 10px;color:#f4f4f4;font-weight:700;">${escapeHtml(mgmtReportAgentName(r.company))}</td>` +
+        `<td style="padding:6px 10px;color:#888;">${escapeHtml(r.company.source_event || "—")}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${r.leadCount}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${r.clientCount}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${mgmtReportPct(r.conversionRate)}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${r.bookedJobCount}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${r.completedJobCount}</td>` +
+        `<td style="padding:6px 10px;color:#aaa;">${money(r.bookedRevenue)}</td>` +
+        `<td style="padding:6px 10px;color:var(--gold);font-weight:700;">${money(r.completedRevenue)}</td>` +
+        `<td style="padding:6px 10px;color:#aaa;">${money(r.avgCompletedJobValue)}</td>` +
+        `<td style="padding:6px 10px;color:#87e18b;">${money(r.commissionDue)}</td>` +
+      `</tr>`).join("") +
+      `</tbody></table></div>`
+    : '<div class="card" style="margin-bottom:16px;"><div class="job-meta">No affiliate activity matches the selected filters.</div></div>';
+
+  const eventTableHtml = data.eventRows.length > 1
+    ? `<div class="sh-title" style="margin-bottom:8px;">Event Performance (${data.eventRows.length})</div>` +
+      `<div style="overflow-x:auto;">` +
+      `<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">` +
+      `<thead><tr style="text-align:left;color:#666;font-size:10px;letter-spacing:.05em;">` +
+        ['EVENT','LEADS','CONVERTED','BOOKINGS','COMPLETED JOBS','COMPLETED REV.','COMMISSION','CONV. RATE']
+          .map(h => `<th style="padding:6px 10px;border-bottom:1px solid #222;">${h}</th>`).join("") +
+      `</tr></thead><tbody>` +
+      data.eventRows.map(r => `<tr style="border-bottom:1px solid #1a1a1a;">` +
+        `<td style="padding:6px 10px;color:#f4f4f4;font-weight:700;">${escapeHtml(r.label)}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${r.leadCount}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${r.clientCount}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${r.bookedJobCount}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${r.completedJobCount}</td>` +
+        `<td style="padding:6px 10px;color:var(--gold);font-weight:700;">${money(r.completedRevenue)}</td>` +
+        `<td style="padding:6px 10px;color:#87e18b;">${money(r.commissionDue)}</td>` +
+        `<td style="padding:6px 10px;color:#ccc;">${mgmtReportPct(r.conversionRate)}</td>` +
+      `</tr>`).join("") +
+      `</tbody></table></div>`
+    : "";
+
+  body.innerHTML = summaryHtml + calloutsHtml + agentTableHtml + eventTableHtml;
+}
+
+// ── Export Data (CSV) ────────────────────────────────────────────────────────
+// Same Blob + <a download> pattern as exportLeadsCSV() above. Structure is
+// section-stacked (Summary / Agent table / Event table / detail rows) inside
+// one CSV so it opens cleanly as one spreadsheet, with XLSX addable later by
+// swapping the Blob-building step for a sheet library without touching the
+// data-gathering above it.
+function csvRow(vals) {
+  return vals.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",");
+}
+
+function exportManagementReportCSV() {
+  const data = window._mgmtReportData || computeManagementReportData(mgmtReportFilters());
+  const f = data.filters;
+  const lines = [];
+  lines.push(csvRow(["OJO Luxe — Affiliate/Event Management Report"]));
+  lines.push(csvRow(["Generated", new Date().toLocaleString()]));
+  lines.push(csvRow(["Date Range", (f.from || "All") + " to " + (f.to || "All")]));
+  lines.push(csvRow(["Event Filter", f.event || "All"]));
+  lines.push(csvRow(["Country Filter", f.country || "All"]));
+  lines.push(csvRow(["Job Status Filter", f.status || "All"]));
+  lines.push(csvRow([]));
+
+  lines.push(csvRow(["SUMMARY"]));
+  const s = data.summary;
+  lines.push(csvRow(["Total Leads", s.totalLeads]));
+  lines.push(csvRow(["Converted Clients", s.totalConvertedClients]));
+  lines.push(csvRow(["Conversion Rate", mgmtReportPct(s.conversionRate)]));
+  lines.push(csvRow(["Booked Jobs", s.totalBookedJobs]));
+  lines.push(csvRow(["Completed Jobs", s.totalCompletedJobs]));
+  lines.push(csvRow(["Booked Revenue", money(s.totalBookedRevenue)]));
+  lines.push(csvRow(["Completed Revenue", money(s.totalCompletedRevenue)]));
+  lines.push(csvRow(["Total Calculated Commission", money(s.totalCommission)]));
+  lines.push(csvRow(["Average Completed Job Value", money(s.avgCompletedJobValue)]));
+  lines.push(csvRow([]));
+
+  lines.push(csvRow(["AGENT / AFFILIATE PERFORMANCE"]));
+  lines.push(csvRow(["Rank","Agent/Affiliate","Company","Source Event","Leads","Converted Clients","Conversion Rate","Booked Jobs","Completed Jobs","Booked Revenue","Completed Revenue","Avg Completed Job Value","Calculated Commission"]));
+  data.agentRows.forEach((r, i) => lines.push(csvRow([
+    i + 1, mgmtReportAgentName(r.company), r.company.legal_name || "", r.company.source_event || "",
+    r.leadCount, r.clientCount, mgmtReportPct(r.conversionRate), r.bookedJobCount, r.completedJobCount,
+    r.bookedRevenue.toFixed(2), r.completedRevenue.toFixed(2), r.avgCompletedJobValue.toFixed(2), r.commissionDue.toFixed(2)
+  ])));
+  lines.push(csvRow([]));
+
+  if (data.eventRows.length) {
+    lines.push(csvRow(["EVENT PERFORMANCE"]));
+    lines.push(csvRow(["Event","Leads","Converted Clients","Bookings","Completed Jobs","Completed Revenue","Commission","Conversion Rate"]));
+    data.eventRows.forEach(r => lines.push(csvRow([
+      r.label, r.leadCount, r.clientCount, r.bookedJobCount, r.completedJobCount,
+      r.completedRevenue.toFixed(2), r.commissionDue.toFixed(2), mgmtReportPct(r.conversionRate)
+    ])));
+    lines.push(csvRow([]));
+  }
+
+  lines.push(csvRow(["DETAIL — JOBS (attributed to an affiliate, matching current filters)"]));
+  lines.push(csvRow(["Date","Reference","Client","Affiliate/Company","Status","Total Price"]));
+  const agentCompanyIds = new Set(data.agentRows.map(r => r.company.id));
+  (allJobs || []).forEach(j => {
+    if (!j.referred_affiliate_company_id || !agentCompanyIds.has(j.referred_affiliate_company_id)) return;
+    if (f.from && (j.date || "") < f.from) return;
+    if (f.to && (j.date || "") > f.to) return;
+    if (f.status && (j.status || "") !== f.status) return;
+    const co = (allCompanies || []).find(c => c.id === j.referred_affiliate_company_id);
+    lines.push(csvRow([j.date || "", j.reference_code || "", j.client || "", co ? mgmtReportAgentName(co) : "", j.status || "", (parseFloat(j.total_price) || 0).toFixed(2)]));
+  });
+
+  const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ojo_management_report_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Print / PDF (browser print, dependency-free) ─────────────────────────────
+// Same dedicated-print-window pattern already used by printFlyer() below --
+// a standalone document containing only the report (branded header + the
+// same summary/callouts/tables already on screen), so window.print() never
+// tries to paginate the whole admin portal chrome.
+function printManagementReport() {
+  const data = window._mgmtReportData || computeManagementReportData(mgmtReportFilters());
+  const f = data.filters;
+  const s = data.summary;
+  const c = data.callouts;
+  const periodLabel = (f.from || f.to) ? `${f.from || "Start"} — ${f.to || "Present"}` : "All Time";
+  const filterLine = [
+    f.event ? "Event: " + f.event : "",
+    f.affiliateId ? "Affiliate: " + (((allCompanies || []).find(co => co.id === f.affiliateId) || {}).legal_name || "") : "",
+    f.country ? "Country: " + f.country : "",
+    f.status ? "Job Status: " + f.status : "",
+  ].filter(Boolean).join(" · ") || "All affiliates, all events, all statuses";
+
+  const kpi = (label, val) => `<div class="kpi"><div class="kpi-val">${val}</div><div class="kpi-label">${label}</div></div>`;
+  const callout = (label, row, valueHtml) => row ? `<div class="callout"><div class="callout-label">${label}</div><div class="callout-name">${escapeHtml(mgmtReportAgentName(row.company))}</div><div class="callout-val">${valueHtml}</div></div>` : "";
+
+  const agentRowsHtml = data.agentRows.map((r, i) => `<tr>
+    <td>${i + 1}</td><td>${escapeHtml(mgmtReportAgentName(r.company))}</td><td>${escapeHtml(r.company.source_event || "—")}</td>
+    <td>${r.leadCount}</td><td>${r.clientCount}</td><td>${mgmtReportPct(r.conversionRate)}</td>
+    <td>${r.bookedJobCount}</td><td>${r.completedJobCount}</td>
+    <td>${money(r.bookedRevenue)}</td><td class="gold">${money(r.completedRevenue)}</td>
+    <td>${money(r.avgCompletedJobValue)}</td><td class="green">${money(r.commissionDue)}</td>
+  </tr>`).join("");
+
+  const eventRowsHtml = data.eventRows.map(r => `<tr>
+    <td>${escapeHtml(r.label)}</td><td>${r.leadCount}</td><td>${r.clientCount}</td>
+    <td>${r.bookedJobCount}</td><td>${r.completedJobCount}</td>
+    <td class="gold">${money(r.completedRevenue)}</td><td class="green">${money(r.commissionDue)}</td>
+    <td>${mgmtReportPct(r.conversionRate)}</td>
+  </tr>`).join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>OJO Luxe — Management Report</title>
+  <style>
+    @page { margin: 0.5in; }
+    body { font-family: 'Space Grotesk', Arial, sans-serif; background:#fff; color:#111; margin:0; padding:24px; }
+    h1,h2 { font-family: 'Cormorant Garamond', Georgia, serif; }
+    .header { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:3px solid #C9A84C; padding-bottom:14px; margin-bottom:18px; }
+    .brand { font-size:26px; font-weight:700; color:#0C0B09; letter-spacing:.03em; }
+    .tagline { font-size:11px; color:#8a7635; letter-spacing:.08em; text-transform:uppercase; }
+    .meta { text-align:right; font-size:11px; color:#555; }
+    h2 { font-size:15px; color:#0C0B09; border-left:4px solid #C9A84C; padding-left:8px; margin:22px 0 10px; }
+    .period { font-size:13px; color:#333; margin-bottom:2px; }
+    .filters { font-size:11px; color:#777; margin-bottom:14px; }
+    .kpis { display:flex; flex-wrap:wrap; gap:8px; }
+    .kpi { flex:1; min-width:110px; border:1px solid #ddd; border-radius:6px; padding:8px 10px; text-align:center; }
+    .kpi-val { font-size:16px; font-weight:800; color:#0C0B09; }
+    .kpi-label { font-size:8px; font-weight:700; color:#888; letter-spacing:.05em; margin-top:2px; }
+    .callouts { display:flex; flex-wrap:wrap; gap:8px; }
+    .callout { flex:1; min-width:160px; border:1px solid #C9A84C; border-radius:6px; padding:8px 10px; }
+    .callout-label { font-size:8px; font-weight:700; color:#8a7635; letter-spacing:.05em; }
+    .callout-name { font-size:13px; font-weight:800; margin-top:3px; }
+    .callout-val { font-size:11px; color:#2e7d32; margin-top:1px; }
+    table { width:100%; border-collapse:collapse; font-size:10px; margin-top:6px; }
+    th, td { padding:5px 6px; border-bottom:1px solid #ddd; text-align:left; white-space:nowrap; }
+    th { color:#777; font-size:8px; letter-spacing:.04em; text-transform:uppercase; border-bottom:2px solid #C9A84C; }
+    .gold { color:#8a7635; font-weight:700; } .green { color:#2e7d32; }
+    .footer { margin-top:26px; font-size:9px; color:#999; text-align:center; }
+    @media print { body { padding:0; } }
+  </style></head><body>
+    <div class="header">
+      <div><div class="brand">OJO LUXE</div><div class="tagline">Time is the ultimate luxury</div></div>
+      <div class="meta">Management Performance Report<br>Generated ${new Date().toLocaleString()}</div>
+    </div>
+    <div class="period"><strong>Reporting Period:</strong> ${escapeHtml(periodLabel)}</div>
+    <div class="filters">${escapeHtml(filterLine)}</div>
+
+    <h2>Summary</h2>
+    <div class="kpis">
+      ${kpi("Total Leads", s.totalLeads)}
+      ${kpi("Converted Clients", s.totalConvertedClients)}
+      ${kpi("Conversion Rate", mgmtReportPct(s.conversionRate))}
+      ${kpi("Booked Jobs", s.totalBookedJobs)}
+      ${kpi("Completed Jobs", s.totalCompletedJobs)}
+      ${kpi("Booked Revenue", money(s.totalBookedRevenue))}
+      ${kpi("Completed Revenue", money(s.totalCompletedRevenue))}
+      ${kpi("Calc. Commission", money(s.totalCommission))}
+      ${kpi("Avg Completed Job Value", money(s.avgCompletedJobValue))}
+    </div>
+
+    ${(c.topRevenue || c.topVolume || c.topConversion || c.topAvgValue) ? `<h2>Top Performers</h2><div class="callouts">
+      ${callout("Top Revenue Agent", c.topRevenue, c.topRevenue ? money(c.topRevenue.completedRevenue) : "")}
+      ${callout("Highest Volume Agent", c.topVolume, c.topVolume ? c.topVolume.bookedJobCount + " bookings" : "")}
+      ${callout("Best Conversion Agent", c.topConversion, c.topConversion ? mgmtReportPct(c.topConversion.conversionRate) : "")}
+      ${callout("Highest Avg Booking Value", c.topAvgValue, c.topAvgValue ? money(c.topAvgValue.avgCompletedJobValue) : "")}
+    </div>` : ""}
+
+    <h2>Affiliate / Agent Ranking</h2>
+    <table><thead><tr><th>#</th><th>Agent/Affiliate</th><th>Source Event</th><th>Leads</th><th>Converted</th><th>Conv. Rate</th><th>Booked</th><th>Completed</th><th>Booked Rev.</th><th>Completed Rev.</th><th>Avg Value</th><th>Commission</th></tr></thead>
+    <tbody>${agentRowsHtml || '<tr><td colspan="12">No affiliate activity for the selected filters.</td></tr>'}</tbody></table>
+
+    ${data.eventRows.length > 1 ? `<h2>Event Comparison</h2>
+    <table><thead><tr><th>Event</th><th>Leads</th><th>Converted</th><th>Bookings</th><th>Completed</th><th>Completed Rev.</th><th>Commission</th><th>Conv. Rate</th></tr></thead>
+    <tbody>${eventRowsHtml}</tbody></table>` : ""}
+
+    <div class="footer">OJO Luxe Operations — Confidential management report · Generated ${new Date().toLocaleDateString()}</div>
+    <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 200); };<\/script>
+  </body></html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) { alert("Please allow pop-ups to print this report."); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function initCompaniesModule() {
   await loadCompaniesFromSupabase();
@@ -7844,7 +8330,12 @@ function setAffiliatesSubTab(tab) {
   if (tab === "companies") { renderCompanies(); renderCompanyAlerts(); populateDriverCheckboxes([]); }
   if (tab === "leads") { loadLeadsFromSupabase().then(renderLeads); }
   if (tab === "events") { loadEventsFromSupabase().then(renderEvents); if (!allLeads.length) loadLeadsFromSupabase().then(renderEvents); }
-  if (tab === "performance") { renderAffiliatePerformance(); }
+  if (tab === "performance") {
+    renderAffiliatePerformance();
+    if (!allLeads.length && getAdminToken()) loadLeadsFromSupabase().then(renderManagementReport);
+    if (!allEvents.length) loadEventsFromSupabase().then(renderManagementReport);
+    renderManagementReport();
+  }
 }
 
 // ── Trade Show Leads (Phase 1) ───────────────────────────────────────────────────
