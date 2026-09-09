@@ -1226,7 +1226,8 @@ window.addEventListener("unhandledrejection", function(e) {
         <input id="filterDateFrom" type="date" title="From date" onchange="renderJobs()">
         <input id="filterDateTo" type="date" title="To date" onchange="renderJobs()">
         <button class="clear-btn" onclick="clearFilters()">✕</button>
-        <button id="exportJobsBtn" onclick="exportCompletedJobs()" style="display:none;background:#1a1508;border:1px solid #C9A84C44;border-radius:8px;padding:7px 12px;color:#C9A84C;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">📊 Export</button>
+        <button id="exportJobsBtn" onclick="exportCompletedJobs()" style="display:none;background:#1a1508;border:1px solid #C9A84C44;border-radius:8px;padding:7px 12px;color:#C9A84C;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">📊 Timesheet Export</button>
+        <button id="exportManifestBtn" onclick="exportJobManifest()" style="display:none;background:#1a1508;border:1px solid #C9A84C44;border-radius:8px;padding:7px 12px;color:#C9A84C;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">📄 Job Manifest</button>
       </div>
 
       <!-- List title -->
@@ -2535,6 +2536,8 @@ function setJobTab(tab) {
     if(filterBar) filterBar.style.display = "flex";
     const exportBtn = getEl("exportJobsBtn");
     if (exportBtn) exportBtn.style.display = tab === "done" ? "inline-block" : "none";
+    const exportManifestBtn = getEl("exportManifestBtn");
+    if (exportManifestBtn) exportManifestBtn.style.display = tab === "done" ? "inline-block" : "none";
     if(listTitle) {
       listTitle.style.display = "block";
       listTitle.textContent =
@@ -2818,6 +2821,188 @@ function exportCompletedJobs() {
 
   XLSX.writeFile(wb, fileName);
   alert(`✅ Exported ${jobs.length} jobs → ${fileName}\n\nOpen in Excel → File → Print → Save as PDF to get PDF version.`);
+}
+
+// ── Job Manifest export ──────────────────────────────────────────────────────
+// Detailed operational manifest for admin/management use — separate sheet from
+// the Timesheet Export above, which stays untouched. Respects every filter
+// control in the Completed Jobs filter bar (search, driver, job type, payment
+// method, date range), not just the subset the Timesheet export reads.
+function exportJobManifest() {
+  const fDriver  = (getEl("filterDriver")?.value||"").trim();
+  const fJobType = getEl("filterJobType")?.value||"";
+  const fPayment = getEl("filterPayment")?.value||"";
+  const fFrom    = getEl("filterDateFrom")?.value||"";
+  const fTo      = getEl("filterDateTo")?.value||"";
+  const fSearch  = (getEl("searchInput")?.value||"").toLowerCase();
+
+  let jobs = allJobs.filter(j => ["Completed","Released"].includes(j.status||""));
+  if (fDriver)  jobs = jobs.filter(j => (j.assigned_driver||"") === fDriver);
+  if (fJobType) jobs = jobs.filter(j => (j.job_type||"") === fJobType);
+  if (fPayment) jobs = jobs.filter(j => (j.payment_type||"") === fPayment);
+  if (fFrom)    jobs = jobs.filter(j => j.date >= fFrom);
+  if (fTo)      jobs = jobs.filter(j => j.date <= fTo);
+  if (fSearch)  jobs = jobs.filter(j =>
+    (j.client||"").toLowerCase().includes(fSearch) ||
+    (j.from_loc||"").toLowerCase().includes(fSearch)
+  );
+  if (!jobs.length) { alert("No completed jobs to export with current filters."); return; }
+  jobs = jobs.sort((a,b) => (a.date||"") < (b.date||"") ? -1 : 1);
+
+  const members  = getStoredMembers();
+  const vehicles = getStoredVehicles();
+
+  const durationUnit = (jobType) => {
+    if (jobType === "Hourly") return "Hour";
+    if (["Half Day","Full Day Charter","Multi-Day / Tour"].includes(jobType)) return "Day";
+    return "Transfer";
+  };
+  const monthTag = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr+"T00:00");
+    if (isNaN(d.getTime())) return "";
+    return MONTHS[d.getMonth()] + "-" + String(d.getFullYear()).slice(-2);
+  };
+
+  const headers = [
+    "Month By Job","No","Ref No","Job Date","Job No","Customer","Country","City",
+    "Vehicle Type","Service Type / Description","Service Duration","Service Duration Unit",
+    "Service Start / Pick-Up Time","Service End / Drop-Off Time","Pick-Up Location","Drop-Off Location",
+    "Route / Additional Stops","Status","Driver Assigned","Driver Vehicle","License Plate",
+    "Referral / Commission","OJO Gross Margin","Driver Fare",
+    "Referral / Commission Payment Date","Fare Payment Date","Job Remarks"
+  ];
+  const currencyCols = new Set([21,22,23]); // Referral/Commission, OJO Gross Margin, Driver Fare
+
+  const rows = [headers];
+
+  jobs.forEach((j, idx) => {
+    const pricing = calculateJobPrice(j);
+    const total   = pricing ? (pricing.grandTotal || pricing.totalPrice) : num(j.total_price);
+
+    // Same recompute-on-the-fly pattern used by renderFinance()/renderEarnings()
+    let ojoCom;
+    if (j.commission_ojo_type && num(j.commission_ojo_value) > 0) {
+      ojoCom = calculateCommissionAmount(total, j.commission_ojo_type, j.commission_ojo_value);
+    } else {
+      ojoCom = num(j.commission_ojo_amount);
+    }
+    let posterCom;
+    if (j.commission_poster_type && num(j.commission_poster_value) > 0) {
+      posterCom = calculateCommissionAmount(total, j.commission_poster_type, j.commission_poster_value);
+    } else {
+      posterCom = num(j.commission_poster_amount);
+    }
+    const driverFare = total - ojoCom - posterCom;
+
+    // Referral / Commission — affiliate attribution (Affiliate Performance's own
+    // eligibility + rate calc) takes priority; agent-mode jobs fall back to the
+    // stored poster/finder-fee commission. Neither invents a new formula.
+    let referralCommission = "";
+    if (j.referred_affiliate_company_id) {
+      const company = (allCompanies||[]).find(c => c.id === j.referred_affiliate_company_id);
+      const cl = clientForJobName(j.client);
+      if (company && isCommissionEligible(j, cl)) {
+        referralCommission = +(total * (effectiveCommissionRate(cl, company)/100)).toFixed(2);
+      }
+    } else if (j.booking_mode === "agent") {
+      referralCommission = +posterCom.toFixed(2);
+    }
+
+    // Driver vehicle / plate — same check-in-first lookup the waybill uses
+    const driverMember = j.assigned_driver
+      ? members.find(m => m.full_name && m.full_name.toLowerCase().includes(j.assigned_driver.toLowerCase().split(" ")[0]))
+      : null;
+    const driverVehicle = driverMember
+      ? vehicles.find(v => String(v.assigned_member_id) === String(driverMember.id))
+      : null;
+    const extrasObj = (typeof j.extras === "string")
+      ? (() => { try { return JSON.parse(j.extras); } catch(e) { return {}; } })()
+      : (j.extras && typeof j.extras === "object" ? j.extras : {});
+    const vMake  = driverVehicle && driverVehicle.make  ? driverVehicle.make  : "";
+    const vModel = driverVehicle && driverVehicle.model ? driverVehicle.model : "";
+    const vYear  = driverVehicle && driverVehicle.year  ? driverVehicle.year  : "";
+    const vColor = driverVehicle && driverVehicle.color ? driverVehicle.color : "";
+    const vPlate = extrasObj.driver_checkin_plate || extrasObj.driver_plate
+                   || (driverVehicle && driverVehicle.plate ? driverVehicle.plate : "");
+    const checkinVehicleDesc = [extrasObj.driver_color, extrasObj.driver_vehicle].filter(Boolean).join(" ");
+    const teamVehicleDesc    = [vYear, vColor, vMake, vModel].filter(Boolean).join(" ");
+    const driverVehicleDesc  = checkinVehicleDesc || teamVehicleDesc || "";
+
+    const stopsText = Array.isArray(j.stops) && j.stops.length
+      ? j.stops.map((s,i) => `Stop ${i+1}: ${s.address||""}`).join("; ")
+      : "";
+
+    const hasHours = j.hours != null && j.hours !== "" && num(j.hours) > 0;
+
+    rows.push([
+      monthTag(j.date),
+      idx + 1,
+      j.reference_code || "",
+      j.date || "",
+      j.id != null ? j.id : "",
+      j.client || "",
+      "", // Country — no source field in jobs/jobcard schema
+      "", // City — no source field in jobs/jobcard schema
+      j.vehicle_type || "",
+      j.job_type || "",
+      hasHours ? num(j.hours) : "",
+      hasHours ? durationUnit(j.job_type) : "",
+      j.pickup_time || "",
+      j.time_end || "",
+      j.from_loc || "",
+      j.to_loc || "",
+      stopsText,
+      j.status || "",
+      j.assigned_driver || "",
+      driverVehicleDesc,
+      vPlate,
+      referralCommission,
+      +ojoCom.toFixed(2),
+      +driverFare.toFixed(2),
+      "", // Referral / Commission Payment Date — no source field
+      "", // Fare Payment Date — no source field
+      j.internal_notes || ""
+    ]);
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+
+  const colCount = headers.length;
+  ws["!cols"] = [
+    {wch:10},{wch:6},{wch:18},{wch:12},{wch:10},{wch:20},{wch:10},{wch:12},
+    {wch:16},{wch:22},{wch:10},{wch:10},{wch:12},{wch:12},{wch:26},{wch:26},
+    {wch:30},{wch:12},{wch:18},{wch:20},{wch:12},
+    {wch:14},{wch:14},{wch:12},{wch:16},{wch:14},{wch:30}
+  ];
+
+  const styleHeader = { font:{bold:true,color:{rgb:"FFFFFF"},sz:11}, fill:{fgColor:{rgb:"2D6FAD"}}, alignment:{horizontal:"center",vertical:"center"} };
+  for (let c = 0; c < colCount; c++) {
+    const addr = XLSX.utils.encode_cell({r:0, c});
+    if (ws[addr]) ws[addr].s = styleHeader;
+  }
+
+  for (let r = 1; r <= jobs.length; r++) {
+    currencyCols.forEach(c => {
+      const addr = XLSX.utils.encode_cell({r, c});
+      if (ws[addr] && typeof ws[addr].v === "number") ws[addr].s = { numFmt:"$#,##0.00" };
+    });
+  }
+
+  ws["!autofilter"] = { ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:jobs.length, c:colCount-1}}) };
+  ws["!freeze"] = { xSplit:0, ySplit:1, topLeftCell:"A2", activePane:"bottomLeft", state:"frozen" };
+
+  XLSX.utils.book_append_sheet(wb, ws, "Job Manifest");
+
+  const fileName = (fFrom && fTo)
+    ? `OJO_Job_Manifest_${fFrom}_to_${fTo}.xlsx`
+    : (fFrom || fTo)
+      ? `OJO_Job_Manifest_${fFrom||"start"}_to_${fTo||new Date().toISOString().slice(0,10)}.xlsx`
+      : `OJO_Job_Manifest_All_Completed_Jobs.xlsx`;
+
+  XLSX.writeFile(wb, fileName);
+  alert(`✅ Exported ${jobs.length} jobs → ${fileName}`);
 }
 
 function calcHours(start, end) {
