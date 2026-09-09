@@ -3135,7 +3135,7 @@ function renderEarnings(done) {
 // ── Job list helpers ──────────────────────────────────────────────────────────
 function getJobsForTab(jobs, tab) {
   if(tab==="offers") return jobs.filter(j=>(j.status||"Offer")==="Offer");
-  if(tab==="active") return jobs.filter(j=>["Assigned","Accepted","Heading to Pickup","Arrived","In Progress"].includes(j.status||""));
+  if(tab==="active") return jobs.filter(j=>["Assigned","Accepted","Checked In","Heading to Pickup","Arrived","In Progress"].includes(j.status||""));
   if(tab==="done")   return jobs.filter(j=>["Completed","Released","Cancelled","Voided"].includes(j.status||""));
   return jobs;
 }
