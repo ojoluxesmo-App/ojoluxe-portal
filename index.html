@@ -1206,6 +1206,13 @@ window.addEventListener("unhandledrejection", function(e) {
       <!-- Filter bar -->
       <div id="filter-bar" style="display:none;">
         <input id="searchInput" placeholder="🔍 Search client / route" oninput="renderJobs()" style="flex:2;min-width:140px;">
+        <select id="filterStatus" title="Status filter — scopes Job Manifest export only, independent of the Offers/Active/Completed tabs above">
+          <option value="">All Statuses</option>
+          <option value="Offer">Offer</option>
+          <option value="Active">Active</option>
+          <option value="Completed">Completed</option>
+          <option value="Cancel">Cancel</option>
+        </select>
         <select id="filterDriver" onchange="renderJobs()">
           <option value="">All Drivers</option>
         </select>
@@ -2536,8 +2543,10 @@ function setJobTab(tab) {
     if(filterBar) filterBar.style.display = "flex";
     const exportBtn = getEl("exportJobsBtn");
     if (exportBtn) exportBtn.style.display = tab === "done" ? "inline-block" : "none";
+    // Job Manifest is not tied to the Completed tab — it's scoped by the
+    // Status filter dropdown instead, so it's available on every job tab.
     const exportManifestBtn = getEl("exportManifestBtn");
-    if (exportManifestBtn) exportManifestBtn.style.display = tab === "done" ? "inline-block" : "none";
+    if (exportManifestBtn) exportManifestBtn.style.display = "inline-block";
     if(listTitle) {
       listTitle.style.display = "block";
       listTitle.textContent =
@@ -2823,12 +2832,37 @@ function exportCompletedJobs() {
   alert(`✅ Exported ${jobs.length} jobs → ${fileName}\n\nOpen in Excel → File → Print → Save as PDF to get PDF version.`);
 }
 
+// ── Job status normalization (Job Manifest only) ─────────────────────────────
+// The Offers/Active/Completed tabs and getJobsForTab() are untouched — this is
+// a separate categorization used only by the Status filter + Job Manifest, so
+// it can group every real status (including "Checked In", which the tabs'
+// own active-status list doesn't currently include) without touching the
+// existing tab/dispatch behavior. Anything that doesn't fall in one of these
+// four groups is never forced in — normalizeJobStatusGroup() returns null and
+// callers preserve the raw status instead of guessing.
+const JOB_STATUS_GROUPS = {
+  Offer:     ["Offer"],
+  Active:    ["Assigned","Accepted","Checked In","Heading to Pickup","Arrived","In Progress"],
+  Completed: ["Completed","Released"],
+  Cancel:    ["Cancelled","Voided"]
+};
+function normalizeJobStatusGroup(status) {
+  const s = status || "Offer";
+  for (const group in JOB_STATUS_GROUPS) {
+    if (JOB_STATUS_GROUPS[group].includes(s)) return group;
+  }
+  return null;
+}
+
 // ── Job Manifest export ──────────────────────────────────────────────────────
 // Detailed operational manifest for admin/management use — separate sheet from
-// the Timesheet Export above, which stays untouched. Respects every filter
-// control in the Completed Jobs filter bar (search, driver, job type, payment
-// method, date range), not just the subset the Timesheet export reads.
+// the Timesheet Export above, which stays untouched. Scoped entirely by the
+// filter bar's Status dropdown (all/Offer/Active/Completed/Cancel) plus every
+// other filter control (search, driver, job type, payment method, date
+// range) — independent of whichever Offers/Active/Completed tab happens to be
+// on screen, so it can export across statuses instead of only completed jobs.
 function exportJobManifest() {
+  const fStatus  = getEl("filterStatus")?.value||"";
   const fDriver  = (getEl("filterDriver")?.value||"").trim();
   const fJobType = getEl("filterJobType")?.value||"";
   const fPayment = getEl("filterPayment")?.value||"";
@@ -2836,7 +2870,8 @@ function exportJobManifest() {
   const fTo      = getEl("filterDateTo")?.value||"";
   const fSearch  = (getEl("searchInput")?.value||"").toLowerCase();
 
-  let jobs = allJobs.filter(j => ["Completed","Released"].includes(j.status||""));
+  let jobs = allJobs.slice();
+  if (fStatus)  jobs = jobs.filter(j => normalizeJobStatusGroup(j.status) === fStatus);
   if (fDriver)  jobs = jobs.filter(j => (j.assigned_driver||"") === fDriver);
   if (fJobType) jobs = jobs.filter(j => (j.job_type||"") === fJobType);
   if (fPayment) jobs = jobs.filter(j => (j.payment_type||"") === fPayment);
@@ -2846,7 +2881,7 @@ function exportJobManifest() {
     (j.client||"").toLowerCase().includes(fSearch) ||
     (j.from_loc||"").toLowerCase().includes(fSearch)
   );
-  if (!jobs.length) { alert("No completed jobs to export with current filters."); return; }
+  if (!jobs.length) { alert("No jobs to export with current filters."); return; }
   jobs = jobs.sort((a,b) => (a.date||"") < (b.date||"") ? -1 : 1);
 
   const members  = getStoredMembers();
@@ -2935,6 +2970,12 @@ function exportJobManifest() {
 
     const hasHours = j.hours != null && j.hours !== "" && num(j.hours) > 0;
 
+    // Human-readable normalized status (OFFER/ACTIVE/COMPLETED/CANCEL). A raw
+    // status that doesn't map to one of the four groups is preserved as-is
+    // rather than forced into the wrong bucket.
+    const statusGroup = normalizeJobStatusGroup(j.status);
+    const statusDisplay = statusGroup ? statusGroup.toUpperCase() : (j.status || "");
+
     rows.push([
       monthTag(j.date),
       idx + 1,
@@ -2953,7 +2994,7 @@ function exportJobManifest() {
       j.from_loc || "",
       j.to_loc || "",
       stopsText,
-      j.status || "",
+      statusDisplay,
       j.assigned_driver || "",
       driverVehicleDesc,
       vPlate,
@@ -2995,11 +3036,12 @@ function exportJobManifest() {
 
   XLSX.utils.book_append_sheet(wb, ws, "Job Manifest");
 
-  const fileName = (fFrom && fTo)
-    ? `OJO_Job_Manifest_${fFrom}_to_${fTo}.xlsx`
-    : (fFrom || fTo)
-      ? `OJO_Job_Manifest_${fFrom||"start"}_to_${fTo||new Date().toISOString().slice(0,10)}.xlsx`
-      : `OJO_Job_Manifest_All_Completed_Jobs.xlsx`;
+  const statusTag = fStatus === "" ? "All_Jobs" : fStatus;
+  const todayTag  = new Date().toISOString().slice(0,10);
+  const dateTag   = (fFrom && fTo) ? `${fFrom}_to_${fTo}`
+    : (fFrom || fTo) ? `${fFrom||todayTag}_to_${fTo||todayTag}`
+    : todayTag;
+  const fileName = `OJO_Job_Manifest_${statusTag}_${dateTag}.xlsx`;
 
   XLSX.writeFile(wb, fileName);
   alert(`✅ Exported ${jobs.length} jobs → ${fileName}`);
@@ -3124,7 +3166,7 @@ function populateFilterDrivers() {
 }
 
 function clearFilters() {
-  ["searchInput","filterDriver","filterJobType","filterPayment","filterDateFrom","filterDateTo"].forEach(id=>{const el=getEl(id);if(el)el.value="";});
+  ["searchInput","filterStatus","filterDriver","filterJobType","filterPayment","filterDateFrom","filterDateTo"].forEach(id=>{const el=getEl(id);if(el)el.value="";});
   renderJobs();
 }
 
