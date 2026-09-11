@@ -2703,7 +2703,7 @@ function exportCompletedJobs() {
   rows.push([""]);
 
   // Column headers row
-  rows.push(["DATE", "CLIENT", "TASK", "START TIME", "FINISH TIME", "REGULAR HRS", "OVERTIME", "OTHER HRS", "TOTAL HRS", "BILLABLE"]);
+  rows.push(["DATE", "CLIENT", "DRIVER NAME", "TASK", "START TIME", "FINISH TIME", "REGULAR HRS", "OVERTIME", "OTHER HRS", "TOTAL HRS", "BILLABLE"]);
 
   const headerRowIndex = rows.length; // 1-based for SheetJS
 
@@ -2738,6 +2738,7 @@ function exportCompletedJobs() {
     rows.push([
       dateStr,
       j.client||"",
+      j.assigned_driver||"",
       j.job_type||"Guide",
       fmt12(j.time_start),
       fmt12(j.time_end),
@@ -2751,7 +2752,7 @@ function exportCompletedJobs() {
 
   // Totals row
   rows.push([
-    "TOTAL HOURS", "", "", "---", "---",
+    "TOTAL HOURS", "", "", "", "---", "---",
     +totalReg.toFixed(2),
     +totalOT.toFixed(2),
     +totalOther.toFixed(2),
@@ -2763,23 +2764,23 @@ function exportCompletedJobs() {
 
   // Signature block
   const today = new Date().toLocaleDateString("en-US",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
-  rows.push(["", "", "", "", today, "", "", "", +totalHrs.toFixed(2)]);
-  rows.push(["SUPERVISOR SIGNATURE", "", "", "", "DATE", "", "", "", "TOTAL HOURS"]);
+  rows.push(["", "", "", "", "", today, "", "", "", +totalHrs.toFixed(2)]);
+  rows.push(["SUPERVISOR SIGNATURE", "", "", "", "", "DATE", "", "", "", "TOTAL HOURS"]);
   rows.push([""]);
-  rows.push(["", "", "", "", "", "", "", "", `$${totalBillable.toFixed(2)}`]);
-  rows.push(["", "", "", "", "", "", "", "", "TOTAL BILLABLE"]);
+  rows.push(["", "", "", "", "", "", "", "", "", `$${totalBillable.toFixed(2)}`]);
+  rows.push(["", "", "", "", "", "", "", "", "", "TOTAL BILLABLE"]);
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
   // Styling via cell references
-  const colCount = 10;
+  const colCount = 11;
   const dataStartRow = headerRowIndex + 1; // 1-based
   const totalRow     = dataStartRow + jobs.length;
 
   // Column widths
   ws["!cols"] = [
-    {wch:16},{wch:20},{wch:14},{wch:12},{wch:12},
-    {wch:12},{wch:10},{wch:10},{wch:10},{wch:12}
+    {wch:16},{wch:20},{wch:18},{wch:14},{wch:12},
+    {wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:12}
   ];
 
   // Apply cell styles using SheetJS cell objects
@@ -2802,7 +2803,7 @@ function exportCompletedJobs() {
 
   // Data rows — format numbers
   for (let r = hdrRow+1; r < hdrRow+1+jobs.length; r++) {
-    for (let c = 5; c < colCount; c++) {
+    for (let c = 6; c < colCount; c++) {
       const addr = XLSX.utils.encode_cell({r, c});
       if (ws[addr] && typeof ws[addr].v === "number") {
         ws[addr].s = c === colCount-1 ? styleAmt : styleNum;
