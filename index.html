@@ -210,6 +210,7 @@ input,select,textarea,button{font-family:var(--font-ui);}
 .jc-chips{display:flex;flex-wrap:wrap;gap:5px;}
 .jc-chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);white-space:nowrap;}
 .jc-chip.poster{border-color:var(--gold-dim);color:var(--gold);}
+.driver-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle;}
 
 /* Card body */
 .jc-body{
@@ -3164,6 +3165,20 @@ function getUrgencyLevel(date, time) {
 
 function normalizeClassName(s){return(s||"").toLowerCase().replace(/\s+/g,"-");}
 
+// ── Driver visual identifier ───────────────────────────────────────────────
+// Deterministic hash of the normalized driver name → one color from a fixed,
+// muted palette. No per-driver hardcoding: scales automatically as drivers
+// are added/removed, and the same name always maps to the same color.
+const DRIVER_COLOR_PALETTE = ["#6a8caf","#4a9a8a","#8a6ab0","#c07840","#b06a8a","#7a8aa0","#7a9a6a","#a08a5a"];
+const DRIVER_UNASSIGNED_COLOR = "#444";
+function driverColor(name) {
+  const norm = String(name||"").trim().toLowerCase();
+  if (!norm) return DRIVER_UNASSIGNED_COLOR;
+  let hash = 0;
+  for (let i=0; i<norm.length; i++) { hash = ((hash<<5) - hash + norm.charCodeAt(i)) | 0; }
+  return DRIVER_COLOR_PALETTE[Math.abs(hash) % DRIVER_COLOR_PALETTE.length];
+}
+
 function populateFilterDrivers() {
   const sel=getEl("filterDriver"); if(!sel) return;
   const cur=sel.value;
@@ -3232,13 +3247,14 @@ function renderJobs() {
     const otRateVal = num(j.ot_rate) || (pricing.type==="hourly" ? pricing.otRate : 0);
     const otRateLabel = otRateVal>0 ? `OT ${money(otRateVal)}/hr` : "";
     const posterChip = j.posted_by ? `<span class="jc-chip poster">👤 ${escapeHtml(j.posted_by)}</span>` : "";
+    const dColor = driverColor(j.assigned_driver);
 
-    html+=`<div class="job-card">
+    html+=`<div class="job-card" style="border-left:3px solid ${dColor};">
       <div class="jc-header" onclick="toggleJobCard('${jid}')">
         <div class="jc-avatar">${icon}</div>
         <div class="jc-main">
           <div class="jc-client">${escapeHtml(j.client||"-")}</div>
-          <div class="jc-meta">${agentBadge}${affiliateBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · ${escapeHtml(j.assigned_driver||"Unassigned")}</div>
+          <div class="jc-meta">${agentBadge}${affiliateBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · <span class="driver-dot" style="background:${dColor};"></span>${escapeHtml(j.assigned_driver||"Unassigned")}</div>
         </div>
         <div class="jc-right">
           <div class="jc-price">${money(pricing.grandTotal||pricing.totalPrice)}</div>
