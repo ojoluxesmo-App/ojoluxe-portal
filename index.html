@@ -277,6 +277,12 @@ input,select,textarea,button{font-family:var(--font-ui);}
 .btn-full{width:100%;flex:none;margin-top:6px;}
 .btn-auto{flex:0 0 auto;}
 
+/* Mobile tap-target/spacing tuning for Job Card action buttons only — scoped
+   to .jc-inner so the shared .btn/.action-row classes used elsewhere in the
+   app (forms, modals) are untouched. */
+.jc-inner .action-row{gap:8px;}
+.jc-inner .action-row .btn{min-height:44px;padding:11px 14px;font-size:13px;}
+
 /* ─── SMALL ACTION BUTTONS (Companies / Leads / Registrations / Vehicles) ── */
 /* Shared class system: .small-btn is the base (size/shape/interaction);
    pair it with one variant — .secondary-btn / .btn-edit / .danger-btn /
