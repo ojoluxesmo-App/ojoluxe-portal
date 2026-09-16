@@ -195,6 +195,16 @@ input,select,textarea,button{font-family:var(--font-ui);}
   display:flex;align-items:center;justify-content:center;
   font-size:16px;
 }
+/* Prominent date badge — the primary way to tell consecutive multi-day
+   cards apart at a glance, especially on mobile. */
+.jc-datebadge{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:46px;flex-shrink:0;padding:6px 2px;border-radius:10px;
+  background:var(--surface2);border:1px solid var(--border2);
+}
+.jc-db-month{font-size:9px;font-weight:800;letter-spacing:.08em;color:var(--gold);}
+.jc-db-day{font-size:19px;font-weight:800;color:var(--text);line-height:1.15;}
+.jc-db-dow{font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--muted);}
 .jc-main{flex:1;min-width:0;}
 .jc-client{font-size:15px;font-weight:700;color:var(--text);line-height:1.2;}
 .jc-meta{font-size:11px;color:var(--muted);margin-top:2px;}
@@ -3155,6 +3165,15 @@ function getJobsForTab(jobs, tab) {
   return jobs;
 }
 
+const JC_MONTH_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const JC_DOW_ABBR = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+function formatDateBadge(dateStr) {
+  if (!dateStr) return { month:"—", day:"–", dow:"" };
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return { month:"—", day:"–", dow:"" };
+  return { month: JC_MONTH_ABBR[d.getMonth()], day: d.getDate(), dow: JC_DOW_ABBR[d.getDay()] };
+}
+
 function getUrgencyLevel(date, time) {
   if(!date) return "Normal";
   const now = new Date();
@@ -3264,19 +3283,24 @@ function renderJobs() {
     const otRateLabel = otRateVal>0 ? `OT ${money(otRateVal)}/hr` : "";
     const posterChip = j.posted_by ? `<span class="jc-chip poster">👤 ${escapeHtml(j.posted_by)}</span>` : "";
     const dColor = driverColor(j.assigned_driver);
+    const dateBadge = formatDateBadge(j.date);
 
     html+=`<div class="job-card" style="border-left:3px solid ${dColor};">
       <div class="jc-header" onclick="toggleJobCard('${jid}')">
-        <div class="jc-avatar">${icon}</div>
+        <div class="jc-datebadge">
+          <div class="jc-db-month">${escapeHtml(dateBadge.month)}</div>
+          <div class="jc-db-day">${escapeHtml(String(dateBadge.day))}</div>
+          <div class="jc-db-dow">${escapeHtml(dateBadge.dow)}</div>
+        </div>
         <div class="jc-main">
           <div class="jc-client">${escapeHtml(j.client||"-")}</div>
-          <div class="jc-meta">${agentBadge}${affiliateBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}${escapeHtml(j.date||"-")}${j.pickup_time?" · "+escapeHtml(j.pickup_time):""} · <span class="driver-dot" style="background:${dColor};"></span>${escapeHtml(j.assigned_driver||"Unassigned")}</div>
+          <div class="jc-meta">${j.pickup_time?`<span style="color:var(--text);font-weight:700;">${escapeHtml(j.pickup_time)}</span> · `:""}${agentBadge}${affiliateBadge}${j.reference_code?`<span style="color:var(--gold);font-weight:700;">${escapeHtml(j.reference_code)}</span> · `:""}<span class="driver-dot" style="background:${dColor};"></span>${escapeHtml(j.assigned_driver||"Unassigned")}</div>
         </div>
         <div class="jc-right">
           <div class="jc-price">${money(pricing.grandTotal||pricing.totalPrice)}</div>
           ${pricing.otTotal>0?`<div style="font-size:10px;color:var(--red);font-weight:700;text-align:right;">+${money(pricing.otTotal)} OT</div>`:""}
           ${pricing.approvedAddons>0?`<div style="font-size:10px;color:#7ec8e3;font-weight:700;text-align:right;">+${money(pricing.approvedAddons)} exp</div>`:""}
-          <div class="jc-status" style="color:${status==="Completed"?"var(--green)":status==="Offer"?"var(--muted)":"var(--gold)"}">${escapeHtml(status)}</div>
+          <div class="jc-status" style="color:${status==="Completed"?"var(--green)":status==="Offer"?"var(--muted)":"var(--gold)"}">${icon} ${escapeHtml(status)}</div>
         </div>
         <span class="jc-arrow" id="jca-${jid}">▼</span>
       </div>
