@@ -1261,6 +1261,12 @@ window.addEventListener("unhandledrejection", function(e) {
         <button id="exportManifestBtn" onclick="exportJobManifest()" style="display:none;background:#1a1508;border:1px solid #C9A84C44;border-radius:8px;padding:7px 12px;color:#C9A84C;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">📄 Job Manifest</button>
       </div>
 
+      <!-- Multi-day bulk driver share -->
+      <div id="selectModeBar" style="display:none;justify-content:space-between;align-items:center;padding:2px 0 8px;gap:8px;">
+        <button id="selectModeToggle" onclick="toggleSelectMode()" style="background:transparent;border:1px solid var(--border2);border-radius:8px;padding:7px 12px;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;">☑ Select Jobs</button>
+        <span id="selectedCountLabel" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+
       <!-- List title -->
       <div id="listTitle" style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;padding:4px 0 10px;display:none;"></div>
 
@@ -1268,6 +1274,11 @@ window.addEventListener("unhandledrejection", function(e) {
       <div id="jobs" class="job-list"></div>
     </div>
   </div>
+</div>
+
+<!-- Sticky Share Selected bar — mobile-friendly, only visible while items are selected -->
+<div id="shareSelectedBar" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:600;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--border2);">
+  <button class="btn btn-gold btn-full" style="padding:13px;font-size:13px;" onclick="shareSelectedJobs()">🔗 Share Selected (<span id="shareSelectedCount">0</span>)</button>
 </div>
 
 <!-- ══════════════ PEOPLE PAGE ══════════════ -->
@@ -2466,6 +2477,9 @@ let currentPeopleTab = "drivers";
 let currentFinanceTab = "overview";
 let editingId = null;
 let portalMode = "admin";
+// Multi-day bulk driver share — "Select Jobs" mode on Offer/Active tabs
+let selectModeOn = false;
+let selectedJobIds = new Set();
 
 function escapeHtml(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 function money(v){return "$"+(parseFloat(v)||0).toFixed(2);}
@@ -2577,6 +2591,11 @@ function setJobTab(tab) {
         tab==="offers" ? "📋 OFFERS" :
         tab==="active" ? "🚘 ACTIVE JOBS" : "✅ COMPLETED";
     }
+    // Multi-day bulk share select mode is only offered on Offer/Active —
+    // leaving those tabs exits it so a stale selection can't linger.
+    const selectBar = getEl("selectModeBar");
+    if (selectBar) selectBar.style.display = (tab==="offers"||tab==="active") ? "flex" : "none";
+    if (tab!=="offers" && tab!=="active" && selectModeOn) { selectModeOn = false; selectedJobIds.clear(); updateSelectedCountUI(); }
     renderJobs();
   }
 }
@@ -3287,6 +3306,7 @@ function renderJobs() {
 
     html+=`<div class="job-card" style="border-left:3px solid ${dColor};">
       <div class="jc-header" onclick="toggleJobCard('${jid}')">
+        ${selectModeOn?`<input type="checkbox" class="jc-select-cb" onclick="event.stopPropagation();toggleJobSelect('${jid}',this.checked)" ${selectedJobIds.has(String(j.id))?"checked":""} style="width:20px;height:20px;flex-shrink:0;accent-color:var(--gold);cursor:pointer;">`:""}
         <div class="jc-datebadge">
           <div class="jc-db-month">${escapeHtml(dateBadge.month)}</div>
           <div class="jc-db-day">${escapeHtml(String(dateBadge.day))}</div>
@@ -3452,6 +3472,83 @@ function toggleJobCard(id) {
   if(!body) return;
   body.classList.toggle("open");
   if(arrow) arrow.classList.toggle("open");
+}
+
+// ── Multi-day bulk driver share ────────────────────────────────────────────────
+function toggleSelectMode() {
+  selectModeOn = !selectModeOn;
+  if (!selectModeOn) selectedJobIds.clear();
+  const btn = getEl("selectModeToggle");
+  if (btn) {
+    btn.textContent = selectModeOn ? "✕ Cancel Select" : "☑ Select Jobs";
+    btn.style.borderColor = selectModeOn ? "var(--gold)" : "var(--border2)";
+    btn.style.color = selectModeOn ? "var(--gold)" : "var(--muted)";
+  }
+  updateSelectedCountUI();
+  renderJobs();
+}
+
+function toggleJobSelect(jobId, checked) {
+  if (checked) selectedJobIds.add(String(jobId));
+  else selectedJobIds.delete(String(jobId));
+  updateSelectedCountUI();
+}
+
+function updateSelectedCountUI() {
+  const n = selectedJobIds.size;
+  const bar = getEl("shareSelectedBar");
+  const cnt = getEl("shareSelectedCount");
+  const lbl = getEl("selectedCountLabel");
+  if (cnt) cnt.textContent = n;
+  if (bar) bar.style.display = (selectModeOn && n > 0) ? "block" : "none";
+  if (lbl) lbl.textContent = selectModeOn && n > 0 ? n + " selected" : "";
+}
+
+// Validates the selection (same driver, all assigned), writes ONE shared
+// share_token to every selected EXISTING job row (no duplication — see
+// audit: share_token has no unique constraint, so Supabase already allows
+// several rows to carry the same token), then shares ONE link. job.html's
+// fetchJob() already returns every job matching a token, so a multi-day
+// link just works there once this write lands. Affiliate/agent share links
+// are a completely separate field/flow and are never touched here.
+async function shareSelectedJobs() {
+  const ids = [...selectedJobIds];
+  if (!ids.length) return;
+  const jobs = ids.map(id => allJobs.find(j => String(j.id) === id)).filter(Boolean);
+  if (!jobs.length) return;
+
+  const drivers = new Set(jobs.map(j => (j.assigned_driver || "").trim()));
+  if (drivers.has("")) { alert("One or more selected jobs is unassigned. Assign a driver to every selected job before sharing."); return; }
+  if (drivers.size > 1) { alert("Selected jobs have different drivers. Please select jobs for one driver at a time."); return; }
+
+  const driverName = jobs[0].assigned_driver;
+  const token = generateShareToken();
+
+  try {
+    const r = await fetch(SUPABASE_URL + "/rest/v1/jobs?id=in.(" + ids.map(encodeURIComponent).join(",") + ")", {
+      method: "PATCH",
+      headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Prefer":"return=minimal" },
+      body: JSON.stringify({ share_token: token })
+    });
+    if (!r.ok && r.status !== 204) { alert("Could not generate the bulk share link."); return; }
+    jobs.forEach(j => { j.share_token = token; });
+  } catch(e) { alert("Error: " + e.message); return; }
+
+  const PROD_URL = "https://ojoluxe-portal.vercel.app";
+  const url = PROD_URL + "/job.html?token=" + token;
+  const sortedDates = [...new Set(jobs.map(j => j.date).filter(Boolean))].sort();
+  const dateRange = sortedDates.length > 1 ? `${sortedDates[0]} → ${sortedDates[sortedDates.length-1]}` : (sortedDates[0]||"");
+  const msg = `OJO Luxe Multi-Day Assignment\nDriver: ${driverName}\n${jobs.length} service days · ${dateRange}\n\nOpen your schedule:\n${url}`;
+
+  selectModeOn = false;
+  selectedJobIds.clear();
+  renderJobs();
+  updateSelectedCountUI();
+
+  if (navigator.share) {
+    try { await navigator.share({ title: "OJO Luxe Multi-Day Assignment", text: msg }); return; } catch(e) {}
+  }
+  showShareOptions(url, msg);
 }
 
 // ── File Upload ───────────────────────────────────────────────────────────────

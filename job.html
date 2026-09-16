@@ -818,12 +818,17 @@ const H = {
 };
 const HG = { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY };
 
+// Returns ALL jobs carrying this share_token — a plain link has exactly one
+// (existing single-job behavior, untouched below); a multi-day bulk-share
+// link has the same token written to several existing job rows, so this
+// naturally returns all of them. Never widened beyond an exact token match,
+// so a driver can only ever see jobs carrying their own link's token.
 async function fetchJob(token) {
-  const url = SUPABASE_URL + "/rest/v1/jobs?share_token=eq." + encodeURIComponent(token) + "&select=*&limit=1";
+  const url = SUPABASE_URL + "/rest/v1/jobs?share_token=eq." + encodeURIComponent(token) + "&select=*";
   const r = await fetch(url, { headers: HG });
   const data = await r.json();
   if (!r.ok) throw new Error(data.message || "Fetch failed");
-  return data[0] || null;
+  return Array.isArray(data) ? data : [];
 }
 
 async function patchJob(jobId, patch) {
@@ -857,6 +862,12 @@ function _debugWebviewLabel() {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentJob = null;
+// Multi-day bulk share: set to the list of job ids sharing this link's token
+// whenever more than one job matched (see fetchJob). Stays null for a plain
+// single-job link, which leaves every existing status/check-in function
+// exactly as it behaved before this feature existed.
+let multiDayJobIds = null;
+let multiDayJobsCache = [];
 let _inAppBannerDismissed = false;
 function dismissInAppBanner() {
   _inAppBannerDismissed = true;
@@ -947,6 +958,7 @@ function render(job) {
 
   document.getElementById("app").innerHTML = `
   <div class="job-card">
+    ${multiDayJobIds ? `<button onclick="renderMultiDayList()" style="margin:12px 12px 0;padding:8px 12px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;">← All ${multiDayJobIds.length} Days</button>` : ""}
     ${showInAppBanner ? `
     <div style="position:relative;margin:12px 12px 0;padding:10px 30px 10px 12px;border:1px solid #C9A84C;border-radius:10px;background:rgba(201,168,76,0.12);color:#C9A84C;font-size:11px;font-weight:600;line-height:1.5;">
       You are viewing inside WhatsApp. Tap the <strong>⋯</strong> (or Share) menu and choose "Open in Safari" or "Open in Chrome" before accepting, so your Accept and status buttons work and stay saved.
@@ -1674,6 +1686,10 @@ async function confirmAccept() {
   // the offer-claim path — so the isMine gate resolves for legacy/
   // admin-assigned jobs too, not only jobs claimed off the offer board.
   localStorage.setItem("ojo_claim_" + currentJob.id, name);
+  // Multi-day bulk share: grant local ownership for every day in the set,
+  // not just the one Stage A ran against, so drilling into any other day
+  // later on this device resolves isMine correctly too.
+  if (multiDayJobIds) multiDayJobIds.forEach(id => localStorage.setItem("ojo_claim_" + id, name));
   render(currentJob);
 
   if (isClaimFlow && currentJob.extras && currentJob.extras.driver_checkin_name === name) {
@@ -1901,7 +1917,7 @@ async function claimOfferJob() {
       openCheckin();
     } else {
       showToast("Sorry, this job was just taken.");
-      const fresh = await fetchJob(getToken());
+      const fresh = (await fetchJob(getToken()))[0] || null;
       if (fresh) render(fresh);
     }
   } catch(e) {
@@ -2075,7 +2091,25 @@ async function applyStatus(newStatus, extraPatch) {
     await patchJob(currentJob.id, patch);
     Object.assign(currentJob, patch);
     currentJob.extras = mergedExtras;
-    render(currentJob);
+
+    // Multi-day bulk share: the driver accepts (Stage A name/phone) and
+    // checks in (Stage B vehicle/photos) ONCE for the whole trip, so those
+    // two stages propagate to every other day in the set. Every later
+    // transition (Heading to Pickup, Arrived, In Progress, Completed,
+    // Cancelled) is deliberately excluded here — it stays strictly
+    // per-day, patched only on currentJob.id above, exactly like a plain
+    // single-job link. Completing one date must never touch the others.
+    if (multiDayJobIds && (newStatus === "Accepted" || newStatus === "Checked In")) {
+      const others = multiDayJobIds.filter(id => String(id) !== String(currentJob.id));
+      await Promise.all(others.map(id => patchJob(id, patch).catch(e => console.error("[OJO] multi-day propagate failed for job " + id, e))));
+      multiDayJobsCache.forEach(j => { if (String(j.id) !== String(currentJob.id)) Object.assign(j, patch); });
+    }
+
+    if (multiDayJobIds && newStatus !== "Accepted") {
+      renderMultiDayList();
+    } else {
+      render(currentJob);
+    }
     showToast(newStatus === "Cancelled" ? "Job cancelled" : newStatus === "Offer" && patchExtras.cancel_reason ? "⚠️ Job released to dispatch" : `Status: ${newStatus} ✓`);
   } catch(e) {
     alert("Failed to update status: " + e.message);
@@ -2094,13 +2128,17 @@ async function init() {
   renderLoading();
 
   try {
-    const job = await fetchJob(token);
-    if (!job) {
+    const jobs = await fetchJob(token);
+    if (!jobs.length) {
       renderError("This job link is invalid or has been revoked. The token may be incorrect.");
       document.getElementById("headerRef").textContent = "Not Found";
       return;
     }
-    routeCheckinEntry(job);
+    if (jobs.length === 1) {
+      routeCheckinEntry(jobs[0]); // existing single-job behavior, unchanged
+    } else {
+      routeMultiDayEntry(jobs);
+    }
   } catch(e) {
     renderError("Could not load job: " + e.message);
     document.getElementById("headerRef").textContent = "Error";
@@ -2136,6 +2174,114 @@ function routeCheckinEntry(job) {
     return;
   }
   promptCheckinGate(ex);
+}
+
+// ── Multi-day bulk share ──────────────────────────────────────────────────────
+// Entered only when fetchJob() returned more than one job for this token
+// (see init()). A plain single-job link never reaches any of this.
+const MD_MONTH_ABBR = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const MD_DOW_ABBR = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+function mdFormatDate(dateStr) {
+  if (!dateStr) return { month:"—", day:"–", dow:"" };
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return { month:"—", day:"–", dow:"" };
+  return { month: MD_MONTH_ABBR[d.getMonth()], day: d.getDate(), dow: MD_DOW_ABBR[d.getDay()] };
+}
+function mdStatusLabel(status) {
+  if (status === "Completed") return "✅ Completed";
+  if (status === "Cancelled") return "✕ Cancelled";
+  if (status === "Checked In") return "🚗 Checked In";
+  if (["Heading to Pickup","Arrived","In Progress"].includes(status)) return "🟢 Active";
+  return "⏳ Upcoming";
+}
+function mdDateBadgeHtml(dateStr) {
+  const d = mdFormatDate(dateStr);
+  return `<div style="width:44px;flex-shrink:0;text-align:center;padding:5px 2px;border-radius:9px;background:var(--surface2,#1a1a1a);border:1px solid var(--border);">
+    <div style="font-size:9px;font-weight:800;letter-spacing:.06em;color:#C9A84C;">${escapeHtml(d.month)}</div>
+    <div style="font-size:17px;font-weight:800;line-height:1.1;">${escapeHtml(String(d.day))}</div>
+    <div style="font-size:9px;font-weight:700;color:var(--muted);">${escapeHtml(d.dow)}</div>
+  </div>`;
+}
+
+function routeMultiDayEntry(jobs) {
+  multiDayJobIds = jobs.map(j => j.id);
+  multiDayJobsCache = jobs.slice().sort((a, b) => {
+    const da = (a.date||"") + " " + (a.pickup_time||"");
+    const db = (b.date||"") + " " + (b.pickup_time||"");
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+
+  const anyAccepted = multiDayJobsCache.some(j => !["Offer","Assigned"].includes(j.status||"Assigned"));
+  if (anyAccepted) renderMultiDayList();
+  else renderMultiDayAccept();
+}
+
+function renderMultiDayAccept() {
+  const driver = multiDayJobsCache[0].assigned_driver || "Driver";
+  document.getElementById("headerRef").textContent = driver + " · " + multiDayJobsCache.length + " days";
+
+  const rows = multiDayJobsCache.map(j => `
+    <div class="jc-head" style="gap:10px;">
+      ${mdDateBadgeHtml(j.date)}
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;">${escapeHtml(j.reference_code||"")}</div>
+        <div class="jc-meta">${j.pickup_time?escapeHtml(j.pickup_time)+" · ":""}${escapeHtml(j.from_loc||"—")} → ${escapeHtml(j.to_loc||"—")}</div>
+      </div>
+    </div>`).join("");
+
+  document.getElementById("app").innerHTML = `
+  <div class="job-card">
+    <div class="jc-head">
+      <div>
+        <div class="jc-client">Multi-Day Assignment</div>
+        <div class="jc-meta">${escapeHtml(driver)} · ${multiDayJobsCache.length} service days</div>
+      </div>
+    </div>
+    <div style="padding:0 12px;display:flex;flex-direction:column;gap:10px;">${rows}</div>
+    <div style="padding:12px;">
+      <button class="status-next" onclick="acceptMultiDay()">✅ Accept All ${multiDayJobsCache.length} Days</button>
+    </div>
+  </div>`;
+}
+
+function acceptMultiDay() {
+  currentJob = multiDayJobsCache[0];
+  doStatus("Accepted");
+}
+
+function renderMultiDayList() {
+  const driver = multiDayJobsCache[0]?.assigned_driver || "Driver";
+  document.getElementById("headerRef").textContent = driver + " · " + multiDayJobsCache.length + " days";
+
+  const rows = multiDayJobsCache.map(j => `
+    <div class="job-card" style="margin-bottom:8px;cursor:pointer;" onclick="viewMultiDayDay(${j.id})">
+      <div class="jc-head" style="gap:10px;">
+        ${mdDateBadgeHtml(j.date)}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:700;">${escapeHtml(j.reference_code||"")}</div>
+          <div class="jc-meta">${j.pickup_time?escapeHtml(j.pickup_time)+" · ":""}${escapeHtml(j.vehicle_type||"")}</div>
+          <div class="jc-meta" style="margin-top:2px;">${escapeHtml(j.from_loc||"—")} → ${escapeHtml(j.to_loc||"—")}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;font-size:11px;font-weight:700;white-space:nowrap;">${mdStatusLabel(j.status||"Assigned")}</div>
+      </div>
+    </div>`).join("");
+
+  document.getElementById("app").innerHTML = `
+    <div class="jc-head" style="padding:12px 12px 0;">
+      <div>
+        <div class="jc-client">${escapeHtml(driver)}</div>
+        <div class="jc-meta">${multiDayJobsCache.length} service days · tap a day to update its status</div>
+      </div>
+    </div>
+    <div style="padding:12px;">${rows}</div>
+  `;
+}
+
+function viewMultiDayDay(id) {
+  const job = multiDayJobsCache.find(j => String(j.id) === String(id));
+  if (!job) return;
+  currentJob = job;
+  render(job);
 }
 
 // Manual re-entry into the same gate/Stage-B flow, for the "Accepted"
