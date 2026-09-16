@@ -204,6 +204,13 @@ input,select,textarea,button{font-family:var(--font-ui);}
 .jc-arrow{font-size:10px;color:var(--muted);transition:transform .2s;margin-left:4px;}
 .jc-arrow.open{transform:rotate(180deg);color:var(--gold);}
 
+/* Collapsed-card at-a-glance summary (always visible, no tap needed) */
+.jc-summary{padding:0 14px 10px;cursor:pointer;}
+.jc-route-compact{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px;}
+.jc-chips{display:flex;flex-wrap:wrap;gap:5px;}
+.jc-chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid var(--border2);background:var(--surface2);color:var(--muted);white-space:nowrap;}
+.jc-chip.poster{border-color:var(--gold-dim);color:var(--gold);}
+
 /* Card body */
 .jc-body{
   max-height:0;overflow:hidden;opacity:0;
@@ -3219,6 +3226,12 @@ function renderJobs() {
     const agentBadge = j.booking_mode==="agent" ? '<span class="badge-agent">🤝 Agent</span> ' : "";
     const jcAffiliateCompany = j.referred_affiliate_company_id ? (allCompanies || []).find(c => c.id === j.referred_affiliate_company_id) : null;
     const affiliateBadge = jcAffiliateCompany ? `<span class="badge-agent" style="border-color:#2e7d32;color:#87e18b;">🎯 ${escapeHtml(jcAffiliateCompany.legal_name || jcAffiliateCompany.dba || "Affiliate")}</span> ` : "";
+    // At-a-glance summary fields — shown without opening the card (Job Card Expanded Preview)
+    const routeCompact = `${j.from_loc||"—"} → ${j.to_loc||"—"}`;
+    const includedHoursLabel = pricing.type==="hourly" ? `${pricing.bracket}h incl.` : "";
+    const otRateVal = num(j.ot_rate) || (pricing.type==="hourly" ? pricing.otRate : 0);
+    const otRateLabel = otRateVal>0 ? `OT ${money(otRateVal)}/hr` : "";
+    const posterChip = j.posted_by ? `<span class="jc-chip poster">👤 ${escapeHtml(j.posted_by)}</span>` : "";
 
     html+=`<div class="job-card">
       <div class="jc-header" onclick="toggleJobCard('${jid}')">
@@ -3234,6 +3247,16 @@ function renderJobs() {
           <div class="jc-status" style="color:${status==="Completed"?"var(--green)":status==="Offer"?"var(--muted)":"var(--gold)"}">${escapeHtml(status)}</div>
         </div>
         <span class="jc-arrow" id="jca-${jid}">▼</span>
+      </div>
+      <div class="jc-summary" onclick="toggleJobCard('${jid}')">
+        <div class="jc-route-compact" title="${escapeHtml(routeCompact)}">${escapeHtml(routeCompact)}</div>
+        <div class="jc-chips">
+          <span class="jc-chip">${escapeHtml(j.vehicle_type||"-")}</span>
+          <span class="jc-chip">${escapeHtml(j.job_type||"-")}</span>
+          ${includedHoursLabel?`<span class="jc-chip">${includedHoursLabel}</span>`:""}
+          ${otRateLabel?`<span class="jc-chip">${otRateLabel}</span>`:""}
+          ${posterChip}
+        </div>
       </div>
       <div class="jc-body" id="jcb-${jid}">
         <div class="jc-divider"></div>
