@@ -614,6 +614,22 @@
   </div>
 </div>
 
+<!-- ══ Save Your Trip Onboarding (multi-day) ══ -->
+<div id="tripOnboardingOverlay" class="checkin-overlay" style="display:none;">
+  <div class="checkin-sheet">
+    <div class="checkin-title">📲 Save Your OJO LUXE Trip</div>
+    <div class="checkin-sub">This one link is your whole trip — no need for a new link each morning. Save it to your home screen so it's always one tap away.</div>
+    <div id="tripOnboardingHowTo" style="display:none;text-align:left;background:var(--surface2,#1a1a1a);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:4px 0 12px;font-size:13px;line-height:1.7;">
+      <strong>On iPhone (Safari):</strong><br>
+      1. Tap the <strong>Share</strong> icon (square with an ↑) at the bottom of the screen<br>
+      2. Scroll down and tap <strong>"Add to Home Screen"</strong><br>
+      3. Tap <strong>Add</strong> — your trip is now one tap away
+    </div>
+    <button type="button" class="expense-add-btn" id="tripOnboardingHowToBtn" onclick="toggleTripOnboardingHowTo()">Show Me How</button>
+    <button class="checkin-confirm" onclick="dismissTripOnboarding()" style="margin-top:10px;">Got It</button>
+  </div>
+</div>
+
 <!-- ══ Selfie Verification Modal ══ -->
 <div id="selfieOverlay" class="selfie-overlay">
 
@@ -1691,6 +1707,9 @@ async function confirmAccept() {
   // later on this device resolves isMine correctly too.
   if (multiDayJobIds) multiDayJobIds.forEach(id => localStorage.setItem("ojo_claim_" + id, name));
   render(currentJob);
+  // confirmCheckin() is Stage A only — it always accepts the assignment, so
+  // this is exactly "after multi-day acceptance", once per trip link.
+  if (multiDayJobIds) maybeShowTripOnboarding();
 
   if (isClaimFlow && currentJob.extras && currentJob.extras.driver_checkin_name === name) {
     // applyStatus() already rendered with the real name in assigned_driver,
@@ -2051,7 +2070,37 @@ async function copyOfferAcceptedMessage(btn) {
   }
 }
 
+// Stale open-page protection: before ANY status mutation (single-job or
+// multi-day), re-verify this job still carries this link's token. A
+// dispatcher reassigning/unassigning/re-sharing a job rotates its
+// share_token (see index.html confirmDispatch/saveJob), so a driver who
+// already had this link open — and hasn't reloaded — would otherwise still
+// be able to PATCH a job that's no longer theirs.
+async function isStillAuthorizedForToken(jobId) {
+  try {
+    const url = SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(jobId) + "&select=share_token";
+    const r = await fetch(url, { headers: HG });
+    const data = await r.json();
+    if (!r.ok || !Array.isArray(data) || !data.length) return false;
+    return data[0].share_token === getToken();
+  } catch(e) {
+    console.warn("[OJO] stale-link check failed, allowing action:", e);
+    return true; // transient network hiccup — don't lock a driver out over it
+  }
+}
+
 async function applyStatus(newStatus, extraPatch) {
+  const ok = await isStillAuthorizedForToken(currentJob.id);
+  if (!ok) {
+    alert("This service has been reassigned. Please contact dispatch if you have questions.");
+    try {
+      const jobs = await fetchJob(getToken());
+      if (jobs.length === 1) routeCheckinEntry(jobs[0]);
+      else if (jobs.length > 1) routeMultiDayEntry(jobs);
+      else renderError("This link is no longer active.");
+    } catch(e) { /* leave current view as-is if the refresh itself fails */ }
+    return;
+  }
   const patch = Object.assign({ status: newStatus }, extraPatch);
   if (newStatus === "In Progress") patch.time_start = new Date().toTimeString().slice(0,5);
   if (newStatus === "Completed")   patch.time_end   = new Date().toTimeString().slice(0,5);
@@ -2092,14 +2141,15 @@ async function applyStatus(newStatus, extraPatch) {
     Object.assign(currentJob, patch);
     currentJob.extras = mergedExtras;
 
-    // Multi-day bulk share: the driver accepts (Stage A name/phone) and
-    // checks in (Stage B vehicle/photos) ONCE for the whole trip, so those
-    // two stages propagate to every other day in the set. Every later
-    // transition (Heading to Pickup, Arrived, In Progress, Completed,
-    // Cancelled) is deliberately excluded here — it stays strictly
+    // Multi-day bulk share: the driver accepts (Stage A name/phone) ONCE
+    // for the whole trip, so that stage propagates to every other day in
+    // the set. Every later transition — Checked In (Stage B vehicle/
+    // photos), Heading to Pickup, Arrived, In Progress, Completed,
+    // Cancelled — is deliberately excluded here — it stays strictly
     // per-day, patched only on currentJob.id above, exactly like a plain
-    // single-job link. Completing one date must never touch the others.
-    if (multiDayJobIds && (newStatus === "Accepted" || newStatus === "Checked In")) {
+    // single-job link. Checking in or completing one date must never
+    // touch the others.
+    if (multiDayJobIds && newStatus === "Accepted") {
       const others = multiDayJobIds.filter(id => String(id) !== String(currentJob.id));
       await Promise.all(others.map(id => patchJob(id, patch).catch(e => console.error("[OJO] multi-day propagate failed for job " + id, e))));
       multiDayJobsCache.forEach(j => { if (String(j.id) !== String(currentJob.id)) Object.assign(j, patch); });
@@ -2202,6 +2252,39 @@ function mdDateBadgeHtml(dateStr) {
     <div style="font-size:9px;font-weight:700;color:var(--muted);">${escapeHtml(d.dow)}</div>
   </div>`;
 }
+// Local (not UTC) YYYY-MM-DD — matches how job.date is stored/compared elsewhere.
+function mdTodayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+
+// ── "Save Your Trip" onboarding — shown once after accepting a multi-day
+// assignment, so the driver knows this one link is theirs for every day of
+// the trip. Keyed by token so a different trip link prompts again.
+function _tripOnboardingKey() {
+  return "ojo_trip_onboarding_seen_" + getToken();
+}
+function maybeShowTripOnboarding() {
+  if (!multiDayJobIds) return;
+  if (localStorage.getItem(_tripOnboardingKey()) === "1") return;
+  openTripOnboarding();
+}
+function openTripOnboarding() {
+  document.getElementById("tripOnboardingHowTo").style.display = "none";
+  document.getElementById("tripOnboardingHowToBtn").textContent = "Show Me How";
+  document.getElementById("tripOnboardingOverlay").style.display = "flex";
+}
+function toggleTripOnboardingHowTo() {
+  const box = document.getElementById("tripOnboardingHowTo");
+  const btn = document.getElementById("tripOnboardingHowToBtn");
+  const show = box.style.display === "none";
+  box.style.display = show ? "block" : "none";
+  btn.textContent = show ? "Hide" : "Show Me How";
+}
+function dismissTripOnboarding() {
+  localStorage.setItem(_tripOnboardingKey(), "1");
+  document.getElementById("tripOnboardingOverlay").style.display = "none";
+}
 
 function routeMultiDayEntry(jobs) {
   multiDayJobIds = jobs.map(j => j.id);
@@ -2253,8 +2336,45 @@ function renderMultiDayList() {
   const driver = multiDayJobsCache[0]?.assigned_driver || "Driver";
   document.getElementById("headerRef").textContent = driver + " · " + multiDayJobsCache.length + " days";
 
-  const rows = multiDayJobsCache.map(j => `
-    <div class="job-card" style="margin-bottom:8px;cursor:pointer;" onclick="viewMultiDayDay(${j.id})">
+  const todayStr = mdTodayStr();
+  const DONE_STATUSES = ["Completed", "Cancelled"];
+  const todaysJob  = multiDayJobsCache.find(j => j.date === todayStr && !DONE_STATUSES.includes(j.status||""));
+  const upcoming   = multiDayJobsCache.filter(j => j !== todaysJob && !DONE_STATUSES.includes(j.status||"") && (j.date||"") >= todayStr);
+  const completed  = multiDayJobsCache.filter(j => j !== todaysJob && (DONE_STATUSES.includes(j.status||"") || (j.date||"") < todayStr));
+
+  // TODAY'S SERVICE — the only card in this list that routes into the real
+  // single-job action view. Nothing else on this screen is clickable into
+  // check-in/status actions, so a driver can never advance a day that
+  // isn't today from here (see viewMultiDayDay / render's day-gate below).
+  const todayHtml = todaysJob ? (() => {
+    const d = mdFormatDate(todaysJob.date);
+    return `
+    <div class="job-card" style="margin-bottom:16px;cursor:pointer;border:1px solid #C9A84C;" onclick="viewMultiDayDay(${todaysJob.id})">
+      <div style="padding:10px 12px 0;font-size:10px;font-weight:800;letter-spacing:.08em;color:#C9A84C;">TODAY'S SERVICE</div>
+      <div class="jc-head" style="gap:12px;">
+        <div style="flex-shrink:0;text-align:center;">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#C9A84C;">${escapeHtml(d.month)}</div>
+          <div style="font-size:34px;font-weight:800;line-height:1;">${escapeHtml(String(d.day))}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--muted);">${escapeHtml(d.dow)}</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="jc-client">${escapeHtml(todaysJob.client||"—")}</div>
+          <div class="jc-meta">${todaysJob.pickup_time?escapeHtml(todaysJob.pickup_time)+" · ":""}${escapeHtml(todaysJob.vehicle_type||"")}</div>
+          <div class="jc-meta" style="margin-top:2px;">${escapeHtml(todaysJob.from_loc||"—")} → ${escapeHtml(todaysJob.to_loc||"—")}</div>
+          <div class="jc-meta" style="margin-top:2px;">${escapeHtml(todaysJob.reference_code||"")}</div>
+        </div>
+      </div>
+      <div style="padding:0 12px 12px;font-size:12px;font-weight:700;">${mdStatusLabel(todaysJob.status||"Assigned")} — tap to continue</div>
+    </div>`;
+  })() : `
+    <div class="job-card" style="margin-bottom:16px;padding:16px 12px;text-align:center;color:var(--muted);font-size:13px;font-weight:600;">
+      No service scheduled for today.
+    </div>`;
+
+  const upcomingHtml = upcoming.length ? `
+    <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--muted);padding:4px 4px 8px;">UPCOMING SERVICES</div>
+    ${upcoming.map(j => `
+    <div class="job-card" style="margin-bottom:8px;opacity:.75;">
       <div class="jc-head" style="gap:10px;">
         ${mdDateBadgeHtml(j.date)}
         <div style="flex:1;min-width:0;">
@@ -2262,18 +2382,37 @@ function renderMultiDayList() {
           <div class="jc-meta">${j.pickup_time?escapeHtml(j.pickup_time)+" · ":""}${escapeHtml(j.vehicle_type||"")}</div>
           <div class="jc-meta" style="margin-top:2px;">${escapeHtml(j.from_loc||"—")} → ${escapeHtml(j.to_loc||"—")}</div>
         </div>
-        <div style="text-align:right;flex-shrink:0;font-size:11px;font-weight:700;white-space:nowrap;">${mdStatusLabel(j.status||"Assigned")}</div>
+        <div style="text-align:right;flex-shrink:0;font-size:11px;font-weight:700;white-space:nowrap;color:var(--muted);">${mdStatusLabel(j.status||"Assigned")}</div>
       </div>
-    </div>`).join("");
+    </div>`).join("")}` : "";
+
+  const completedHtml = completed.length ? `
+    <details style="margin-top:8px;">
+      <summary style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--muted);padding:4px;cursor:pointer;">COMPLETED SERVICES (${completed.length})</summary>
+      <div style="padding-top:8px;">
+      ${completed.map(j => `
+      <div class="job-card" style="margin-bottom:8px;opacity:.6;">
+        <div class="jc-head" style="gap:10px;">
+          ${mdDateBadgeHtml(j.date)}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;">${escapeHtml(j.reference_code||"")}</div>
+            <div class="jc-meta">${escapeHtml(j.from_loc||"—")} → ${escapeHtml(j.to_loc||"—")}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;font-size:11px;font-weight:700;white-space:nowrap;">${mdStatusLabel(j.status||"Assigned")}</div>
+        </div>
+      </div>`).join("")}
+      </div>
+    </details>` : "";
 
   document.getElementById("app").innerHTML = `
     <div class="jc-head" style="padding:12px 12px 0;">
       <div>
         <div class="jc-client">${escapeHtml(driver)}</div>
-        <div class="jc-meta">${multiDayJobsCache.length} service days · tap a day to update its status</div>
+        <div class="jc-meta">${multiDayJobsCache.length} service days</div>
       </div>
+      <button onclick="openTripOnboarding()" style="margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:20px;padding:5px 10px;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">❓ How to Use</button>
     </div>
-    <div style="padding:12px;">${rows}</div>
+    <div style="padding:12px;">${todayHtml}${upcomingHtml}${completedHtml}</div>
   `;
 }
 

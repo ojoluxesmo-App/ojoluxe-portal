@@ -4110,6 +4110,35 @@ async function saveJob() {
       payload.extras = Object.assign({}, _uvBase, { driver_unverified: false });
     }
   }
+  // Emergency reassignment security (Edit Job path): mirrors confirmDispatch()'s
+  // rotation exactly, so a driver changed here loses access the same way as one
+  // reassigned via Dispatch/Reassign. Only fires when the driver actually
+  // changed on an existing, non-Completed/Cancelled job that already had an
+  // active link — saving Edit Job without touching the driver never rotates
+  // the token. Clearing the driver (Silas → Unassigned) counts as revocation too.
+  if (editingId) {
+    const _prevJob = allJobs.find(x=>String(x.id)===String(editingId));
+    const _prevDriver = (_prevJob?.assigned_driver||"").trim();
+    const _nextDriver = (assignedDriver||"").trim();
+    const _isEditReassign = !!(_prevJob && _prevDriver && _prevDriver !== _nextDriver
+      && _prevJob.share_token && !["Completed","Cancelled"].includes(_prevJob.status||""));
+    if (_isEditReassign) {
+      const _prevRaw = _prevJob.extras;
+      const _prevEx = (typeof _prevRaw==="string")?(()=>{ try{return JSON.parse(_prevRaw);}catch(e){return {};} })():(_prevRaw||{});
+      const _reassignExtras = Object.assign({}, _prevEx, payload.extras || {});
+      delete _reassignExtras.driver_checkin_name;
+      delete _reassignExtras.driver_checkin_phone;
+      delete _reassignExtras.driver_phone_last4;
+      delete _reassignExtras.driver_vehicle;
+      delete _reassignExtras.driver_color;
+      delete _reassignExtras.driver_checkin_plate;
+      delete _reassignExtras.photo_vehicle_front;
+      delete _reassignExtras.photo_car_interior;
+      delete _reassignExtras.photo_selfie;
+      payload.extras = _reassignExtras;
+      payload.share_token = generateShareToken();
+    }
+  }
   // Coerce empty/whitespace-only strings to null for true date/timestamp columns
   // (agent_invoice_due is `date`, cancelled_at is `timestamptz` — Postgres rejects "")
   const DATE_FIELDS = ['agent_invoice_due', 'cancelled_at'];
@@ -4848,12 +4877,43 @@ async function confirmDispatch(){
   const _dspJob = allJobs.find(x=>String(x.id)===String(_dispatchJobId));
   const _dspRaw = _dspJob?.extras;
   const _dspEx = (typeof _dspRaw==="string")?(()=>{ try{return JSON.parse(_dspRaw);}catch(e){return {};} })():(_dspRaw||{});
+
+  // Emergency reassignment security: this is a REASSIGNMENT (not an initial
+  // dispatch) when the job already had a different driver and an active
+  // share link. Rotating share_token here is what actually revokes the old
+  // driver's access — job.html's fetchJob() only ever returns jobs matching
+  // the token in the URL, so their still-open link (single-job or multi-day)
+  // stops including this job on its next load or status action (see
+  // job.html's stale-open-page guard). Never touches Completed/Cancelled
+  // jobs, so historical days stay exactly as they were for the original
+  // driver. The old driver's check-in identity (name/phone/plate/photos) is
+  // stripped so the new driver starts a clean acceptance, same as a fresh
+  // dispatch — and since this only ever mutates the single job being
+  // reassigned, no duplicate job rows are ever created.
+  const _isReassign = !!(_dspJob && _dspJob.assigned_driver && _dspJob.assigned_driver !== driver
+    && _dspJob.share_token && !["Completed","Cancelled"].includes(_dspJob.status||""));
   const _dspExtras = Object.assign({}, _dspEx, { driver_unverified: _dspUnverified });
-  const{error}=await db.from("jobs").update({assigned_driver:driver,status:"Assigned",extras:_dspExtras}).eq("id",_dispatchJobId);
+  if (_isReassign) {
+    delete _dspExtras.driver_checkin_name;
+    delete _dspExtras.driver_checkin_phone;
+    delete _dspExtras.driver_phone_last4;
+    delete _dspExtras.driver_vehicle;
+    delete _dspExtras.driver_color;
+    delete _dspExtras.driver_checkin_plate;
+    delete _dspExtras.photo_vehicle_front;
+    delete _dspExtras.photo_car_interior;
+    delete _dspExtras.photo_selfie;
+  }
+  const _dspNewToken = _isReassign ? generateShareToken() : null;
+  const _dspUpdate = {assigned_driver:driver,status:"Assigned",extras:_dspExtras};
+  if (_dspNewToken) _dspUpdate.share_token = _dspNewToken;
+  const{error}=await db.from("jobs").update(_dspUpdate).eq("id",_dispatchJobId);
   if(error){alert("Dispatch failed: "+error.message);return;}
   // Generate share token if not already set, so notification link works
   const j = allJobs.find(x => String(x.id) === String(_dispatchJobId));
-  if (j && !j.share_token) {
+  if (_dspNewToken) {
+    if (j) j.share_token = _dspNewToken;
+  } else if (j && !j.share_token) {
     const token = generateShareToken();
     await fetch(SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(_dispatchJobId), {
       method:"PATCH",
