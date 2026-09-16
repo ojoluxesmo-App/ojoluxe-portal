@@ -1212,7 +1212,7 @@ window.addEventListener("unhandledrejection", function(e) {
           <div class="example-title">EXAMPLE: $200 AIRPORT JOB</div>
           <div class="ex-row"><span class="ex-label">Job Rate</span><span class="ex-val">$200</span></div>
           <div class="ex-row"><span class="ex-label">OjoLuxe (10%)</span><span class="ex-val gold">$20</span></div>
-          <div class="ex-row"><span class="ex-label">Your Finder Fee (5%)</span><span class="ex-val blue">$10</span></div>
+          <div class="ex-row"><span class="ex-label">Referral Commission</span><span class="ex-val blue">$10</span></div>
           <div class="ex-row"><span class="ex-label">Driver Payout</span><span class="ex-val green">$170</span></div>
         </div>
       </div>
@@ -3171,6 +3171,16 @@ function getUrgencyLevel(date, time) {
 
 function normalizeClassName(s){return(s||"").toLowerCase().replace(/\s+/g,"-");}
 
+// Checks whether a driver tag (e.g. "Meet & Greet", "Car Seat") is active in
+// the structured tag line only (waybill_notes line 1, built by buildDriverNotes()) —
+// never the whole waybill_notes string — so a Special Instructions free-text
+// mention of the same phrase can't keep a charge/row stuck after the tag is
+// unchecked.
+function hasDriverTag(waybillNotes, tag) {
+  const tagLine = String(waybillNotes||"").split("\n")[0] || "";
+  return tagLine.split(" · ").map(s=>s.trim()).includes(tag);
+}
+
 // ── Driver visual identifier ───────────────────────────────────────────────
 // Deterministic hash of the normalized driver name → one color from a fixed,
 // muted palette. No per-driver hardcoding: scales automatically as drivers
@@ -5038,9 +5048,9 @@ function showExpenseModal(jobId) {
   expenseRows  = Array.isArray(j.addon_charges) ? j.addon_charges.map(normalizeAddonCharge) : [];
   getEl("expModalRef").textContent = (j.reference_code||j.id||"") + " · " + escapeHtml(j.client||"");
   const mgRow = getEl("expMeetGreetRow");
-  if (mgRow) mgRow.style.display = String(j.waybill_notes||"").includes("Meet & Greet") ? "flex" : "none";
+  if (mgRow) mgRow.style.display = hasDriverTag(j.waybill_notes, "Meet & Greet") ? "flex" : "none";
   const csRow = getEl("expCarSeatRow");
-  if (csRow) csRow.style.display = String(j.waybill_notes||"").includes("Car Seat") ? "flex" : "none";
+  if (csRow) csRow.style.display = hasDriverTag(j.waybill_notes, "Car Seat") ? "flex" : "none";
   renderExpenseRows();
   getEl("expenseModal").style.display = "flex";
 }
@@ -6477,12 +6487,11 @@ function calculateJobPrice(job) {
   const otRate  = num(job.ot_rate);
   const otTotal = (otHours > 0 && otRate > 0) ? Math.round(otHours * otRate * 100) / 100 : 0;
 
-  // Meet & Greet addon — $50 flat if tag present in waybill_notes
-  const hasMeetGreet = String(job.waybill_notes||"").includes("Meet & Greet");
+  // Meet & Greet / Car Seat addons — flat charge if the tag is active
+  const hasMeetGreet = hasDriverTag(job.waybill_notes, "Meet & Greet");
   const meetGreetCharge = hasMeetGreet ? 50 : 0;
 
-  // Car Seat addon — $15 flat
-  const hasCarSeat = String(job.waybill_notes||"").includes("Car Seat");
+  const hasCarSeat = hasDriverTag(job.waybill_notes, "Car Seat");
   const carSeatCharge = hasCarSeat ? 15 : 0;
 
   // Approved addon charges from addon_charges JSONB
