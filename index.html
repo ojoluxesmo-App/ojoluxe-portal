@@ -3844,10 +3844,10 @@ async function saveJob() {
     miles:num(getValue("miles")), hours:num(getValue("hours"))
   });
   console.log("[S5] pricing=",JSON.stringify(pricing));
-  const ojoCommission = pricing ? (pricing.ojoCommission||0) : 0;
-  const posterCommission = pricing ? (pricing.posterCommission||0) : 0;
-  const driverPay = pricing ? (pricing.driverPay||0) : 0;
   const totalPrice = pricing ? (pricing.totalPrice||0) : 0;
+  const ojoCommission    = calculateCommissionAmount(totalPrice, getValue("ojoCommissionType")||"percent", num(getValue("ojoCommissionValue")));
+  const posterCommission = calculateCommissionAmount(totalPrice, getValue("posterCommissionType")||"percent", num(getValue("posterCommissionValue")));
+  const driverPay = totalPrice - ojoCommission - posterCommission;
 
   // ── Status auto-rule ──────────────────────────────────────────────────────
   // If a driver is assigned and status is still Offer → auto-bump to Assigned
