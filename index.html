@@ -1111,7 +1111,7 @@ window.addEventListener("unhandledrejection", function(e) {
                   <option value="percent">%</option>
                   <option value="fixed">$</option>
                 </select>
-                <input id="posterCommissionValue" type="number" min="0" step="0.01" value="5" oninput="updateQuoteSummary()">
+                <input id="posterCommissionValue" type="number" min="0" step="0.01" value="0" oninput="updateQuoteSummary()">
               </div>
             </div>
           </div>
@@ -4053,7 +4053,7 @@ function qqUpdateSummary(show) {
   });
   const total = pricing.totalPrice;
   const ojo   = calculateCommissionAmount(total, "percent", 10);
-  const poster= calculateCommissionAmount(total, "percent", 5);
+  const poster= calculateCommissionAmount(total, "percent", 0);
   const driver= total - ojo - poster;
   getEl("qq-price").textContent  = money(total);
   getEl("qq-ojo").textContent    = money(ojo);
@@ -4214,7 +4214,7 @@ async function saveMultiDayTour() {
     const ojoType   = getValue("ojoCommissionType")  || "percent";
     const ojoVal    = num(getValue("ojoCommissionValue"))  || 10;
     const poType    = getValue("posterCommissionType") || "percent";
-    const poVal     = num(getValue("posterCommissionValue")) || 5;
+    const poVal     = num(getValue("posterCommissionValue")) || 0;
 
     // OT rule — per agreement, set when creating the tour
     const otThreshold = num(getValue("tourOtThreshold")) || 10;  // regular hrs/day
@@ -4514,7 +4514,7 @@ function clearForm(){
   setValue("tourOtRate","75");
   setValue("status","Offer");setValue("jobType","Airport Transfer");setValue("vehicleType","Premium SUV");
   setValue("paymentType","Cash");setValue("pricingMode","auto");setValue("pickupTime","");
-  setValue("ojoCommissionValue","10");setValue("posterCommissionValue","5");
+  setValue("ojoCommissionValue","10");setValue("posterCommissionValue","0");
   if(typeof clearStops==="function")clearStops();
   setBookingMode("standard");
   togglePricingMode();
@@ -4534,7 +4534,7 @@ function fillFormById(id) {
     pricingMode:j.pricing_mode||"auto",manualPrice:j.manual_price,
     miles:j.miles,hours:j.hours,postedBy:j.posted_by,
     ojoCommissionType:j.commission_ojo_type??"percent",ojoCommissionValue:j.commission_ojo_value??10,
-    posterCommissionType:j.commission_poster_type??"percent",posterCommissionValue:j.commission_poster_value??5,
+    posterCommissionType:j.commission_poster_type??"percent",posterCommissionValue:j.commission_poster_value??0,
     tourOtThreshold:j.ot_threshold??10,tourOtRate:j.ot_rate??75,
     agentName:j.agent_name||"", agentRefNum:j.agent_ref_num||"",
     agentInvoiceDue:j.agent_invoice_due||"", agentNumDays:j.agent_num_days||"",
@@ -6578,7 +6578,7 @@ function syncMultiDayPreview() {
   const ojoType    = getValue("ojoCommissionType")  || "percent";
   const ojoVal     = num(getValue("ojoCommissionValue"))  || 10;
   const poType     = getValue("posterCommissionType") || "percent";
-  const poVal      = num(getValue("posterCommissionValue")) || 5;
+  const poVal      = num(getValue("posterCommissionValue")) || 0;
   const ojoCom     = calculateCommissionAmount(perDay, ojoType, ojoVal);
   const posterCom  = calculateCommissionAmount(perDay, poType,  poVal);
   const driverPay  = perDay - ojoCom - posterCom;
@@ -6635,7 +6635,7 @@ function updateQuoteSummary() {
   const ojType     = document.getElementById("ojoCommissionType")?.value    || "percent";
   const ojValue    = document.getElementById("ojoCommissionValue")?.value   ?? 10;
   const poType     = document.getElementById("posterCommissionType")?.value  || "percent";
-  const poValue    = document.getElementById("posterCommissionValue")?.value ?? 5;
+  const poValue    = document.getElementById("posterCommissionValue")?.value ?? 0;
 
   // Build temp job object — same shape as saved job
   const tempJob = {
