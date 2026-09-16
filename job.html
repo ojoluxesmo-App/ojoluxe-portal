@@ -2354,7 +2354,7 @@ function renderMultiDayList() {
       <div class="jc-head" style="gap:12px;">
         <div style="flex-shrink:0;text-align:center;">
           <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#C9A84C;">${escapeHtml(d.month)}</div>
-          <div style="font-size:34px;font-weight:800;line-height:1;">${escapeHtml(String(d.day))}</div>
+          <div style="font-size:34px;font-weight:800;line-height:1;color:var(--text);">${escapeHtml(String(d.day))}</div>
           <div style="font-size:10px;font-weight:700;color:var(--muted);">${escapeHtml(d.dow)}</div>
         </div>
         <div style="flex:1;min-width:0;">
@@ -2364,7 +2364,7 @@ function renderMultiDayList() {
           <div class="jc-meta" style="margin-top:2px;">${escapeHtml(todaysJob.reference_code||"")}</div>
         </div>
       </div>
-      <div style="padding:0 12px 12px;font-size:12px;font-weight:700;">${mdStatusLabel(todaysJob.status||"Assigned")} — tap to continue</div>
+      <div style="padding:0 12px 12px;font-size:12px;font-weight:700;color:var(--text);">${mdStatusLabel(todaysJob.status||"Assigned")} — tap to continue</div>
     </div>`;
   })() : `
     <div class="job-card" style="margin-bottom:16px;padding:16px 12px;text-align:center;color:var(--muted);font-size:13px;font-weight:600;">
@@ -2378,7 +2378,7 @@ function renderMultiDayList() {
       <div class="jc-head" style="gap:10px;">
         ${mdDateBadgeHtml(j.date)}
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:700;">${escapeHtml(j.reference_code||"")}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);">${escapeHtml(j.reference_code||"")}</div>
           <div class="jc-meta">${j.pickup_time?escapeHtml(j.pickup_time)+" · ":""}${escapeHtml(j.vehicle_type||"")}</div>
           <div class="jc-meta" style="margin-top:2px;">${escapeHtml(j.from_loc||"—")} → ${escapeHtml(j.to_loc||"—")}</div>
         </div>
@@ -2395,10 +2395,10 @@ function renderMultiDayList() {
         <div class="jc-head" style="gap:10px;">
           ${mdDateBadgeHtml(j.date)}
           <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:700;">${escapeHtml(j.reference_code||"")}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">${escapeHtml(j.reference_code||"")}</div>
             <div class="jc-meta">${escapeHtml(j.from_loc||"—")} → ${escapeHtml(j.to_loc||"—")}</div>
           </div>
-          <div style="text-align:right;flex-shrink:0;font-size:11px;font-weight:700;white-space:nowrap;">${mdStatusLabel(j.status||"Assigned")}</div>
+          <div style="text-align:right;flex-shrink:0;font-size:11px;font-weight:700;white-space:nowrap;color:var(--muted);">${mdStatusLabel(j.status||"Assigned")}</div>
         </div>
       </div>`).join("")}
       </div>
